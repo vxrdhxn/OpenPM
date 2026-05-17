@@ -1,0 +1,48 @@
+# Gitleaks configuration for OpenPM
+# Scans every commit for accidentally leaked secrets
+# Run locally: gitleaks detect --source . --config .gitleaks.toml
+# Also runs in CI via GitHub Actions
+
+title = "OpenPM Gitleaks Config"
+
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''\.env\.example$''',       # Template file with placeholder values — safe
+    '''\.gitleaks\.toml$''',     # This config file itself
+    '''docs/.*''',               # Documentation files
+  ]
+
+# Additional rules beyond the built-in defaults
+
+[[rules]]
+  id = "openpm-jwt-secret"
+  description = "Hardcoded JWT secret"
+  regex = '''(?i)(jwt[_-]?secret|jwt[_-]?key)\s*[:=]\s*['"][^'"]{8,}['"]'''
+  tags = ["secret", "jwt"]
+
+[[rules]]
+  id = "openpm-database-url"
+  description = "Database connection string with password"
+  regex = '''postgres(ql)?:\/\/[^:]+:[^@]+@[^/]+\/\w+'''
+  tags = ["secret", "database"]
+  [rules.allowlist]
+    regexes = [
+      '''postgres(ql)?:\/\/openpm:openpm@localhost''',  # Default dev credentials in .env.example
+    ]
+
+[[rules]]
+  id = "openpm-redis-url"
+  description = "Redis connection string with password"
+  regex = '''redis:\/\/:[^@]+@[^/]+'''
+  tags = ["secret", "redis"]
+  [rules.allowlist]
+    regexes = [
+      '''redis:\/\/:openpm@localhost''',  # Default dev credentials in .env.example
+    ]
+
+[[rules]]
+  id = "openpm-generic-api-key"
+  description = "Generic API key pattern"
+  regex = '''(?i)(api[_-]?key|apikey|api[_-]?token)\s*[:=]\s*['"][a-zA-Z0-9_\-]{20,}['"]'''
+  tags = ["secret", "api-key"]
