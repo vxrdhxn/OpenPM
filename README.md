@@ -5,7 +5,7 @@
 <h1 align="center">OpenPM</h1>
 
 <p align="center">
-  <strong>Self-hostable project management — built for teams that own their data.</strong>
+  <strong>Self-hostable project management - built for teams that own their data.</strong>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 
 Most project management tools are SaaS-only. Your data lives on someone else's servers, your workflows are locked behind their pricing tiers, and one API change breaks your integrations.
 
-**OpenPM is different.** Deploy it on your infrastructure — a single Docker Compose command for small teams, or a production Helm chart on Kubernetes for scale. You own everything.
+**OpenPM is different.** Deploy it on your infrastructure - a single Docker Compose command for small teams, or a production Helm chart on Kubernetes for scale. You own everything.
 
 ---
 
@@ -39,11 +39,11 @@ Most project management tools are SaaS-only. Your data lives on someone else's s
 | Feature | Description |
 |---------|-------------|
 | **Kanban Boards** | Drag-and-drop task management with real-time sync across all connected clients |
-| **Real-Time Collaboration** | WebSocket-powered live updates — see changes as they happen, no refresh needed |
-| **Multi-Tenant** | Full organization isolation. Every query is scoped by `org_id` from JWT — zero cross-tenant leakage |
+| **Real-Time Collaboration** | WebSocket-powered live updates - see changes as they happen, no refresh needed |
+| **Multi-Tenant** | Full organization isolation. Every query is scoped by `org_id` from JWT - zero cross-tenant leakage |
 | **Background Workers** | BullMQ-powered async job processing for notifications, with exponential backoff retry |
 | **Cache Layer** | Redis cache-aside pattern on hot paths. Sub-millisecond reads on repeated queries |
-| **Observability** | Prometheus metrics, Grafana dashboards, structured logging — production-ready from day one |
+| **Observability** | Prometheus metrics, Grafana dashboards, structured logging - production-ready from day one |
 | **Kubernetes-Native** | Helm chart with HPA, NetworkPolicy, PodDisruptionBudget, and SecurityContext hardening |
 | **GitOps Ready** | ArgoCD manifests for automated, auditable deployments. Every deploy = a git commit |
 
@@ -106,7 +106,7 @@ npm run dev:worker
 npm run dev:frontend
 ```
 
-Open [http://localhost:3001](http://localhost:3001) and register your first organization.
+Open [http://localhost:3001](http://localhost:3001) and register your first organisation.
 
 ### One-command production (Docker Compose)
 
@@ -114,7 +114,7 @@ Open [http://localhost:3001](http://localhost:3001) and register your first orga
 docker-compose up --build -d
 ```
 
-All 5 services start with healthchecks. Frontend at `:3001`, API at `:3000`.
+All 5 services start with health checks. Frontend at `:3001`, API at `:3000`.
 
 ---
 
@@ -148,10 +148,10 @@ All 5 services start with healthchecks. Frontend at `:3001`, API at `:3000`.
 
 ### Key Design Decisions
 
-- **Multi-tenant isolation**: Every DB query includes `AND org_id = $org_id`. The `org_id` is extracted from the JWT — never from the request body.
+- **Multi-tenant isolation**: Every DB query includes `AND org_id = $org_id`. The `org_id` is extracted from the JWT - never from the request body.
 - **Stateless auth**: JWT carries identity. Any API pod can verify it. No shared session store needed for horizontal scaling.
 - **Cache-aside pattern**: Hot paths (project lists, task boards) are cached in Redis with TTL. Cache is invalidated on writes.
-- **Async processing**: Task notifications are queued in BullMQ and processed by a separate worker. API responds in ~20ms. Worker scales independently.
+- **Async processing**: Task notifications are queued in BullMQ and processed by a separate worker. API responds in ~20ms. The worker scales independently.
 - **Redis Pub/Sub**: Real-time updates bridge multiple API pods. User A on pod 1 updates a task → pod 2 receives via Redis → pushes to User B's WebSocket.
 
 ---
@@ -234,7 +234,7 @@ kubectl apply -f argocd/app-of-apps.yaml
 
 ## Environment Variables
 
-See [`.env.example`](.env.example) for all available configuration. Key variables:
+See [`.env.example`](.env.example) for all available configurations. Key variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -248,11 +248,11 @@ See [`.env.example`](.env.example) for all available configuration. Key variable
 
 ## Security
 
-OpenPM is designed to be self-hosted and open-source. Security is defense-in-depth:
+OpenPM is designed to be self-hosted and open-source. Security is defence-in-depth:
 
 - **Secrets**: Zero hardcoded secrets. All configuration via environment variables.
 - **Auth**: bcrypt (cost 12), httpOnly cookies (SameSite=Strict), JWT with expiry.
-- **Input**: Parameterized SQL queries, Fastify JSON Schema validation on all routes.
+- **Input**: Parameterised SQL queries, Fastify JSON Schema validation on all routes.
 - **API**: Rate limiting, Helmet security headers, strict CORS, 1MB body limit.
 - **Containers**: Non-root (UID 1001), multi-stage builds, minimal base images.
 - **Network**: Kubernetes NetworkPolicy with default deny-all.
@@ -272,10 +272,10 @@ Please use [GitHub Security Advisories](../../security/advisories/new) to report
 ### Metrics (Prometheus)
 
 The API exposes `/metrics` in Prometheus text format:
-- `http_request_duration_seconds` (histogram) — latency by route
-- `http_requests_total` (counter) — request count by method, route, status
-- `active_websocket_connections` (gauge) — current WebSocket connections
-- `bullmq_jobs_queued_total` (counter) — background job queue depth
+- `http_request_duration_seconds` (histogram) - latency by route
+- `http_requests_total` (counter) - request count by method, route, status
+- `active_websocket_connections` (gauge) - current WebSocket connections
+- `bullmq_jobs_queued_total` (counter) - background job queue depth
 
 ### Grafana Dashboard
 
@@ -325,7 +325,7 @@ npm run dev:frontend # Terminal 3
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU Affero General Public License v3.0** - see the [LICENSE](LICENSE) file for details.
 
 This means you can freely use, modify, and distribute OpenPM, but if you offer it as a network service (e.g., a managed SaaS), you must release your modifications under the same license.
 
