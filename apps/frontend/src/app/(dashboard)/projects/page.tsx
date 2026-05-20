@@ -45,7 +45,7 @@ export default function Projects() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Projects</h1>
-          <p className="text-slate-500 mt-1">Manage your team's workflows and tasks.</p>
+          <p className="text-slate-500 mt-1">Manage your team&apos;s workflows and tasks.</p>
         </div>
         <button 
           onClick={() => setIsModalOpen(true)}

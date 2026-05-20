@@ -37,7 +37,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }, async (request, reply) => {
     const { projectId } = request.params as any;
-    const { title, description, priority, assignee_id, due_date } = request.body as any;
+    const { title, description, priority = 'medium', assignee_id, due_date } = request.body as any;
     const { org_id, user_id } = request.user;
 
     const client = await db.getClient();
