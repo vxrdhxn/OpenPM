@@ -1,0 +1,178 @@
+# Default values for openpm.
+# This is a YAML-formatted file.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# General Configurations
+global:
+  environment: "production"
+  # Domain name used for ingress config
+  domain: "openpm.local"
+
+# Security Context Configurations
+# Active across all pods/containers as requirements specify hardening
+securityContext:
+  pod:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  container:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    capabilities:
+      drop:
+        - ALL
+
+# Core Secrets (Should be overridden in production)
+secrets:
+  jwtSecret: "change_me_to_something_super_secret_and_long_enough_32_chars"
+  postgres:
+    username: "openpm"
+    password: "openpm_secure_db_pass"
+    database: "openpm"
+  redis:
+    password: "openpm_secure_redis_pass"
+
+# Toggle self-hosted dev dependencies (toggled to true by default for simple dev deploys)
+postgres:
+  enabled: true
+  image: "postgres:16-alpine"
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+redis:
+  enabled: true
+  image: "redis:7-alpine"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# If postgres.enabled or redis.enabled are false, configure these:
+externalDatabase:
+  url: ""
+externalRedis:
+  url: ""
+
+# API Application Service
+api:
+  replicaCount: 2
+  image:
+    repository: "openpm-api"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+  port: 3000
+  corsOrigin: "http://openpm.local"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+
+# Worker Application Service
+worker:
+  replicaCount: 1
+  image:
+    repository: "openpm-worker"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Frontend Application Service
+frontend:
+  replicaCount: 2
+  image:
+    repository: "openpm-frontend"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+  port: 3001
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: "openpm.local"
+      paths:
+        - path: /
+          pathType: Prefix
+          backend: frontend
+        - path: /api
+          pathType: Prefix
+          backend: api
+        - path: /ws
+          pathType: Prefix
+          backend: api
+  tls: []
+  #  - secretName: openpm-tls
+  #    hosts:
+  #      - openpm.local
+
+# Network Policies (Default Deny + Explicit flows)
+networkPolicy:
+  enabled: true
+
+# Prometheus ServiceMonitor
+serviceMonitor:
+  enabled: false
+  # namespace: monitoring
+  interval: 15s
+  labels: {}
