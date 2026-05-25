@@ -1,0 +1,244 @@
+{{- if .Values.networkPolicy.enabled -}}
+# 1. Default Deny-All Ingress & Egress for all pods in this release
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.fullname" . }}-default-deny
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# 2. Allow DNS Egress for all pods (crucial for connecting to services by name)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.fullname" . }}-dns-egress
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {} # Allow DNS in all namespaces (e.g. kube-system)
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# 3. Frontend Policies: Ingress from anywhere (via ingress controller) and Egress to API
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.frontend.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.frontend.port | default 3001 }}
+  egress:
+    # Allow communication to the API server inside the cluster (for Server Side Rendering)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: api
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port | default 3000 }}
+
+---
+# 4. API Policies: Ingress from Ingress/Frontend, and Egress to DB & Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.api.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from Ingress Controller or Frontend pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: frontend
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port | default 3000 }}
+    # Allow direct ingress (from ingress controller or load balancer)
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.api.port | default 3000 }}
+  egress:
+    # Egress to Postgres (self-hosted or external)
+    {{- if .Values.postgres.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- else }}
+    # Allow egress to external DB IPs if configured
+    - ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    # Egress to Redis (self-hosted or external)
+    {{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: redis
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 6379
+    {{- else }}
+    # Allow egress to external Redis IPs
+    - ports:
+        - protocol: TCP
+          port: 6379
+    {{- end }}
+
+---
+# 5. Worker Policies: Egress to DB & Redis (no Ingress required)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.worker.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # Egress to Postgres (self-hosted or external)
+    {{- if .Values.postgres.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- else }}
+    - ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    # Egress to Redis (self-hosted or external)
+    {{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: redis
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 6379
+    {{- else }}
+    - ports:
+        - protocol: TCP
+          port: 6379
+    {{- end }}
+
+---
+# 6. Database Policies: Ingress from API and Worker (only if self-hosted)
+{{- if .Values.postgres.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.postgres.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: postgres
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: api
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: worker
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+
+---
+# 7. Redis Policies: Ingress from API and Worker (only if self-hosted)
+{{- if .Values.redis.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.redis.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: api
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: worker
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+
+{{- end }}

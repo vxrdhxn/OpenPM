@@ -1,0 +1,23 @@
+{{- if .Values.frontend.hpa.enabled -}}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "openpm.frontend.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "openpm.frontend.fullname" . }}
+  minReplicas: {{ .Values.frontend.hpa.minReplicas | default 2 }}
+  maxReplicas: {{ .Values.frontend.hpa.maxReplicas | default 5 }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.frontend.hpa.targetCPUUtilizationPercentage | default 80 }}
+{{- end }}

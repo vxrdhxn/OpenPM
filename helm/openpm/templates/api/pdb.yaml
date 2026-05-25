@@ -1,0 +1,15 @@
+{{- if .Values.api.pdb.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openpm.api.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  maxUnavailable: {{ .Values.api.pdb.maxUnavailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "openpm.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+{{- end }}

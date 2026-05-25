@@ -1,0 +1,86 @@
+# Production overrides for openpm
+global:
+  environment: "production"
+  domain: "app.openpm.com"
+
+# For production, we assume managed external databases are used
+postgres:
+  enabled: false
+
+redis:
+  enabled: false
+
+# Configure external production database and cache connections
+# Override these secrets during helm deployment (e.g. --set externalDatabase.url=$DB_URL)
+externalDatabase:
+  url: "postgresql://openpm_prod_user:SECRET_PASSWORD_HERE@postgres-prod-instance.internal:5432/openpm_prod"
+externalRedis:
+  url: "redis://:SECRET_REDIS_PASS_HERE@redis-prod-instance.internal:6379/0"
+
+api:
+  replicaCount: 3
+  image:
+    tag: "1.0.0"
+    pullPolicy: "IfNotPresent"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+worker:
+  replicaCount: 2
+  image:
+    tag: "1.0.0"
+    pullPolicy: "IfNotPresent"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+frontend:
+  replicaCount: 3
+  image:
+    tag: "1.0.0"
+    pullPolicy: "IfNotPresent"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: "app.openpm.com"
+      paths:
+        - path: /
+          pathType: Prefix
+          backend: frontend
+        - path: /api
+          pathType: Prefix
+          backend: api
+        - path: /ws
+          pathType: Prefix
+          backend: api
+  tls:
+    - secretName: openpm-tls-prod
+      hosts:
+        - "app.openpm.com"
+
+# Enable Prometheus ServiceMonitor in production
+serviceMonitor:
+  enabled: true
