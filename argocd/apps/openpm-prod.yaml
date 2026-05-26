@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openpm-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/vxrdhxn/OpenPM.git'
+    targetRevision: HEAD
+    path: helm/openpm
+    helm:
+      valueFiles:
+        - values.yaml
+        - values.prod.yaml
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: openpm-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
