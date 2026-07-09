@@ -16,6 +16,8 @@ import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
 import taskRoutes from './routes/tasks';
 import websocketRoutes from './routes/websocket';
+import profileRoutes from './routes/profile';
+import inviteRoutes from './routes/invites';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -118,6 +120,8 @@ fastify.register(metricsRoutes);
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(projectRoutes, { prefix: '/api/projects' });
 fastify.register(taskRoutes, { prefix: '/api/projects' }); // /:projectId/tasks
+fastify.register(profileRoutes, { prefix: '/api/profile' });
+fastify.register(inviteRoutes, { prefix: '/api/invites' });
 fastify.register(websocketRoutes);
 
 // Graceful Shutdown on SIGTERM

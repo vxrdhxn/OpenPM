@@ -157,6 +157,86 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
     return reply.send({ success: true });
   });
+
+  // Forgot Password
+  fastify.post('/forgot-password', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', format: 'email' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const { email } = request.body as any;
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const users = await db.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+    if (users.length > 0) {
+      const userId = users[0].id;
+      const { randomBytes } = await import('crypto');
+      const token = randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+
+      await db.query(
+        'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+        [userId, token, expiresAt]
+      );
+      
+      // In a real app, send an email with the token here using BullMQ job
+    }
+
+    // Always return success to prevent email enumeration
+    return reply.send({ success: true, message: 'If that email is registered, a reset link was sent.' });
+  });
+
+  // Reset Password
+  fastify.post('/reset-password', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['token', 'password'],
+        properties: {
+          token: { type: 'string' },
+          password: { type: 'string', minLength: 8 }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const { token, password } = request.body as any;
+
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const tokens = await client.query(
+        'SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1',
+        [token]
+      );
+
+      if (tokens.length === 0 || tokens[0].expires_at < new Date()) {
+        throw new Error('INVALID_TOKEN');
+      }
+
+      const userId = tokens[0].user_id;
+      const passwordHash = await bcrypt.hash(password, 12);
+
+      await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+      await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+
+      await client.query('COMMIT');
+      return reply.send({ success: true });
+    } catch (err: any) {
+      await client.query('ROLLBACK');
+      if (err.message === 'INVALID_TOKEN') {
+        return reply.code(400).send({ error: 'Invalid or expired reset token' });
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
 };
 
 export default authRoutes;
