@@ -5,8 +5,9 @@ import crypto from 'crypto';
 const inviteRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
 
-  // POST /
+  // POST / (Requires admin role or higher)
   fastify.post('/', {
+    preHandler: fastify.requireRole('admin'),
     schema: {
       body: {
         type: 'object',
@@ -18,12 +19,8 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   }, async (request, reply) => {
-    const { org_id, role: userRole } = request.user;
+    const { org_id } = request.user;
     const { email, role } = request.body as any;
-
-    if (userRole !== 'admin') {
-      return reply.code(403).send({ error: 'Only admins can invite users' });
-    }
 
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date();
@@ -36,17 +33,16 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
         [org_id, email, token, role || 'member', expiresAt]
       );
       
-      // Here you would typically enqueue an email job, e.g., using BullMQ
-      // await inviteQueue.add('send_invite', { email, token, org_id });
-
       return reply.code(201).send(res.rows[0]);
     } finally {
       client.release();
     }
   });
 
-  // GET /
-  fastify.get('/', async (request, reply) => {
+  // GET / (Requires admin role or higher)
+  fastify.get('/', {
+    preHandler: fastify.requireRole('admin')
+  }, async (request, reply) => {
     const { org_id } = request.user;
 
     const res = await db.query(
@@ -57,14 +53,12 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(res);
   });
 
-  // DELETE /:id
-  fastify.delete('/:id', async (request, reply) => {
-    const { org_id, role } = request.user;
+  // DELETE /:id (Requires admin role or higher)
+  fastify.delete('/:id', {
+    preHandler: fastify.requireRole('admin')
+  }, async (request, reply) => {
+    const { org_id } = request.user;
     const { id } = request.params as any;
-
-    if (role !== 'admin') {
-      return reply.code(403).send({ error: 'Only admins can delete invites' });
-    }
 
     const res = await db.query(
       'DELETE FROM organization_invites WHERE id = $1 AND org_id = $2 RETURNING id',
@@ -80,3 +74,4 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
 };
 
 export default inviteRoutes;
+
