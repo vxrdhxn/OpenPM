@@ -15,7 +15,8 @@
     "dev:worker": "npm run dev --workspace=apps/worker",
     "dev:frontend": "npm run dev --workspace=apps/frontend",
     "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/worker && npm run build --workspace=apps/frontend",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -20,8 +20,9 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     );
   }
 
-  // POST /projects/:projectId/tasks
+  // POST /projects/:projectId/tasks (Requires member role or higher)
   fastify.post('/:projectId/tasks', {
+    preHandler: fastify.requireRole('member'),
     schema: {
       body: {
         type: 'object',
@@ -44,7 +45,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       await client.query('BEGIN');
       
-      // Verify project ownership
+      // Verify project ownership within tenant boundary
       const projCheck = await client.query('SELECT id FROM projects WHERE id = $1 AND org_id = $2', [projectId, org_id]);
       if (projCheck.rows.length === 0) {
         throw new Error('PROJECT_NOT_FOUND');
@@ -85,8 +86,10 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // GET /projects/:projectId/tasks
-  fastify.get('/:projectId/tasks', async (request, reply) => {
+  // GET /projects/:projectId/tasks (Viewer or higher)
+  fastify.get('/:projectId/tasks', {
+    preHandler: fastify.requireRole('viewer')
+  }, async (request, reply) => {
     const { projectId } = request.params as any;
     const { org_id } = request.user;
 
@@ -96,7 +99,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(cached);
     }
 
-    // Verify project ownership
+    // Verify project ownership within tenant boundary
     const projCheck = await db.query('SELECT id FROM projects WHERE id = $1 AND org_id = $2', [projectId, org_id]);
     if (projCheck.length === 0) {
       return reply.code(404).send({ error: 'Project not found' });
@@ -124,8 +127,9 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(grouped);
   });
 
-  // PATCH /projects/:projectId/tasks/:taskId
+  // PATCH /projects/:projectId/tasks/:taskId (Requires member role or higher)
   fastify.patch('/:projectId/tasks/:taskId', {
+    preHandler: fastify.requireRole('member'),
     schema: {
       body: {
         type: 'object',
@@ -180,7 +184,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
 
       const updatedTask = res.rows[0];
 
-      let metadata: any = { changes: Object.keys(updates) };
+      const metadata: any = { changes: Object.keys(updates) };
       if (updates.status && updates.status !== oldStatus) {
         metadata.from = oldStatus;
         metadata.to = updates.status;
@@ -209,6 +213,40 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       client.release();
     }
   });
+
+  // DELETE /projects/:projectId/tasks/:taskId (Requires admin role or higher)
+  fastify.delete('/:projectId/tasks/:taskId', {
+    preHandler: fastify.requireRole('admin')
+  }, async (request, reply) => {
+    const { projectId, taskId } = request.params as any;
+    const { org_id, user_id } = request.user;
+
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const res = await client.query(
+        'DELETE FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 RETURNING id',
+        [taskId, projectId, org_id]
+      );
+
+      if (res.rows.length === 0) {
+        throw new Error('NOT_FOUND');
+      }
+
+      await logActivity(client, org_id, user_id, taskId, 'deleted', {});
+      await client.query('COMMIT');
+
+      await cache.del(`org:${org_id}:project:${projectId}:tasks`);
+      return reply.code(204).send();
+    } catch (err: any) {
+      await client.query('ROLLBACK');
+      if (err.message === 'NOT_FOUND') return reply.code(404).send({ error: 'Task not found' });
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
 };
 
 export default taskRoutes;
+

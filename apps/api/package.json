@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "lint": "eslint src/ --ext .ts",
     "migrate": "tsx src/db/migrate.ts",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.1",

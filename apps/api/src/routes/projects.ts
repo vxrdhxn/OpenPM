@@ -14,8 +14,9 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     );
   }
 
-  // POST /
+  // POST / (Requires member role or higher)
   fastify.post('/', {
+    preHandler: fastify.requireRole('member'),
     schema: {
       body: {
         type: 'object',
@@ -54,8 +55,10 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // GET /
-  fastify.get('/', async (request, reply) => {
+  // GET / (Viewer or higher)
+  fastify.get('/', {
+    preHandler: fastify.requireRole('viewer')
+  }, async (request, reply) => {
     const { org_id } = request.user;
     const cacheKey = `org:${org_id}:projects`;
 
@@ -78,8 +81,10 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(projects);
   });
 
-  // GET /:id
-  fastify.get('/:id', async (request, reply) => {
+  // GET /:id (Viewer or higher)
+  fastify.get('/:id', {
+    preHandler: fastify.requireRole('viewer')
+  }, async (request, reply) => {
     const { org_id } = request.user;
     const { id } = request.params as any;
 
@@ -95,8 +100,9 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(projects[0]);
   });
 
-  // PATCH /:id
+  // PATCH /:id (Requires member role or higher)
   fastify.patch('/:id', {
+    preHandler: fastify.requireRole('member'),
     schema: {
       body: {
         type: 'object',
@@ -120,7 +126,7 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       await client.query('BEGIN');
       
-      // Verify ownership
+      // Verify ownership within tenant boundary
       const check = await client.query('SELECT id FROM projects WHERE id = $1 AND org_id = $2', [id, org_id]);
       if (check.rows.length === 0) {
         throw new Error('NOT_FOUND');
@@ -157,14 +163,12 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // DELETE /:id
-  fastify.delete('/:id', async (request, reply) => {
-    const { org_id, role } = request.user;
+  // DELETE /:id (Requires admin role or higher)
+  fastify.delete('/:id', {
+    preHandler: fastify.requireRole('admin')
+  }, async (request, reply) => {
+    const { org_id } = request.user;
     const { id } = request.params as any;
-
-    if (role !== 'admin') {
-      return reply.code(403).send({ error: 'Only admins can delete projects' });
-    }
 
     const res = await db.query('DELETE FROM projects WHERE id = $1 AND org_id = $2 RETURNING id', [id, org_id]);
     
@@ -178,3 +182,4 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
 };
 
 export default projectRoutes;
+

@@ -130,7 +130,7 @@ export default function OrganizationSettings() {
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Pending Invites</h2>
-              <p className="text-sm text-slate-500">Users who haven't accepted their invitation yet.</p>
+              <p className="text-sm text-slate-500">Users who haven&apos;t accepted their invitation yet.</p>
             </div>
             
             {invites.length === 0 ? (

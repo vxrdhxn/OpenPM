@@ -210,16 +210,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
-      const tokens = await client.query(
+      const tokenRes = await client.query(
         'SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1',
         [token]
       );
 
-      if (tokens.length === 0 || tokens[0].expires_at < new Date()) {
+      if (tokenRes.rows.length === 0 || tokenRes.rows[0].expires_at < new Date()) {
         throw new Error('INVALID_TOKEN');
       }
 
-      const userId = tokens[0].user_id;
+      const userId = tokenRes.rows[0].user_id;
       const passwordHash = await bcrypt.hash(password, 12);
 
       await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
