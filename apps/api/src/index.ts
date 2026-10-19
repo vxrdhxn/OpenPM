@@ -48,10 +48,17 @@ export const activeWebsocketConnections = new client.Gauge({
   help: 'Number of active WebSocket connections',
 });
 
+
 const fastify = Fastify({
   logger: true,
   bodyLimit: 1048576, // 1MB request size limit
+  ajv: {
+    customOptions: {
+      removeAdditional: false,
+    },
+  },
 });
+
 
 // Setup prometheus hooks
 fastify.addHook('onRequest', (request, _reply, done) => {
