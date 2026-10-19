@@ -24,7 +24,9 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           name: { type: 'string', minLength: 1 },
           description: { type: 'string' }
-        }
+        },
+        minProperties: 1,
+        additionalProperties: false
       }
     }
   }, async (request, reply) => {
@@ -104,59 +106,90 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/:id', {
     preHandler: fastify.requireRole('member'),
     schema: {
+
       body: {
         type: 'object',
         properties: {
           name: { type: 'string', minLength: 1 },
           description: { type: 'string' },
           status: { type: 'string', enum: ['active', 'archived'] }
-        }
+        },
+        minProperties: 1,
+        additionalProperties: false
       }
     }
   }, async (request, reply) => {
     const { org_id, user_id } = request.user;
-    const { id } = request.params as any;
-    const updates = request.body as any;
-
-    if (Object.keys(updates).length === 0) {
-      return reply.code(400).send({ error: 'No fields to update' });
-    }
+    const { id } = request.params as { id: string };
+    const updates = request.body as {
+      name?: string;
+      description?: string;
+      status?: 'active' | 'archived';
+    };
 
     const client = await db.getClient();
+
     try {
       await client.query('BEGIN');
-      
-      // Verify ownership within tenant boundary
-      const check = await client.query('SELECT id FROM projects WHERE id = $1 AND org_id = $2', [id, org_id]);
+
+      // Verify the project belongs to the authenticated user's organization.
+      const check = await client.query(
+          'SELECT id FROM projects WHERE id = $1 AND org_id = $2',
+          [id, org_id]
+      );
+
       if (check.rows.length === 0) {
-        throw new Error('NOT_FOUND');
+        await client.query('ROLLBACK');
+        return reply.code(404).send({ error: 'Project not found' });
       }
 
-      const setClauses = [];
-      const values = [];
-      let i = 1;
+      // Only explicitly permitted fields can become SQL column names.
+      const columnByField: Record<string, string> = {
+        name: 'name',
+        description: 'description',
+        status: 'status'
+      };
+
+      const setClauses: string[] = [];
+      const values: unknown[] = [];
+
       for (const [key, value] of Object.entries(updates)) {
-        setClauses.push(`${key} = $${i}`);
+        const column = columnByField[key];
+
+        if (!column) {
+          await client.query('ROLLBACK');
+          return reply.code(400).send({
+            error: `Unsupported project field: ${key}`
+          });
+        }
+
         values.push(value);
-        i++;
+        setClauses.push(`${column} = $${values.length}`);
       }
+
+      const projectIdParam = values.length + 1;
+      const orgIdParam = values.length + 2;
+
       values.push(id, org_id);
 
       const res = await client.query(
-        `UPDATE projects SET ${setClauses.join(', ')} WHERE id = $${i-2} AND org_id = $${i-1} RETURNING *`,
-        values
+          `UPDATE projects
+           SET ${setClauses.join(', ')}
+           WHERE id = $${projectIdParam}
+             AND org_id = $${orgIdParam}
+             RETURNING *`,
+          values
       );
 
       await logActivity(client, org_id, user_id, id, 'updated', updates);
       await client.query('COMMIT');
 
-      // Invalidate cache
+      // Invalidate the organization-specific project cache.
       await cache.del(`org:${org_id}:projects`);
 
       return reply.send(res.rows[0]);
-    } catch (err: any) {
+    } catch (err) {
       await client.query('ROLLBACK');
-      if (err.message === 'NOT_FOUND') return reply.code(404).send({ error: 'Project not found' });
       throw err;
     } finally {
       client.release();

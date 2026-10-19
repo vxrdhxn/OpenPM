@@ -1,4 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../cache/redis', () => ({
+  cache: {
+    get: vi.fn(),
+    set: vi.fn(),
+    del: vi.fn(),
+    publish: vi.fn(),
+    subscribe: vi.fn(),
+  },
+}));
 import Fastify from 'fastify';
 import authPlugin, { hasMinRole } from '../plugins/auth';
 import projectRoutes from './projects';
