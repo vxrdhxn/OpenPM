@@ -1,0 +1,30 @@
+version: 2
+
+# Keeps dependencies, the SHA-pinned GitHub Actions and the base images current.
+# Updates arrive as grouped weekly PRs to keep the noise down; security updates are separate and
+# are raised immediately by GitHub regardless of this schedule.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories:
+      - /apps/api
+      - /apps/worker
+      - /apps/frontend
+    schedule:
+      interval: weekly
