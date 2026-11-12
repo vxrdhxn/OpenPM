@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { Queue } from 'bullmq';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
+import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
 import { config } from '../config';
 
@@ -233,7 +234,15 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     const { org_id, user_id } = request.user;
 
     try {
-      await withTransaction(async (client) => {
+      const orphanedKeys = await withTransaction(async (client) => {
+        // The task's attachment rows would be removed by ON DELETE CASCADE anyway, but the files
+        // in object storage would not. Delete the rows explicitly to learn exactly which keys to
+        // clean up. If the task turns out not to exist, the rollback restores these rows.
+        const attachments = await client.query(
+          'DELETE FROM task_attachments WHERE task_id = $1 AND org_id = $2 RETURNING storage_key',
+          [taskId, org_id]
+        );
+
         const res = await client.query(
           'DELETE FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 RETURNING id',
           [taskId, projectId, org_id]
@@ -244,7 +253,11 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         await logActivity(client, org_id, user_id, taskId, 'deleted', {});
+        return attachments.rows.map((r: { storage_key: string }) => r.storage_key);
       });
+
+      // Only after commit, so a rolled-back delete never loses files that are still referenced.
+      await deleteStoredObjects(orphanedKeys, request.log);
 
       await cache.del(`org:${org_id}:project:${projectId}:tasks`);
       await cache.publish(`org:${org_id}:updates`, {

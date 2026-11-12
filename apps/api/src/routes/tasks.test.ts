@@ -11,6 +11,8 @@ const { queueAdd } = vi.hoisted(() => ({ queueAdd: vi.fn() }));
 vi.mock('bullmq', () => ({
   Queue: vi.fn().mockImplementation(() => ({ add: queueAdd })),
 }));
+const { getStorage } = vi.hoisted(() => ({ getStorage: vi.fn() }));
+vi.mock('../storage', () => ({ getStorage }));
 
 import { db } from '../db/client';
 import { cache } from '../cache/redis';
@@ -232,6 +234,89 @@ describe('Task routes lifecycle', () => {
       mockClient.query.mockImplementation(async () => rows());
       const res = await app.inject({ method: 'DELETE', url, headers: auth('admin') });
       expect(res.statusCode).toBe(404);
+    });
+
+    describe('attachment files', () => {
+      const storage = { delete: vi.fn() };
+      const withAttachments = (keys: string[]) =>
+        mockClient.query.mockImplementation(async (sql: string) => {
+          if (sql.startsWith('DELETE FROM task_attachments')) return rows(keys.map((storage_key) => ({ storage_key })));
+          if (sql.startsWith('DELETE FROM tasks')) return rows([{ id: T }]);
+          return rows();
+        });
+
+      beforeEach(() => {
+        storage.delete.mockReset().mockResolvedValue(undefined);
+        getStorage.mockReturnValue(storage);
+      });
+
+      it('removes the files from storage after the task is deleted', async () => {
+        withAttachments(['org/org-9/tasks/t/k1', 'org/org-9/tasks/t/k2']);
+
+        const res = await app.inject({ method: 'DELETE', url, headers: auth('admin', 'org-9') });
+
+        expect(res.statusCode).toBe(204);
+        expect(storage.delete).toHaveBeenCalledTimes(2);
+        expect(storage.delete).toHaveBeenCalledWith('org/org-9/tasks/t/k1');
+        expect(storage.delete).toHaveBeenCalledWith('org/org-9/tasks/t/k2');
+      });
+
+      it('collects the keys inside the transaction, scoped to the task and org, before deleting the task', async () => {
+        withAttachments(['k1']);
+
+        await app.inject({ method: 'DELETE', url, headers: auth('admin', 'org-9') });
+
+        const order = sqls();
+        const attachmentsAt = order.findIndex((s) => s.startsWith('DELETE FROM task_attachments'));
+        const taskAt = order.findIndex((s) => s.startsWith('DELETE FROM tasks'));
+        expect(attachmentsAt).toBeGreaterThan(order.indexOf('BEGIN'));
+        expect(attachmentsAt).toBeLessThan(taskAt);
+        expect(taskAt).toBeLessThan(order.indexOf('COMMIT'));
+        const call = mockClient.query.mock.calls[attachmentsAt]!;
+        expect(sqlOf(call)).toContain('RETURNING storage_key');
+        expect(call[1]).toEqual([T, 'org-9']);
+      });
+
+      it('does not delete files until the transaction has committed', async () => {
+        withAttachments(['k1']);
+        mockClient.query.mockImplementation(async (sql: string) => {
+          if (sql.startsWith('DELETE FROM task_attachments')) return rows([{ storage_key: 'k1' }]);
+          if (sql.startsWith('DELETE FROM tasks')) return rows(); // task not found -> rollback
+          return rows();
+        });
+
+        const res = await app.inject({ method: 'DELETE', url, headers: auth('admin', 'org-9') });
+
+        expect(res.statusCode).toBe(404);
+        expect(storage.delete).not.toHaveBeenCalled(); // the rows were rolled back; keep the files
+      });
+
+      it('still succeeds when storage fails (the files become logged orphans)', async () => {
+        withAttachments(['k1', 'k2']);
+        storage.delete.mockRejectedValue(new Error('storage down'));
+
+        const res = await app.inject({ method: 'DELETE', url, headers: auth('admin', 'org-9') });
+
+        expect(res.statusCode).toBe(204);
+        expect(storage.delete).toHaveBeenCalledTimes(2); // one failure does not stop the others
+      });
+
+      it('works when attachment storage is not configured', async () => {
+        getStorage.mockReturnValue(null);
+        withAttachments(['k1']);
+
+        const res = await app.inject({ method: 'DELETE', url, headers: auth('admin', 'org-9') });
+
+        expect(res.statusCode).toBe(204);
+      });
+
+      it('does not touch storage when the task had no attachments', async () => {
+        withAttachments([]);
+
+        await app.inject({ method: 'DELETE', url, headers: auth('admin', 'org-9') });
+
+        expect(storage.delete).not.toHaveBeenCalled();
+      });
     });
 
     it('publishes nothing when the delete fails or finds no task', async () => {
