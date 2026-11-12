@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import { domainOf, logger, Logger } from './logger';
+import { emailsTotal } from '../metrics';
 
 dotenv.config({ path: '../../.env' });
 
@@ -27,16 +28,21 @@ export async function sendEmailNotification(email: string, subject: string, body
       });
 
       if (error) {
+        emailsTotal.inc({ result: 'failed' });
         log.error({ err: error, to_domain }, 'Email provider rejected the message');
       } else {
+        emailsTotal.inc({ result: 'sent' });
         log.info({ to_domain, message_id: data?.id }, 'Email sent');
       }
     } catch (error) {
+      emailsTotal.inc({ result: 'failed' });
       log.error({ err: error, to_domain }, 'Failed to send email via Resend');
     }
   } else if (process.env.NODE_ENV === 'production') {
+    emailsTotal.inc({ result: 'skipped' });
     log.warn({ to_domain }, 'Email not sent: RESEND_API_KEY is not configured');
   } else {
+    emailsTotal.inc({ result: 'skipped' });
     log.info({ to: email, subject, body }, 'Email (development mock, not sent)');
     await new Promise(resolve => setTimeout(resolve, 500));
   }

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Logger } from './logger';
 
-const { send } = vi.hoisted(() => ({ send: vi.fn() }));
+const { send, emailInc } = vi.hoisted(() => ({ send: vi.fn(), emailInc: vi.fn() }));
+vi.mock('../metrics', () => ({ emailsTotal: { inc: emailInc } }));
 vi.mock('resend', () => ({
   Resend: vi.fn().mockImplementation(() => ({ emails: { send } })),
 }));
@@ -129,5 +130,64 @@ describe('sendEmailNotification', () => {
       expect(all()).not.toContain('secret body');
       expect(all()).not.toContain('token=abc');
     });
+  });
+});
+
+describe('email result metrics', () => {
+  beforeEach(() => {
+    send.mockReset();
+    emailInc.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
+
+  const resultsRecorded = () => emailInc.mock.calls.map((c) => c[0].result);
+
+  it('counts a sent email', async () => {
+    vi.stubEnv('RESEND_API_KEY', 'test-key');
+    send.mockResolvedValue({ data: { id: 'm1' }, error: null });
+
+    const { sendEmailNotification } = await loadEmail();
+    await sendEmailNotification('a@b.com', 's', 'b', fakeLog().log);
+
+    expect(resultsRecorded()).toEqual(['sent']);
+  });
+
+  it('counts a provider rejection and a network failure as failed', async () => {
+    vi.stubEnv('RESEND_API_KEY', 'test-key');
+    const { sendEmailNotification } = await loadEmail();
+
+    send.mockResolvedValueOnce({ data: null, error: { message: 'invalid' } });
+    await sendEmailNotification('a@b.com', 's', 'b', fakeLog().log);
+    send.mockRejectedValueOnce(new Error('network'));
+    await sendEmailNotification('a@b.com', 's', 'b', fakeLog().log);
+
+    expect(resultsRecorded()).toEqual(['failed', 'failed']);
+  });
+
+  it.each(['development', 'production'])('counts a mail not sent for lack of a provider as skipped (%s)', async (env) => {
+    vi.stubEnv('RESEND_API_KEY', '');
+    vi.stubEnv('NODE_ENV', env);
+    vi.useFakeTimers();
+
+    const { sendEmailNotification } = await loadEmail();
+    const pending = sendEmailNotification('a@b.com', 's', 'b', fakeLog().log);
+    await vi.runAllTimersAsync();
+    await pending;
+
+    expect(resultsRecorded()).toEqual(['skipped']);
+  });
+
+  it('labels only with the result, never with an address, subject or body', async () => {
+    vi.stubEnv('RESEND_API_KEY', 'test-key');
+    send.mockResolvedValue({ data: { id: 'm1' }, error: null });
+
+    const { sendEmailNotification } = await loadEmail();
+    await sendEmailNotification('someone.private@example.org', 'Private subject', 'Private body', fakeLog().log);
+
+    expect(emailInc.mock.calls).toEqual([[{ result: 'sent' }]]);
   });
 });
