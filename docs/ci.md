@@ -70,8 +70,8 @@ action.
 
 - The workflow has not run on GitHub yet, so expect to fix small things on the first run.
 - `actionlint` was not run.
-- The API and frontend Dockerfiles, and any `docker build`, were not run (no Docker daemon here), nor
-  was Trivy.
+- Trivy was not run. (All three images were built and started with `docker compose up --build` on a
+  developer machine, and the stack was exercised end to end, but not from a clean CI runner.)
 - Some API tests are timing-based (heartbeat and token-expiry tests use short real timers); a heavily
   loaded runner could make one flaky.
 - `dist/` currently also contains compiled `*.test.js` files, so images ship them. Excluding tests

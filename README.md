@@ -70,6 +70,20 @@ CI/CD       GitHub Actions (lint, build, test, Helm, gitleaks, Trivy)
 - [Docker](https://www.docker.com/) + Docker Compose
 - [Git](https://git-scm.com/)
 
+### Fastest way: run everything in Docker
+
+```bash
+git clone https://github.com/YOUR_ORG/openpm.git
+cd openpm
+docker compose up --build
+```
+
+Then open <http://localhost:3001> and register: the first account creates your organization.
+Database migrations run automatically (a one-shot `migrate` service runs before the API starts), and
+the defaults work without a `.env`. Stop it with `docker compose down` (add `-v` to also delete the data).
+
+For development with hot reload, use the steps below instead.
+
 ### 1. Clone & configure
 
 ```bash

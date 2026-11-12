@@ -34,6 +34,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # Applies database migrations, then exits. The API (and worker) start only after it succeeds, so a
+  # fresh `docker compose up` yields a working database instead of an app that 500s on first use.
+  # Safe to run repeatedly and from several instances at once (it is idempotent and takes a lock).
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: openpm-migrate
+    restart: "no"
+    command: ["node", "apps/api/dist/db/migrate.js", "up"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-openpm}:${POSTGRES_PASSWORD:-openpm}@postgres:5432/${POSTGRES_DB:-openpm}
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -60,6 +77,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -77,6 +96,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 5s
