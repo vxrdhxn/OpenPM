@@ -108,12 +108,12 @@ Tasks are divided into immediate, near-term, and production release phases:
 - [x] **Task A.2:** Audit every route in `apps/api/src/routes/` (`projects.ts`, `tasks.ts`, `invites.ts`, `profile.ts`) to ensure client-supplied `org_id` parameters can never override authenticated session context.
 - [x] **Task A.3:** Add explicit IDOR / cross-tenant boundary security tests ensuring User A from Org A cannot read or mutate resources owned by Org B.
 
-### Phase B: Test Suite Expansion (Next Focus)
-- [ ] **Task B.1:** Create integration test suites for Authentication flows (`register`, `login`, `password-reset`).
-- [ ] **Task B.2:** Create task & project lifecycle integration tests (`apps/api/src/routes/tasks.test.ts`).
-- [ ] **Task B.3:** Create worker process unit tests testing BullMQ payload consumption and Nodemailer dispatch mocks (`apps/worker`).
+### Phase B: Test Suite Expansion (Completed 🟢)
+- [x] **Task B.1:** Create integration test suites for Authentication flows (`register`, `login`, `password-reset`).
+- [x] **Task B.2:** Create task & project lifecycle integration tests (`apps/api/src/routes/tasks.test.ts`).
+- [x] **Task B.3:** Create worker process unit tests testing BullMQ payload consumption and Nodemailer dispatch mocks (`apps/worker`).
 
-### Phase C: Database & Migration Framework Polish
+### Phase C: Database & Migration Framework Polish (Next Focus)
 - [ ] **Task C.1:** Standardize schema migrations with rollback support.
 - [ ] **Task C.2:** Add indexes for foreign key lookups (`tasks(project_id)`, `projects(org_id)`, `organization_memberships(user_id, org_id)`).
 - [ ] **Task C.3:** Add database transaction wrappers around multi-step operations (e.g., user registration creating default organization).
