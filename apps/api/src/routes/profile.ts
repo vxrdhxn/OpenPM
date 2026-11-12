@@ -29,35 +29,34 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           name: { type: 'string', minLength: 1 },
           password: { type: 'string', minLength: 8 }
-        }
+        },
+        // Only name/password are self-editable. Unknown keys (role, org_id, email, ...) must be
+        // rejected: the app runs Ajv with removeAdditional: false, so they are not stripped.
+        minProperties: 1,
+        additionalProperties: false
       }
     }
   }, async (request, reply) => {
     const { user_id } = request.user;
-    const updates = request.body as any;
+    const { name, password } = request.body as { name?: string; password?: string };
 
-    if (Object.keys(updates).length === 0) {
-      return reply.code(400).send({ error: 'No fields to update' });
+    // Each column is written out explicitly; no request key ever becomes SQL text.
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+
+    if (name !== undefined) {
+      values.push(name);
+      setClauses.push(`name = $${values.length}`);
+    }
+    if (password !== undefined) {
+      values.push(await bcrypt.hash(password, 12));
+      setClauses.push(`password_hash = $${values.length}`);
     }
 
-    const setClauses = [];
-    const values = [];
-    let i = 1;
-    for (const [key, value] of Object.entries(updates)) {
-      if (key === 'password') {
-        const hash = await bcrypt.hash(value as string, 12);
-        setClauses.push(`password_hash = $${i}`);
-        values.push(hash);
-      } else {
-        setClauses.push(`${key} = $${i}`);
-        values.push(value);
-      }
-      i++;
-    }
     values.push(user_id);
 
     const res = await db.query(
-      `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${i-1} RETURNING id, name, email, role`,
+      `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING id, name, email, role`,
       values
     );
 
