@@ -20,6 +20,9 @@ vi.mock('../cache/redis', () => ({
     },
 }));
 
+const { getStorage } = vi.hoisted(() => ({ getStorage: vi.fn() }));
+vi.mock('../storage', () => ({ getStorage }));
+
 import { db } from '../db/client';
 import { cache } from '../cache/redis';
 import projectRoutes from './projects';
@@ -154,5 +157,104 @@ describe('Project routes', () => {
         expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
         expect(cache.del).toHaveBeenCalledWith('org:org-1:projects');
         expect(mockClient.release).toHaveBeenCalledOnce();
+    });
+
+    describe('DELETE', () => {
+        const storage = { delete: vi.fn() };
+        const sqls = () => mockClient.query.mock.calls.map((c) => String(c[0]));
+
+        function remove(role = 'admin') {
+            const adminToken = app.jwt.sign({ user_id: 'user-1', org_id: 'org-1', role });
+            return app.inject({
+                method: 'DELETE',
+                url: '/projects/project-1',
+                headers: { authorization: `Bearer ${adminToken}` },
+            });
+        }
+
+        function scenario({ keys = [] as string[], projectExists = true } = {}) {
+            mockClient.query.mockReset();
+            mockClient.query.mockImplementation(async (sql: string) => {
+                if (sql.startsWith('DELETE FROM task_attachments')) {
+                    return queryResult(keys.map((storage_key) => ({ storage_key })));
+                }
+                if (sql.startsWith('DELETE FROM projects')) {
+                    return queryResult(projectExists ? [{ id: 'project-1' }] : []);
+                }
+                return queryResult();
+            });
+        }
+
+        beforeEach(() => {
+            storage.delete.mockReset().mockResolvedValue(undefined);
+            getStorage.mockReturnValue(storage);
+        });
+
+        it('removes the files of every task in the project, after commit', async () => {
+            scenario({ keys: ['org/org-1/tasks/a/k1', 'org/org-1/tasks/b/k2'] });
+
+            const response = await remove();
+
+            expect(response.statusCode).toBe(204);
+            expect(storage.delete).toHaveBeenCalledTimes(2);
+            expect(storage.delete).toHaveBeenCalledWith('org/org-1/tasks/a/k1');
+            expect(storage.delete).toHaveBeenCalledWith('org/org-1/tasks/b/k2');
+            expect(cache.del).toHaveBeenCalledWith('org:org-1:projects');
+        });
+
+        it('collects keys inside the transaction, scoped to the project and org, before deleting the project', async () => {
+            scenario({ keys: ['k1'] });
+
+            await remove();
+
+            const order = sqls();
+            const attachmentsAt = order.findIndex((s) => s.startsWith('DELETE FROM task_attachments'));
+            const projectAt = order.findIndex((s) => s.startsWith('DELETE FROM projects'));
+            expect(attachmentsAt).toBeGreaterThan(order.indexOf('BEGIN'));
+            expect(attachmentsAt).toBeLessThan(projectAt);
+            expect(projectAt).toBeLessThan(order.indexOf('COMMIT'));
+
+            const call = mockClient.query.mock.calls[attachmentsAt]!;
+            expect(String(call[0])).toContain('RETURNING a.storage_key');
+            expect(String(call[0])).toContain('t.project_id = $1');
+            expect(call[1]).toEqual(['project-1', 'org-1']);
+        });
+
+        it('returns 404, rolls back and keeps the files when the project is not in the organization', async () => {
+            scenario({ keys: ['k1'], projectExists: false });
+
+            const response = await remove();
+
+            expect(response.statusCode).toBe(404);
+            expect(sqls()).toContain('ROLLBACK');
+            expect(storage.delete).not.toHaveBeenCalled();
+            expect(cache.del).not.toHaveBeenCalled();
+        });
+
+        it('still succeeds when storage fails', async () => {
+            scenario({ keys: ['k1', 'k2'] });
+            storage.delete.mockRejectedValue(new Error('storage down'));
+
+            const response = await remove();
+
+            expect(response.statusCode).toBe(204);
+            expect(storage.delete).toHaveBeenCalledTimes(2);
+        });
+
+        it('works when attachment storage is not configured', async () => {
+            getStorage.mockReturnValue(null);
+            scenario({ keys: ['k1'] });
+
+            expect((await remove()).statusCode).toBe(204);
+        });
+
+        it('stays admin-only', async () => {
+            scenario();
+
+            const response = await remove('member');
+
+            expect(response.statusCode).toBe(403);
+            expect(db.getClient).not.toHaveBeenCalled();
+        });
     });
 });

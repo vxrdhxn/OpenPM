@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
+import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
 
 const projectRoutes: FastifyPluginAsync = async (fastify) => {
@@ -197,14 +198,38 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     const { org_id } = request.user;
     const { id } = request.params as any;
 
-    const res = await db.query('DELETE FROM projects WHERE id = $1 AND org_id = $2 RETURNING id', [id, org_id]);
-    
-    if (res.length === 0) {
-      return reply.code(404).send({ error: 'Project not found' });
-    }
+    try {
+      const orphanedKeys = await withTransaction(async (client) => {
+        // Tasks (and their attachment rows) are removed by ON DELETE CASCADE, but the files in
+        // object storage are not. Delete the attachment rows explicitly to learn exactly which
+        // keys to clean up; if the project turns out not to exist, the rollback restores them.
+        const attachments = await client.query(
+          `DELETE FROM task_attachments a
+            USING tasks t
+            WHERE a.task_id = t.id AND t.project_id = $1 AND a.org_id = $2
+            RETURNING a.storage_key`,
+          [id, org_id]
+        );
 
-    await cache.del(`org:${org_id}:projects`);
-    return reply.code(204).send();
+        const res = await client.query('DELETE FROM projects WHERE id = $1 AND org_id = $2 RETURNING id', [id, org_id]);
+        if (res.rows.length === 0) {
+          throw new Error('NOT_FOUND');
+        }
+
+        return attachments.rows.map((r: { storage_key: string }) => r.storage_key);
+      });
+
+      // Only after commit, so a rolled-back delete never loses files that are still referenced.
+      await deleteStoredObjects(orphanedKeys, request.log);
+
+      await cache.del(`org:${org_id}:projects`);
+      return reply.code(204).send();
+    } catch (err) {
+      if (err instanceof Error && err.message === 'NOT_FOUND') {
+        return reply.code(404).send({ error: 'Project not found' });
+      }
+      throw err;
+    }
   });
 };
 
