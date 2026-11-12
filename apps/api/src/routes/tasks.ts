@@ -247,6 +247,11 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       await cache.del(`org:${org_id}:project:${projectId}:tasks`);
+      await cache.publish(`org:${org_id}:updates`, {
+        type: 'task_deleted',
+        project_id: projectId,
+        task_id: taskId
+      });
       return reply.code(204).send();
     } catch (err: any) {
       if (err.message === 'NOT_FOUND') return reply.code(404).send({ error: 'Task not found' });

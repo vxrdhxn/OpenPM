@@ -213,10 +213,31 @@ describe('Task routes lifecycle', () => {
       expect(cache.del).toHaveBeenCalledWith(`org:org-9:project:${P}:tasks`);
     });
 
+    it('publishes a task_deleted event to the caller org so other boards update', async () => {
+      mockClient.query.mockImplementation(async (sql: string) =>
+        sql.startsWith('DELETE FROM tasks') ? rows([{ id: T }]) : rows()
+      );
+
+      await app.inject({ method: 'DELETE', url, headers: auth('admin', 'org-9') });
+
+      expect(cache.publish).toHaveBeenCalledTimes(1);
+      expect(cache.publish).toHaveBeenCalledWith('org:org-9:updates', {
+        type: 'task_deleted',
+        project_id: P,
+        task_id: T,
+      });
+    });
+
     it('returns 404 when nothing was deleted', async () => {
       mockClient.query.mockImplementation(async () => rows());
       const res = await app.inject({ method: 'DELETE', url, headers: auth('admin') });
       expect(res.statusCode).toBe(404);
+    });
+
+    it('publishes nothing when the delete fails or finds no task', async () => {
+      mockClient.query.mockImplementation(async () => rows());
+      await app.inject({ method: 'DELETE', url, headers: auth('admin') });
+      expect(cache.publish).not.toHaveBeenCalled();
     });
   });
 
