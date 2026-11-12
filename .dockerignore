@@ -1,0 +1,25 @@
+# The Docker build context is the repo root (compose and CI build with `context: .`).
+# Keep host artifacts out of it: they bloat the context, and host node_modules / dist / .next can
+# carry platform-specific binaries or stale output into the image.
+
+.git
+.github
+.idea
+
+# Dependencies and build output are produced inside the image
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/*.tsbuildinfo
+
+# Never send local environment files (may hold real credentials)
+.env
+.env.*
+
+# Not needed to build any image
+helm
+argocd
+docs
+tests
+**/*.md
