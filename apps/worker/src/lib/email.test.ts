@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Logger } from './logger';
 
 const { send } = vi.hoisted(() => ({ send: vi.fn() }));
 vi.mock('resend', () => ({
@@ -11,56 +12,122 @@ async function loadEmail() {
   return import('./email.js');
 }
 
+/** A logger double that records every call (level, fields, message). */
+function fakeLog() {
+  const calls: Array<{ level: string; fields: Record<string, unknown>; msg: string }> = [];
+  const make = (level: string) => (fields: Record<string, unknown> | string, msg?: string) =>
+    calls.push(typeof fields === 'string' ? { level, fields: {}, msg: fields } : { level, fields, msg: msg ?? '' });
+  const log = { info: make('info'), warn: make('warn'), error: make('error') } as unknown as Logger;
+  return { log, calls, all: () => JSON.stringify(calls) };
+}
+
+const ADDRESS = 'someone.private@example.org';
+const SUBJECT = 'You have been assigned a task';
+const BODY = 'Hi Someone, secret body text with a link https://x.test/reset?token=abc';
+
 describe('sendEmailNotification', () => {
   beforeEach(() => {
     send.mockReset();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
-  it('sends through Resend when an API key is configured', async () => {
-    vi.stubEnv('RESEND_API_KEY', 'test-key');
-    vi.stubEnv('EMAIL_FROM_ADDRESS', 'no-reply@openpm.test');
-    send.mockResolvedValue({ data: { id: 'msg-1' }, error: null });
+  describe('with a Resend API key', () => {
+    it('sends through Resend', async () => {
+      vi.stubEnv('RESEND_API_KEY', 'test-key');
+      vi.stubEnv('EMAIL_FROM_ADDRESS', 'no-reply@openpm.test');
+      send.mockResolvedValue({ data: { id: 'msg-1' }, error: null });
+      const { log } = fakeLog();
 
-    const { sendEmailNotification } = await loadEmail();
-    await sendEmailNotification('a@b.com', 'Hi', 'Body');
+      const { sendEmailNotification } = await loadEmail();
+      await sendEmailNotification('a@b.com', 'Hi', 'Body', log);
 
-    expect(send).toHaveBeenCalledWith({
-      from: 'no-reply@openpm.test',
-      to: ['a@b.com'],
-      subject: 'Hi',
-      text: 'Body',
+      expect(send).toHaveBeenCalledWith({ from: 'no-reply@openpm.test', to: ['a@b.com'], subject: 'Hi', text: 'Body' });
+    });
+
+    it('logs only the recipient domain and the message id on success', async () => {
+      vi.stubEnv('RESEND_API_KEY', 'test-key');
+      send.mockResolvedValue({ data: { id: 'msg-1' }, error: null });
+      const { log, calls, all } = fakeLog();
+
+      const { sendEmailNotification } = await loadEmail();
+      await sendEmailNotification(ADDRESS, SUBJECT, BODY, log);
+
+      expect(calls).toEqual([{ level: 'info', fields: { to_domain: 'example.org', message_id: 'msg-1' }, msg: 'Email sent' }]);
+      expect(all()).not.toContain('someone.private');
+      expect(all()).not.toContain(SUBJECT);
+      expect(all()).not.toContain('secret body');
+    });
+
+    it('logs a provider error (with domain only) without throwing', async () => {
+      vi.stubEnv('RESEND_API_KEY', 'test-key');
+      send.mockResolvedValueOnce({ data: null, error: { message: 'invalid recipient' } });
+      const { log, calls, all } = fakeLog();
+
+      const { sendEmailNotification } = await loadEmail();
+      await expect(sendEmailNotification(ADDRESS, SUBJECT, BODY, log)).resolves.toBeUndefined();
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toMatchObject({ level: 'error', msg: 'Email provider rejected the message' });
+      expect(calls[0]!.fields).toMatchObject({ to_domain: 'example.org', err: { message: 'invalid recipient' } });
+      expect(all()).not.toContain('someone.private');
+    });
+
+    it('logs a network failure (with domain only) without throwing', async () => {
+      vi.stubEnv('RESEND_API_KEY', 'test-key');
+      send.mockRejectedValueOnce(new Error('network'));
+      const { log, calls, all } = fakeLog();
+
+      const { sendEmailNotification } = await loadEmail();
+      await expect(sendEmailNotification(ADDRESS, SUBJECT, BODY, log)).resolves.toBeUndefined();
+
+      expect(calls[0]).toMatchObject({ level: 'error', msg: 'Failed to send email via Resend' });
+      expect(all()).not.toContain('someone.private');
     });
   });
 
-  it('does not throw when Resend reports an error or rejects', async () => {
-    vi.stubEnv('RESEND_API_KEY', 'test-key');
-    const { sendEmailNotification } = await loadEmail();
+  describe('without an API key', () => {
+    beforeEach(() => {
+      vi.stubEnv('RESEND_API_KEY', '');
+      vi.useFakeTimers();
+    });
 
-    send.mockResolvedValueOnce({ data: null, error: { message: 'bad' } });
-    await expect(sendEmailNotification('a@b.com', 's', 'b')).resolves.toBeUndefined();
+    const run = async (log: Logger) => {
+      const { sendEmailNotification } = await loadEmail();
+      const pending = sendEmailNotification(ADDRESS, SUBJECT, BODY, log);
+      await vi.runAllTimersAsync();
+      await pending;
+    };
 
-    send.mockRejectedValueOnce(new Error('network'));
-    await expect(sendEmailNotification('a@b.com', 's', 'b')).resolves.toBeUndefined();
-  });
+    it('in development prints the whole mail so it can be read, and sends nothing', async () => {
+      vi.stubEnv('NODE_ENV', 'development');
+      const { log, calls } = fakeLog();
 
-  it('falls back to a console mock when no API key is set', async () => {
-    vi.stubEnv('RESEND_API_KEY', '');
-    vi.useFakeTimers();
+      await run(log);
 
-    const { sendEmailNotification } = await loadEmail();
-    const pending = sendEmailNotification('a@b.com', 'Subject', 'Body');
-    await vi.runAllTimersAsync();
-    await pending;
-    vi.useRealTimers();
+      expect(send).not.toHaveBeenCalled();
+      expect(calls).toEqual([
+        { level: 'info', fields: { to: ADDRESS, subject: SUBJECT, body: BODY }, msg: 'Email (development mock, not sent)' },
+      ]);
+    });
 
-    expect(send).not.toHaveBeenCalled();
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('[EMAIL MOCK] To: a@b.com'));
+    it('in production never logs the address, subject or body, only a warning with the domain', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const { log, calls, all } = fakeLog();
+
+      await run(log);
+
+      expect(send).not.toHaveBeenCalled();
+      expect(calls).toEqual([
+        { level: 'warn', fields: { to_domain: 'example.org' }, msg: 'Email not sent: RESEND_API_KEY is not configured' },
+      ]);
+      expect(all()).not.toContain('someone.private');
+      expect(all()).not.toContain(SUBJECT);
+      expect(all()).not.toContain('secret body');
+      expect(all()).not.toContain('token=abc');
+    });
   });
 });
