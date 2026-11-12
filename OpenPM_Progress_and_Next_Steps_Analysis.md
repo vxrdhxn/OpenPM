@@ -124,7 +124,7 @@ Tasks are divided into immediate, near-term, and production release phases:
 - [x] **Task D.3:** Frontend attachments UI. Cards on the board now open an accessible task detail dialog (focus trap, Escape, focus restored) containing a drag-and-drop panel: per-file progress and cancel, list, download, confirmed delete; viewers can download but not upload. The upload client derives the content type from the extension, cleans up the pending row on failure, and has unit tests (48, including a guard that keeps its type map identical to the server allowlist). The production build passes. **Not yet exercised in a browser against real storage**; the UI interactions (drag/drop, dialog focus) have no automated tests.
 
 ### Phase E: Production Readiness & Observability
-- [ ] **Task E.1:** Configure structured JSON logging with request correlation IDs across API and Worker.
+- [x] **Task E.1:** Structured JSON logging with request correlation across API and worker. `X-Request-Id` is honored when well-formed (hostile values replaced), returned to the caller and stamped on every log line; the API passes it to background jobs so the worker logs under the same id; authenticated lines carry `user_id`/`org_id` only; credentials are redacted; `LOG_LEVEL` is configurable; production worker logs never contain email addresses or bodies. Unit-tested, including the real Fastify wiring against a captured stream. Not yet run in a deployed environment; no log retention policy is defined.
 - [ ] **Task E.2:** Add Grafana dashboard definitions in Helm chart for API performance, queue lag, and error rates.
 - [ ] **Task E.3:** Setup GitHub Actions CI workflow to run lint, build, test, Docker container scanning (`gitleaks`, `trivy`), and Helm lint on PRs.
 
