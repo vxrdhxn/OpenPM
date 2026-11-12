@@ -1,9 +1,14 @@
 # Gitleaks configuration for OpenPM
 # Scans every commit for accidentally leaked secrets
 # Run locally: gitleaks detect --source . --config .gitleaks.toml
-# Also runs in CI via GitHub Actions
+# Also runs in CI (.github/workflows/ci.yml)
 
 title = "OpenPM Gitleaks Config"
+
+# Without this, a custom config REPLACES gitleaks' built-in rules (AWS/GitHub/Stripe tokens,
+# private keys, ...) and only the OpenPM rules below would run.
+[extend]
+  useDefault = true
 
 [allowlist]
   description = "Global allowlist"
@@ -13,22 +18,40 @@ title = "OpenPM Gitleaks Config"
     '''docs/.*''',               # Documentation files
   ]
 
-# Additional rules beyond the built-in defaults
+# Additional rules beyond the built-in defaults.
+#
+# Regex groups are non-capturing on purpose: an allowlist is matched against the rule's "secret",
+# which is the FIRST CAPTURE GROUP when there is one. With a capturing group such as `(ql)?` the
+# allowlists below would be tested against "ql" instead of the connection string and never match.
+#
+# Allowlists cover only the placeholder shapes this repo ships deliberately, and are anchored to the
+# position of the password/value so a real secret next to a placeholder is still reported:
+#   - documented local dev credentials (openpm:openpm@localhost)
+#   - SECRET_..._HERE style placeholders in example values
+#   - variable / template references (${VAR}, ${VAR:-default}, Helm printf "%s")
+# A real credential in a connection string does not match any of these and is still reported.
 
 [[rules]]
   id = "openpm-jwt-secret"
   description = "Hardcoded JWT secret"
-  regex = '''(?i)(jwt[_-]?secret|jwt[_-]?key)\s*[:=]\s*['"][^'"]{8,}['"]'''
+  regex = '''(?i)(?:jwt[_-]?secret|jwt[_-]?key)\s*[:=]\s*['"][^'"]{8,}['"]'''
   tags = ["secret", "jwt"]
+  [rules.allowlist]
+    regexes = [
+      '''(?i)['"][^'"]*change[_-]?me''',  # "change_me_to_something_..." template values
+      '''['"]\$\{[A-Z_]+''',              # "${JWT_SECRET}" references (the value IS a variable)
+    ]
 
 [[rules]]
   id = "openpm-database-url"
   description = "Database connection string with password"
-  regex = '''postgres(ql)?:\/\/[^:]+:[^@]+@[^/]+\/\w+'''
+  regex = '''postgres(?:ql)?:\/\/[^:]+:[^@]+@[^/]+\/\w+'''
   tags = ["secret", "database"]
   [rules.allowlist]
     regexes = [
-      '''postgres(ql)?:\/\/openpm:openpm@localhost''',  # Default dev credentials in .env.example
+      '''postgres(?:ql)?:\/\/openpm:openpm@localhost''',  # Default dev credentials (.env.example, README)
+      '''postgres(?:ql)?:\/\/[^:]+:SECRET_[A-Z_]+_HERE@''',  # Placeholders in values.prod.yaml
+      '''postgres(?:ql)?:\/\/[^:]+:\$\{[A-Z_]+[^}]*\}@''',   # ${POSTGRES_PASSWORD:-openpm} in compose
     ]
 
 [[rules]]
@@ -39,10 +62,13 @@ title = "OpenPM Gitleaks Config"
   [rules.allowlist]
     regexes = [
       '''redis:\/\/:openpm@localhost''',  # Default dev credentials in .env.example
+      '''redis:\/\/:SECRET_[A-Z_]+_HERE@''',   # Placeholders in values.prod.yaml
+      '''redis:\/\/:\$\{[A-Z_]+[^}]*\}@''',    # ${REDIS_PASSWORD:-openpm} in compose
+      '''redis:\/\/:%s@''',                   # Helm printf format string, not a value
     ]
 
 [[rules]]
   id = "openpm-generic-api-key"
   description = "Generic API key pattern"
-  regex = '''(?i)(api[_-]?key|apikey|api[_-]?token)\s*[:=]\s*['"][a-zA-Z0-9_\-]{20,}['"]'''
+  regex = '''(?i)(?:api[_-]?key|apikey|api[_-]?token)\s*[:=]\s*['"][a-zA-Z0-9_\-]{20,}['"]'''
   tags = ["secret", "api-key"]
