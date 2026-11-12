@@ -17,6 +17,7 @@ vi.mock('../storage', () => ({ getStorage }));
 import { db } from '../db/client';
 import { cache } from '../cache/redis';
 import authPlugin from '../plugins/auth';
+import { genReqId } from '../logger';
 import taskRoutes from './tasks';
 
 const mockClient = { query: vi.fn(), release: vi.fn() };
@@ -323,6 +324,32 @@ describe('Task routes lifecycle', () => {
       mockClient.query.mockImplementation(async () => rows());
       await app.inject({ method: 'DELETE', url, headers: auth('admin') });
       expect(cache.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('job correlation', () => {
+    it('hands the request id to the background job so logs can be followed into the worker', async () => {
+      const wired = Fastify({ genReqId, requestIdLogLabel: 'request_id' }); // same wiring as src/index.ts
+      await wired.register(authPlugin);
+      await wired.register(taskRoutes, { prefix: '/projects' });
+      await wired.ready();
+      mockClient.query.mockImplementation(async (sql: string) => {
+        if (sql.startsWith('SELECT id FROM projects')) return rows([{ id: P }]);
+        if (sql.startsWith('INSERT INTO tasks')) return rows([{ id: T, title: 'x' }]);
+        return rows();
+      });
+      const token = wired.jwt.sign({ user_id: 'user-1', org_id: 'org-1', role: 'member' });
+
+      const res = await wired.inject({
+        method: 'POST',
+        url: `/projects/${P}/tasks`,
+        headers: { authorization: `Bearer ${token}`, 'x-request-id': 'upstream-req-0001' },
+        payload: { title: 'x' },
+      });
+      await wired.close();
+
+      expect(res.statusCode).toBe(201);
+      expect(queueAdd).toHaveBeenCalledWith('task_created', expect.objectContaining({ request_id: 'upstream-req-0001' }));
     });
   });
 

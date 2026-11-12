@@ -77,7 +77,9 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       await taskQueue.add('task_created', {
         task_id: newTask.id,
         assignee_id: assignee_id,
-        org_id: org_id
+        org_id: org_id,
+        // Lets the worker log under the same id as the request that caused this job.
+        request_id: request.id
       });
 
       // Clear cache and emit WS event
