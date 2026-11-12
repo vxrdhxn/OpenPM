@@ -28,3 +28,8 @@ updates:
       - /apps/frontend
     schedule:
       interval: weekly
+    ignore:
+      # Stay on the Node LTS line (currently 22). Odd-numbered releases (23, 25, ...) never become LTS.
+      # Move to the next LTS (24) deliberately, by editing the Dockerfiles, CI and package.json together.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
