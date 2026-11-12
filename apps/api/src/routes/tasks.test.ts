@@ -219,4 +219,65 @@ describe('Task routes lifecycle', () => {
       expect(res.statusCode).toBe(404);
     });
   });
+
+  // Regression: PATCH built its SET clause from request-body keys. With the production
+  // Fastify config (removeAdditional: false, see src/index.ts) unknown keys reached the SQL,
+  // allowing SQL injection via a key name and writes to protected columns such as org_id.
+  describe('update: unknown / protected fields (production ajv config)', () => {
+    let strictApp: ReturnType<typeof Fastify>;
+    const url = `/projects/${P}/tasks/${T}`;
+
+    beforeEach(async () => {
+      strictApp = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
+      await strictApp.register(authPlugin);
+      await strictApp.register(taskRoutes, { prefix: '/projects' });
+      await strictApp.ready();
+    });
+
+    afterEach(async () => {
+      await strictApp.close();
+    });
+
+    const patch = (payload: Record<string, unknown>) =>
+      strictApp.inject({
+        method: 'PATCH',
+        url,
+        headers: {
+          authorization: `Bearer ${strictApp.jwt.sign({ user_id: 'user-1', org_id: 'org-1', role: 'member' })}`,
+        },
+        payload,
+      });
+
+    it.each([
+      ['a protected column', { org_id: 'org-other' }],
+      ['another protected column', { created_by: 'someone-else' }],
+      ['an unknown column', { nonexistent: 'x' }],
+      ['a SQL-injection key', { title: 'x', "status = 'done', org_id": 'org-other' }],
+      ['a valid field mixed with an unknown one', { title: 'ok', org_id: 'org-other' }],
+    ])('rejects %s with 400 before touching the database', async (_label, payload) => {
+      const res = await patch(payload);
+
+      expect(res.statusCode).toBe(400);
+      expect(db.getClient).not.toHaveBeenCalled();
+      expect(mockClient.query).not.toHaveBeenCalled();
+    });
+
+    it('only ever interpolates whitelisted column names into the UPDATE', async () => {
+      mockClient.query.mockImplementation(async (sql: string) => {
+        if (sql.startsWith('SELECT status FROM tasks')) return rows([{ status: 'todo' }]);
+        if (sql.startsWith('UPDATE tasks')) return rows([{ id: T }]);
+        return rows();
+      });
+
+      const res = await patch({ title: 'New', description: 'd', status: 'done', priority: 'high' });
+
+      expect(res.statusCode).toBe(200);
+      const update = mockClient.query.mock.calls.find((c) => sqlOf(c).startsWith('UPDATE tasks'));
+      expect(sqlOf(update)).toBe(
+        'UPDATE tasks SET title = $1, description = $2, status = $3, priority = $4, updated_at = NOW() ' +
+          'WHERE id = $5 AND project_id = $6 AND org_id = $7 RETURNING *'
+      );
+      expect(update![1]).toEqual(['New', 'd', 'done', 'high', T, P, 'org-1']);
+    });
+  });
 });

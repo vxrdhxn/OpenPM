@@ -11,6 +11,17 @@ const taskQueue = new Queue('tasks', {
   }
 });
 
+// Columns a client may change via PATCH. Everything else (org_id, project_id,
+// created_by, id, ...) is server-controlled and must never be written from a request body.
+const UPDATABLE_TASK_COLUMNS = new Set([
+  'title',
+  'description',
+  'status',
+  'priority',
+  'assignee_id',
+  'due_date',
+]);
+
 const taskRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
 
@@ -137,7 +148,10 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
           priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
           assignee_id: { type: 'string', format: 'uuid', nullable: true },
           due_date: { type: 'string', format: 'date-time', nullable: true }
-        }
+        },
+        // Reject unknown keys (the app runs Ajv with removeAdditional: false) and empty bodies.
+        minProperties: 1,
+        additionalProperties: false
       }
     }
   }, async (request, reply) => {
@@ -165,6 +179,11 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         const values = [];
         let i = 1;
         for (const [key, value] of Object.entries(updates)) {
+          // Defense in depth: only whitelisted names may ever become SQL identifiers,
+          // even if the schema above is loosened later.
+          if (!UPDATABLE_TASK_COLUMNS.has(key)) {
+            throw new Error('UNSUPPORTED_FIELD');
+          }
           setClauses.push(`${key} = $${i}`);
           values.push(value);
           i++;
@@ -201,6 +220,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(updatedTask);
     } catch (err: any) {
       if (err.message === 'NOT_FOUND') return reply.code(404).send({ error: 'Task not found' });
+      if (err.message === 'UNSUPPORTED_FIELD') return reply.code(400).send({ error: 'Unsupported task field' });
       throw err;
     }
   });
