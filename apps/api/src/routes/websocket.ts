@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { cache } from '../cache/redis';
 import { config } from '../config';
+import { activeWebsocketConnections } from '../metrics';
 
 export interface WebsocketRouteOptions {
   /** Ping interval. A client that misses a whole interval without answering is dropped. */
@@ -33,9 +34,12 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     let heartbeat: NodeJS.Timeout | null = null;
     let expiry: NodeJS.Timeout | null = null;
 
+    let counted = false; // whether this socket is currently included in the connections gauge
+
     const cleanup = () => {
       if (closed) return;
       closed = true;
+      if (counted) activeWebsocketConnections.dec();
       if (heartbeat) clearInterval(heartbeat);
       if (expiry) clearTimeout(expiry);
       unsubscribe?.();
@@ -56,6 +60,13 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       socket.close(1008, 'Unauthorized');
       return;
     }
+
+    // The client may have gone away while the token was being verified. cleanup() has already
+    // run in that case, so starting timers or counting the socket now would leak them.
+    if (closed) return;
+
+    activeWebsocketConnections.inc();
+    counted = true;
 
     const { org_id: orgId, exp } = request.user as { org_id: string; exp?: number };
     const channel = `org:${orgId}:updates`;

@@ -10,6 +10,7 @@ vi.mock('../cache/redis', () => ({
 
 import { cache } from '../cache/redis';
 import { config } from '../config';
+import { activeWebsocketConnections } from '../metrics';
 import authPlugin from '../plugins/auth';
 import websocketRoutes from './websocket';
 
@@ -237,6 +238,69 @@ describe('GET /ws', () => {
       expect(info).toMatchObject({ code: 1008, reason: 'Token expired' });
       await tick();
       expect(unsubscribe).toHaveBeenCalledTimes(1);
+    }, 5000);
+  });
+
+  describe('active_websocket_connections metric', () => {
+    beforeEach(() => build());
+
+    const gauge = async () => (await activeWebsocketConnections.get()).values[0]?.value ?? 0;
+    const until = async (expected: number) => {
+      for (let i = 0; i < 100; i++) {
+        if ((await gauge()) === expected) return;
+        await tick(10);
+      }
+      expect(await gauge()).toBe(expected);
+    };
+
+    beforeEach(async () => {
+      await until(0); // let any socket from a previous test finish closing
+    });
+
+    it('counts authenticated connections up and back down on disconnect', async () => {
+      const a = connect({ headers: asCookie(tokenFor()) });
+      const b = connect({ headers: asCookie(tokenFor('org-2')) });
+      await Promise.all([open(a), open(b)]);
+      await until(2);
+
+      a.ws.close();
+      await a.closed;
+      await until(1);
+
+      b.ws.close();
+      await b.closed;
+      await until(0);
+    });
+
+    it('does not count rejected connections', async () => {
+      const noAuth = connect();
+      const badOrigin = connect({ headers: { ...asCookie(tokenFor()), origin: 'https://evil.example' } });
+      await Promise.all([noAuth.closed, badOrigin.closed]);
+      await tick();
+
+      expect(await gauge()).toBe(0);
+    });
+
+    it('decrements when the server expires the session', async () => {
+      const c = connect({ headers: asCookie(tokenFor('org-1', {}, { expiresIn: 1 })) });
+      await open(c);
+      await until(1);
+
+      await c.closed; // server closes at JWT expiry
+
+      await until(0);
+    }, 5000);
+
+    it('decrements when a connection is dropped for missing heartbeats', async () => {
+      await app.close();
+      await build(25);
+      const c = connect({ headers: asCookie(tokenFor()), autoPong: false });
+      await open(c);
+      await until(1);
+
+      await c.closed;
+
+      await until(0);
     }, 5000);
   });
 
