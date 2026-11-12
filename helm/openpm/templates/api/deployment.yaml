@@ -41,6 +41,11 @@ spec:
                 configMapKeyRef:
                   name: {{ include "openpm.fullname" . }}-config
                   key: NODE_ENV
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "openpm.fullname" . }}-config
+                  key: LOG_LEVEL
             - name: PORT
               value: {{ .Values.api.port | default 3000 | quote }}
             - name: CORS_ORIGIN

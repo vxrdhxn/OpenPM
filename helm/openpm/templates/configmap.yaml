@@ -6,6 +6,7 @@ metadata:
     {{- include "openpm.labels" . | nindent 4 }}
 data:
   NODE_ENV: {{ .Values.global.environment | quote }}
+  LOG_LEVEL: {{ .Values.global.logLevel | default "info" | quote }}
   CORS_ORIGIN: {{ .Values.api.corsOrigin | default (printf "http://%s" .Values.global.domain) | quote }}
   
   # Frontend environment variables

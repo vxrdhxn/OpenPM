@@ -7,6 +7,8 @@ fullnameOverride: ""
 # General Configurations
 global:
   environment: "production"
+  # fatal | error | warn | info | debug | trace | silent. Logs are JSON, one object per line.
+  logLevel: "info"
   # Domain name used for ingress config
   domain: "openpm.local"
 
@@ -109,6 +111,11 @@ worker:
     repository: "openpm-worker"
     tag: "latest"
     pullPolicy: "IfNotPresent"
+  # Prometheus metrics endpoint (job outcomes/durations, queue depth and lag). The worker has no
+  # other HTTP port. Queue gauges describe the queue, not the pod: use max(), not sum(), across replicas.
+  metrics:
+    enabled: true
+    port: 9100
   resources:
     limits:
       cpu: 500m
@@ -169,10 +176,28 @@ ingress:
 # Network Policies (Default Deny + Explicit flows)
 networkPolicy:
   enabled: true
+  # Who may reach the worker's metrics port (your Prometheus). Default: pods in a namespace named
+  # "monitoring". Change this to match where Prometheus runs.
+  metricsIngressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
 
-# Prometheus ServiceMonitor
+# Prometheus ServiceMonitor (scrapes the API and, if worker.metrics.enabled, the worker)
 serviceMonitor:
   enabled: false
   # namespace: monitoring
   interval: 15s
   labels: {}
+
+# Grafana dashboards (API performance, worker/queue lag, error rates), shipped as ConfigMaps that
+# Grafana's dashboard sidecar picks up (the kube-prometheus-stack default is the label below).
+grafana:
+  dashboards:
+    enabled: false
+    # Namespace the sidecar watches. Empty = the release namespace.
+    namespace: ""
+    labels:
+      grafana_dashboard: "1"
+    annotations: {}
+    #  grafana_folder: "OpenPM"

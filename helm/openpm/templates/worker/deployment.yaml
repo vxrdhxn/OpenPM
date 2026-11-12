@@ -35,6 +35,15 @@ spec:
                 configMapKeyRef:
                   name: {{ include "openpm.fullname" . }}-config
                   key: NODE_ENV
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "openpm.fullname" . }}-config
+                  key: LOG_LEVEL
+            {{- if .Values.worker.metrics.enabled }}
+            - name: METRICS_PORT
+              value: {{ .Values.worker.metrics.port | default 9100 | quote }}
+            {{- end }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -50,6 +59,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "openpm.fullname" . }}-secrets
                   key: JWT_SECRET
+          {{- if .Values.worker.metrics.enabled }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.worker.metrics.port | default 9100 }}
+              protocol: TCP
+          {{- end }}
           livenessProbe:
             exec:
               command:

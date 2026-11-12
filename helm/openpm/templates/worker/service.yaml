@@ -1,0 +1,20 @@
+{{- if .Values.worker.metrics.enabled }}
+# Exists only so Prometheus can discover and scrape the worker's metrics port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openpm.worker.fullname" . }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: {{ .Values.worker.metrics.port | default 9100 }}
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    {{- include "openpm.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+{{- end }}
