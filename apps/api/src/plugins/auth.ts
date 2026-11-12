@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { config } from '../config';
+import { authFailuresTotal } from '../metrics';
 
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -61,8 +62,10 @@ export default fp(async function (fastify, _opts) {
     try {
       await request.jwtVerify();
     } catch (err) {
-      // Log why, never the credential itself.
-      request.log.warn({ event: 'auth_failure', reason: authFailureReason(err) }, 'Authentication failed');
+      // Record why, never the credential itself.
+      const reason = authFailureReason(err);
+      authFailuresTotal.inc({ reason });
+      request.log.warn({ event: 'auth_failure', reason }, 'Authentication failed');
       return reply.code(401).send({ error: 'Unauthorized' });
     }
 

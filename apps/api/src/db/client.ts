@@ -1,6 +1,8 @@
 import { Pool } from 'pg';
+import client from 'prom-client';
 import { config } from '../config';
 import { logger } from '../logger';
+import { dbQueryDurationSeconds } from '../metrics';
 
 // WHY max 20 connections:
 // PostgreSQL has a default max_connections of 100.
@@ -19,15 +21,34 @@ pool.on('error', (err) => {
   process.exit(-1);
 });
 
+// Pool saturation, read at scrape time so it is always current. "waiting" > 0 means requests are
+// queueing for a connection, the first sign the pool (max 20) is too small or queries are slow.
+new client.Gauge({
+  name: 'db_pool_connections',
+  help: 'Database pool connections by state (total, idle, waiting)',
+  labelNames: ['state'],
+  collect() {
+    this.set({ state: 'total' }, pool.totalCount);
+    this.set({ state: 'idle' }, pool.idleCount);
+    this.set({ state: 'waiting' }, pool.waitingCount);
+  },
+});
+
 export const db = {
   async query<T = any>(text: string, params?: any[]): Promise<T[]> {
-    const start = Date.now();
-    const res = await pool.query(text, params);
-    const duration = Date.now() - start;
-    if (config.NODE_ENV === 'development') {
-      logger.debug({ text, duration, rows: res.rowCount }, 'Executed query');
+    const stopTimer = dbQueryDurationSeconds.startTimer();
+    try {
+      const start = Date.now();
+      const res = await pool.query(text, params);
+      if (config.NODE_ENV === 'development') {
+        logger.debug({ text, duration: Date.now() - start, rows: res.rowCount }, 'Executed query');
+      }
+      stopTimer({ outcome: 'ok' });
+      return res.rows as T[];
+    } catch (err) {
+      stopTimer({ outcome: 'error' });
+      throw err;
     }
-    return res.rows as T[];
   },
   
   // For transactions
