@@ -99,4 +99,6 @@ The upload URL is valid for 5 minutes; download URLs for 2 minutes.
   is no scheduled reaper yet. Deleting a task or project does remove its files after the delete
   commits, on a best-effort basis.
 - **Retention policy** and attachment quotas per organization.
-- **Frontend UI** (drag-and-drop upload, list, download) is Task D.3.
+- **Browser verification.** The UI (click a task card to open it) has been type-checked, built and
+  unit-tested for its upload logic, but not run in a browser against real storage. Do that, and
+  confirm the bucket CORS rules above, before relying on it.

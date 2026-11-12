@@ -118,10 +118,10 @@ Tasks are divided into immediate, near-term, and production release phases:
 - [x] **Task C.2:** Add indexes for foreign key lookups. Migration `008_query_indexes` adds `tasks(project_id, created_at)`, `projects(org_id, created_at DESC)`, `password_reset_tokens(user_id)` and `activity_log(user_id)`. `organization_memberships` does not exist (users carry a single `users.org_id`), so that index is N/A until a membership model is introduced. Not yet run against a live Postgres.
 - [x] **Task C.3:** Add database transaction wrappers around multi-step operations. `withTransaction` (`apps/api/src/db/transaction.ts`) now backs every transactional route (auth, projects, tasks): commit on success, rollback on throw without masking the original error, client always released.
 
-### Phase D: Multi-Node Scaling & Media Attachments (In Progress)
+### Phase D: Multi-Node Scaling & Media Attachments (Completed 🟢, pending live verification)
 - [x] **Task D.1:** Redis Pub/Sub backplane for multi-pod WebSocket delivery. One shared, ref-counted subscriber per pod (`RealtimeHub`) instead of one Redis connection per client; cookie auth + Origin check; heartbeat; close on JWT expiry; no subscription leak on early disconnect; frontend reconnects with backoff. Unit-tested incl. real-socket route tests; not yet exercised against a live Redis or across two running pods.
 - [x] **Task D.2:** File attachments via S3-compatible storage with presigned uploads, at `/api/projects/:projectId/tasks/:taskId/attachments` (project-scoped like every task route). Allowlist, extension and size limits, random storage keys, magic-byte verification on completion, org-scoped authorization on every operation, forced-download headers, and file cleanup when a task or project is deleted. See `docs/attachments.md`. Tested with a fake store; **not yet run against real S3/MinIO**. Not done: malware scanning, an orphan reaper, retention and quotas.
-- [ ] **Task D.3:** Create frontend dropzone UI for task attachments.
+- [x] **Task D.3:** Frontend attachments UI. Cards on the board now open an accessible task detail dialog (focus trap, Escape, focus restored) containing a drag-and-drop panel: per-file progress and cancel, list, download, confirmed delete; viewers can download but not upload. The upload client derives the content type from the extension, cleans up the pending row on failure, and has unit tests (48, including a guard that keeps its type map identical to the server allowlist). The production build passes. **Not yet exercised in a browser against real storage**; the UI interactions (drag/drop, dialog focus) have no automated tests.
 
 ### Phase E: Production Readiness & Observability
 - [ ] **Task E.1:** Configure structured JSON logging with request correlation IDs across API and Worker.
@@ -141,5 +141,5 @@ Tasks are divided into immediate, near-term, and production release phases:
 | **Kubernetes & DevOps**| 🟢 Complete | Validate ArgoCD sync & Helm deployment rehearsal (Phase E) |
 
 ### Recommended Immediate Action:
-Continue **Phase D** with Task D.3 (frontend dropzone UI). Before that, run D.1 and D.2 against a real Redis and a real S3/MinIO bucket, including the browser PUT and CORS path.
+Phase D is implemented, but none of it has run outside tests. Before starting **Phase E**, run the full stack once (real Postgres, Redis, two API instances and an S3/MinIO bucket) and walk through: live board updates across two browsers, an attachment upload/download/delete in the browser (this exercises the bucket CORS configuration), and `migrate`/`migrate:down`/`migrate` on a real database.
 
