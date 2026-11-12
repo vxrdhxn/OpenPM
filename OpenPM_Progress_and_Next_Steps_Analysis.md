@@ -125,7 +125,7 @@ Tasks are divided into immediate, near-term, and production release phases:
 
 ### Phase E: Production Readiness & Observability
 - [x] **Task E.1:** Structured JSON logging with request correlation across API and worker. `X-Request-Id` is honored when well-formed (hostile values replaced), returned to the caller and stamped on every log line; the API passes it to background jobs so the worker logs under the same id; authenticated lines carry `user_id`/`org_id` only; credentials are redacted; `LOG_LEVEL` is configurable; production worker logs never contain email addresses or bodies. Unit-tested, including the real Fastify wiring against a captured stream. Not yet run in a deployed environment; no log retention policy is defined.
-- [ ] **Task E.2:** Add Grafana dashboard definitions in Helm chart for API performance, queue lag, and error rates.
+- [x] **Task E.2:** Metrics and Grafana dashboards. New API metrics (DB latency and pool saturation, auth failures, WebSocket rejections/errors, Redis errors, finer latency buckets) and a worker metrics endpoint (job outcomes/durations, queue depth, queue lag, email results). Two dashboards ship in the Helm chart (`grafana.dashboards.enabled`), with a worker Service/ServiceMonitor and a NetworkPolicy rule for scraping; fixed the API ServiceMonitor, which scraped nothing when placed in another namespace. A test checks every dashboard query against the metrics the code registers. Chart verified with real `helm lint`/`helm template`; **not loaded into a live Grafana/Prometheus**. No alert rules yet. See `docs/observability.md`.
 - [ ] **Task E.3:** Setup GitHub Actions CI workflow to run lint, build, test, Docker container scanning (`gitleaks`, `trivy`), and Helm lint on PRs.
 
 ---
