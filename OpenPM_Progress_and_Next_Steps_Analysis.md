@@ -113,12 +113,12 @@ Tasks are divided into immediate, near-term, and production release phases:
 - [x] **Task B.2:** Create task & project lifecycle integration tests (`apps/api/src/routes/tasks.test.ts`).
 - [x] **Task B.3:** Create worker process unit tests testing BullMQ payload consumption and Nodemailer dispatch mocks (`apps/worker`).
 
-### Phase C: Database & Migration Framework Polish (Next Focus)
+### Phase C: Database & Migration Framework Polish (Completed 🟢)
 - [x] **Task C.1:** Standardize schema migrations with rollback support. (`npm run migrate`, `migrate:down [n]`, `migrate:status`; unit-tested with a fake client — not yet exercised against a live Postgres.)
 - [x] **Task C.2:** Add indexes for foreign key lookups. Migration `008_query_indexes` adds `tasks(project_id, created_at)`, `projects(org_id, created_at DESC)`, `password_reset_tokens(user_id)` and `activity_log(user_id)`. `organization_memberships` does not exist (users carry a single `users.org_id`), so that index is N/A until a membership model is introduced. Not yet run against a live Postgres.
-- [ ] **Task C.3:** Add database transaction wrappers around multi-step operations (e.g., user registration creating default organization).
+- [x] **Task C.3:** Add database transaction wrappers around multi-step operations. `withTransaction` (`apps/api/src/db/transaction.ts`) now backs every transactional route (auth, projects, tasks): commit on success, rollback on throw without masking the original error, client always released.
 
-### Phase D: Multi-Node Scaling & Media Attachments
+### Phase D: Multi-Node Scaling & Media Attachments (Next Focus)
 - [ ] **Task D.1:** Upgrade WebSocket handler with Redis Pub/Sub so task events broadcast across multi-instance API deployments.
 - [ ] **Task D.2:** Implement file attachment upload service (`/api/tasks/:id/attachments`) using MinIO / AWS S3 client.
 - [ ] **Task D.3:** Create frontend dropzone UI for task attachments.
@@ -136,10 +136,10 @@ Tasks are divided into immediate, near-term, and production release phases:
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Maintain zero-warning baseline in CI |
 | **API Backend & RBAC** | 🟢 Complete | Enforced server-side RBAC & tenant boundary test suite |
-| **Background Worker** | 🟢 Functional | Expand unit test coverage for job failures (Phase B) |
+| **Background Worker** | 🟢 Functional | Worker unit tests added (Phase B); add job-retry/backoff coverage |
 | **Frontend UI** | 🟢 Functional | Add attachment handling & granular role views (Phase D) |
 | **Kubernetes & DevOps**| 🟢 Complete | Validate ArgoCD sync & Helm deployment rehearsal (Phase E) |
 
 ### Recommended Immediate Action:
-Begin **Phase B** by creating comprehensive integration test suites for authentication and task lifecycle workflows.
+Begin **Phase D** with Task D.1: a Redis Pub/Sub backplane so WebSocket events reach clients on every API pod.
 
