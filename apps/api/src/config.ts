@@ -25,7 +25,24 @@ const envSchema = z.object({
   ATTACHMENT_MAX_BYTES: z.string().regex(/^\d+$/).default('10485760').transform(Number), // 10 MiB
 });
 
-const parsed = envSchema.safeParse(process.env);
+// .env.example ships these optional settings blank (`S3_BUCKET=`), and a blank value is "unset",
+// not an invalid URL/size. Other variables keep strict semantics: a blank JWT_SECRET must still fail.
+const BLANK_MEANS_UNSET = new Set([
+  'S3_ENDPOINT',
+  'S3_PUBLIC_ENDPOINT',
+  'S3_REGION',
+  'S3_BUCKET',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+  'S3_FORCE_PATH_STYLE',
+  'ATTACHMENT_MAX_BYTES',
+]);
+
+const env = Object.fromEntries(
+  Object.entries(process.env).filter(([key, value]) => !(value === '' && BLANK_MEANS_UNSET.has(key)))
+);
+
+const parsed = envSchema.safeParse(env);
 
 if (!parsed.success) {
   console.error('❌ Invalid environment variables:', parsed.error.flatten().fieldErrors);
