@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { Queue } from 'bullmq';
 import { db } from '../db/client';
+import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 import { config } from '../config';
 
@@ -41,25 +42,24 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     const { title, description, priority = 'medium', assignee_id, due_date } = request.body as any;
     const { org_id, user_id } = request.user;
 
-    const client = await db.getClient();
     try {
-      await client.query('BEGIN');
-      
-      // Verify project ownership within tenant boundary
-      const projCheck = await client.query('SELECT id FROM projects WHERE id = $1 AND org_id = $2', [projectId, org_id]);
-      if (projCheck.rows.length === 0) {
-        throw new Error('PROJECT_NOT_FOUND');
-      }
+      const newTask = await withTransaction(async (client) => {
+        // Verify project ownership within tenant boundary
+        const projCheck = await client.query('SELECT id FROM projects WHERE id = $1 AND org_id = $2', [projectId, org_id]);
+        if (projCheck.rows.length === 0) {
+          throw new Error('PROJECT_NOT_FOUND');
+        }
 
-      const res = await client.query(
-        `INSERT INTO tasks (org_id, project_id, title, description, priority, assignee_id, due_date, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [org_id, projectId, title, description, priority, assignee_id, due_date, user_id]
-      );
-      const newTask = res.rows[0];
+        const res = await client.query(
+          `INSERT INTO tasks (org_id, project_id, title, description, priority, assignee_id, due_date, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+          [org_id, projectId, title, description, priority, assignee_id, due_date, user_id]
+        );
+        const created = res.rows[0];
 
-      await logActivity(client, org_id, user_id, newTask.id, 'created', { title });
-      await client.query('COMMIT');
+        await logActivity(client, org_id, user_id, created.id, 'created', { title });
+        return created;
+      });
 
       // Async background job processing
       await taskQueue.add('task_created', {
@@ -78,11 +78,8 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.code(201).send(newTask);
     } catch (err: any) {
-      await client.query('ROLLBACK');
       if (err.message === 'PROJECT_NOT_FOUND') return reply.code(404).send({ error: 'Project not found' });
       throw err;
-    } finally {
-      client.release();
     }
   });
 
@@ -152,46 +149,43 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'No fields to update' });
     }
 
-    const client = await db.getClient();
     try {
-      await client.query('BEGIN');
+      const updatedTask = await withTransaction(async (client) => {
+        const check = await client.query(
+          'SELECT status FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3',
+          [taskId, projectId, org_id]
+        );
+        if (check.rows.length === 0) {
+          throw new Error('NOT_FOUND');
+        }
 
-      const check = await client.query(
-        'SELECT status FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3', 
-        [taskId, projectId, org_id]
-      );
-      if (check.rows.length === 0) {
-        throw new Error('NOT_FOUND');
-      }
+        const oldStatus = check.rows[0].status;
 
-      const oldStatus = check.rows[0].status;
+        const setClauses = [];
+        const values = [];
+        let i = 1;
+        for (const [key, value] of Object.entries(updates)) {
+          setClauses.push(`${key} = $${i}`);
+          values.push(value);
+          i++;
+        }
+        setClauses.push(`updated_at = NOW()`);
+        values.push(taskId, projectId, org_id);
 
-      const setClauses = [];
-      const values = [];
-      let i = 1;
-      for (const [key, value] of Object.entries(updates)) {
-        setClauses.push(`${key} = $${i}`);
-        values.push(value);
-        i++;
-      }
-      setClauses.push(`updated_at = NOW()`);
-      values.push(taskId, projectId, org_id);
+        const res = await client.query(
+          `UPDATE tasks SET ${setClauses.join(', ')} WHERE id = $${i} AND project_id = $${i+1} AND org_id = $${i+2} RETURNING *`,
+          values
+        );
 
-      const res = await client.query(
-        `UPDATE tasks SET ${setClauses.join(', ')} WHERE id = $${i} AND project_id = $${i+1} AND org_id = $${i+2} RETURNING *`,
-        values
-      );
+        const metadata: any = { changes: Object.keys(updates) };
+        if (updates.status && updates.status !== oldStatus) {
+          metadata.from = oldStatus;
+          metadata.to = updates.status;
+        }
 
-      const updatedTask = res.rows[0];
-
-      const metadata: any = { changes: Object.keys(updates) };
-      if (updates.status && updates.status !== oldStatus) {
-        metadata.from = oldStatus;
-        metadata.to = updates.status;
-      }
-
-      await logActivity(client, org_id, user_id, taskId, 'updated', metadata);
-      await client.query('COMMIT');
+        await logActivity(client, org_id, user_id, taskId, 'updated', metadata);
+        return res.rows[0];
+      });
 
       // Pub/Sub notification for real-time collaboration
       await cache.publish(`org:${org_id}:updates`, {
@@ -206,11 +200,8 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send(updatedTask);
     } catch (err: any) {
-      await client.query('ROLLBACK');
       if (err.message === 'NOT_FOUND') return reply.code(404).send({ error: 'Task not found' });
       throw err;
-    } finally {
-      client.release();
     }
   });
 
@@ -221,29 +212,25 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     const { projectId, taskId } = request.params as any;
     const { org_id, user_id } = request.user;
 
-    const client = await db.getClient();
     try {
-      await client.query('BEGIN');
-      const res = await client.query(
-        'DELETE FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 RETURNING id',
-        [taskId, projectId, org_id]
-      );
+      await withTransaction(async (client) => {
+        const res = await client.query(
+          'DELETE FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 RETURNING id',
+          [taskId, projectId, org_id]
+        );
 
-      if (res.rows.length === 0) {
-        throw new Error('NOT_FOUND');
-      }
+        if (res.rows.length === 0) {
+          throw new Error('NOT_FOUND');
+        }
 
-      await logActivity(client, org_id, user_id, taskId, 'deleted', {});
-      await client.query('COMMIT');
+        await logActivity(client, org_id, user_id, taskId, 'deleted', {});
+      });
 
       await cache.del(`org:${org_id}:project:${projectId}:tasks`);
       return reply.code(204).send();
     } catch (err: any) {
-      await client.query('ROLLBACK');
       if (err.message === 'NOT_FOUND') return reply.code(404).send({ error: 'Task not found' });
       throw err;
-    } finally {
-      client.release();
     }
   });
 };
