@@ -120,7 +120,7 @@ Tasks are divided into immediate, near-term, and production release phases:
 
 ### Phase D: Multi-Node Scaling & Media Attachments (In Progress)
 - [x] **Task D.1:** Redis Pub/Sub backplane for multi-pod WebSocket delivery. One shared, ref-counted subscriber per pod (`RealtimeHub`) instead of one Redis connection per client; cookie auth + Origin check; heartbeat; close on JWT expiry; no subscription leak on early disconnect; frontend reconnects with backoff. Unit-tested incl. real-socket route tests; not yet exercised against a live Redis or across two running pods.
-- [ ] **Task D.2:** Implement file attachment upload service (`/api/tasks/:id/attachments`) using MinIO / AWS S3 client.
+- [x] **Task D.2:** File attachments via S3-compatible storage with presigned uploads, at `/api/projects/:projectId/tasks/:taskId/attachments` (project-scoped like every task route). Allowlist, extension and size limits, random storage keys, magic-byte verification on completion, org-scoped authorization on every operation, forced-download headers, and file cleanup when a task or project is deleted. See `docs/attachments.md`. Tested with a fake store; **not yet run against real S3/MinIO**. Not done: malware scanning, an orphan reaper, retention and quotas.
 - [ ] **Task D.3:** Create frontend dropzone UI for task attachments.
 
 ### Phase E: Production Readiness & Observability
@@ -141,5 +141,5 @@ Tasks are divided into immediate, near-term, and production release phases:
 | **Kubernetes & DevOps**| 🟢 Complete | Validate ArgoCD sync & Helm deployment rehearsal (Phase E) |
 
 ### Recommended Immediate Action:
-Continue **Phase D** with Task D.2: file attachments (`/api/tasks/:id/attachments`) via S3/MinIO. Before that, run D.1 against a real Redis with two API instances to confirm cross-pod delivery.
+Continue **Phase D** with Task D.3 (frontend dropzone UI). Before that, run D.1 and D.2 against a real Redis and a real S3/MinIO bucket, including the browser PUT and CORS path.
 
