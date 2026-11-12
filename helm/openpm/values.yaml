@@ -182,6 +182,23 @@ networkPolicy:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: monitoring
+  # Outbound HTTPS (TCP 443) to external services. With default-deny egress, the worker cannot reach
+  # the email provider and the API cannot reach S3 unless allowed here. Each list is a set of
+  # NetworkPolicy `to` peers; an empty list blocks it. Narrow these to your provider's CIDRs if you
+  # can. The default allows any public IP and excludes private ranges, so this does not open the
+  # cluster itself. Use the S3 list instead for in-cluster MinIO (selectors, port 9000).
+  egress:
+    worker:
+      https:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    api:
+      # Attachments (S3). Set to [] if attachments are disabled.
+      https:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
 
 # Prometheus ServiceMonitor (scrapes the API and, if worker.metrics.enabled, the worker)
 serviceMonitor:

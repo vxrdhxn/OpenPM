@@ -131,6 +131,15 @@ spec:
         - protocol: TCP
           port: 6379
     {{- end }}
+    {{- with .Values.networkPolicy.egress.api.https }}
+    # Egress to S3-compatible storage (attachments, presigned URLs are created locally but the API
+    # also verifies/deletes objects)
+    - to:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
 
 ---
 # 5. Worker Policies: Egress to DB & Redis; Ingress only for Prometheus on the metrics port
@@ -188,6 +197,14 @@ spec:
     - ports:
         - protocol: TCP
           port: 6379
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.worker.https }}
+    # Egress to the email provider (Resend API)
+    - to:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 443
     {{- end }}
 
 ---

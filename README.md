@@ -254,7 +254,7 @@ See [`.env.example`](.env.example) for all available configurations. Key variabl
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql://openpm:openpm@localhost:5432/openpm` | PostgreSQL connection string |
 | `REDIS_URL` | `redis://:openpm@localhost:6379` | Redis connection string |
-| `JWT_SECRET` | — | **Required.** Minimum 32 characters |
+| `JWT_SECRET` | dev key outside production | **Required when `NODE_ENV=production`** (the API refuses to start without it). Minimum 32 characters |
 | `CORS_ORIGIN` | `http://localhost:3001` | Allowed CORS origins |
 | `NODE_ENV` | `development` | `development` / `production` |
 
