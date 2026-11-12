@@ -8,6 +8,7 @@ vi.mock('./lib/db', () => ({ pool: {} }));
 
 import { handleJob, jobLogger } from './handler';
 import { loggerOptions } from './lib/logger';
+import { jobDurationSeconds, jobsTotal } from './metrics';
 
 type Line = Record<string, any>;
 
@@ -85,5 +86,55 @@ describe('handleJob', () => {
     processTaskCreated.mockRejectedValue(new Error('db down'));
 
     await expect(handleJob(job('task_created'), base)).rejects.toThrow('db down');
+  });
+});
+
+describe('job metrics', () => {
+  beforeEach(() => {
+    processTaskCreated.mockReset().mockResolvedValue(undefined);
+    jobsTotal.reset();
+    jobDurationSeconds.reset();
+  });
+
+  const count = async (job_name: string, status: string) =>
+    (await jobsTotal.get()).values.find((v) => v.labels.job_name === job_name && v.labels.status === status)?.value ?? 0;
+  const observations = async (job_name: string) =>
+    (await jobDurationSeconds.get()).values.find(
+      (v) => (v as { metricName?: string }).metricName === 'worker_job_duration_seconds_count' && v.labels.job_name === job_name
+    )?.value ?? 0;
+
+  it('counts a completed job and observes its duration', async () => {
+    await handleJob(job('task_created'), capture().base);
+
+    expect(await count('task_created', 'completed')).toBe(1);
+    expect(await count('task_created', 'failed')).toBe(0);
+    expect(await observations('task_created')).toBe(1);
+  });
+
+  it('counts a failed job, still observes its duration, and rethrows for BullMQ', async () => {
+    processTaskCreated.mockRejectedValue(new Error('db down'));
+
+    await expect(handleJob(job('task_created'), capture().base)).rejects.toThrow('db down');
+
+    expect(await count('task_created', 'failed')).toBe(1);
+    expect(await count('task_created', 'completed')).toBe(0);
+    expect(await observations('task_created')).toBe(1);
+  });
+
+  it('reports an unrecognized job name as "other", never as an arbitrary label value', async () => {
+    await handleJob(job('totally_unknown_job'), capture().base);
+
+    expect(await count('other', 'completed')).toBe(1);
+    expect(JSON.stringify((await jobsTotal.get()).values)).not.toContain('totally_unknown_job');
+  });
+
+  it('accumulates across jobs', async () => {
+    await handleJob(job('task_created', {}, '1'), capture().base);
+    await handleJob(job('task_created', {}, '2'), capture().base);
+    processTaskCreated.mockRejectedValueOnce(new Error('x'));
+    await handleJob(job('task_created', {}, '3'), capture().base).catch(() => undefined);
+
+    expect(await count('task_created', 'completed')).toBe(2);
+    expect(await count('task_created', 'failed')).toBe(1);
   });
 });
