@@ -16,6 +16,7 @@ import metricsRoutes from './routes/metrics';
 import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
 import taskRoutes from './routes/tasks';
+import attachmentRoutes from './routes/attachments';
 import websocketRoutes from './routes/websocket';
 import profileRoutes from './routes/profile';
 import inviteRoutes from './routes/invites';
@@ -110,6 +111,7 @@ fastify.register(metricsRoutes);
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(projectRoutes, { prefix: '/api/projects' });
 fastify.register(taskRoutes, { prefix: '/api/projects' }); // /:projectId/tasks
+fastify.register(attachmentRoutes, { prefix: '/api/projects' }); // /:projectId/tasks/:taskId/attachments
 fastify.register(profileRoutes, { prefix: '/api/profile' });
 fastify.register(inviteRoutes, { prefix: '/api/invites' });
 fastify.register(websocketRoutes);
