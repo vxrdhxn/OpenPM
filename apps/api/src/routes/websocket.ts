@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { cache } from '../cache/redis';
 import { config } from '../config';
-import { activeWebsocketConnections } from '../metrics';
+import { activeWebsocketConnections, websocketErrorsTotal, websocketRejectionsTotal } from '../metrics';
 
 export interface WebsocketRouteOptions {
   /** Ping interval. A client that misses a whole interval without answering is dropped. */
@@ -45,11 +45,15 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       unsubscribe?.();
     };
     socket.on('close', cleanup);
-    socket.on('error', (err) => fastify.log.warn(err, 'WS socket error'));
+    socket.on('error', (err) => {
+      websocketErrorsTotal.inc();
+      fastify.log.warn(err, 'WS socket error');
+    });
 
     const origin = request.headers.origin;
     if (origin && origin !== config.CORS_ORIGIN) {
       fastify.log.warn({ origin }, 'WS rejected: origin not allowed');
+      websocketRejectionsTotal.inc({ reason: 'origin' });
       socket.close(1008, 'Origin not allowed');
       return;
     }
@@ -57,6 +61,7 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     try {
       await request.jwtVerify();
     } catch {
+      websocketRejectionsTotal.inc({ reason: 'unauthorized' });
       socket.close(1008, 'Unauthorized');
       return;
     }
@@ -108,6 +113,7 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       fastify.log.info({ channel }, 'WS client subscribed');
     } catch (err) {
       fastify.log.error(err, 'WS subscription failed');
+      websocketRejectionsTotal.inc({ reason: 'subscription_failed' });
       socket.close(1011, 'Subscription failed');
     }
   });

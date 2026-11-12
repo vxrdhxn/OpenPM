@@ -10,7 +10,7 @@ vi.mock('../cache/redis', () => ({
 
 import { cache } from '../cache/redis';
 import { config } from '../config';
-import { activeWebsocketConnections } from '../metrics';
+import { activeWebsocketConnections, websocketErrorsTotal, websocketRejectionsTotal } from '../metrics';
 import authPlugin from '../plugins/auth';
 import websocketRoutes from './websocket';
 
@@ -302,6 +302,62 @@ describe('GET /ws', () => {
 
       await until(0);
     }, 5000);
+  });
+
+  describe('rejection and error metrics', () => {
+    beforeEach(() => build());
+
+    const rejections = async (reason: string) =>
+      (await websocketRejectionsTotal.get()).values.find((v) => v.labels.reason === reason)?.value ?? 0;
+
+    beforeEach(() => {
+      websocketRejectionsTotal.reset();
+      websocketErrorsTotal.reset();
+    });
+
+    it('counts an unauthenticated connection as unauthorized', async () => {
+      await connect().closed;
+      expect(await rejections('unauthorized')).toBe(1);
+    });
+
+    it('counts a bad token as unauthorized', async () => {
+      await connect({ headers: asCookie('garbage') }).closed;
+      expect(await rejections('unauthorized')).toBe(1);
+    });
+
+    it('counts a cross-site origin as origin', async () => {
+      await connect({ headers: { ...asCookie(tokenFor()), origin: 'https://evil.example' } }).closed;
+      expect(await rejections('origin')).toBe(1);
+      expect(await rejections('unauthorized')).toBe(0);
+    });
+
+    it('counts a failed subscription as subscription_failed', async () => {
+      vi.mocked(cache.subscribe).mockRejectedValue(new Error('redis down'));
+
+      await connect({ headers: asCookie(tokenFor()) }).closed;
+
+      expect(await rejections('subscription_failed')).toBe(1);
+    });
+
+    it('counts nothing for a healthy connection', async () => {
+      const c = connect({ headers: asCookie(tokenFor()) });
+      await open(c);
+      await tick();
+
+      const total = (await websocketRejectionsTotal.get()).values.reduce((n, v) => n + v.value, 0);
+      expect(total).toBe(0);
+    });
+
+    it('counts socket-level errors', async () => {
+      const c = connect({ headers: asCookie(tokenFor()) });
+      await open(c);
+      await tick();
+
+      const [serverSide] = [...app.websocketServer.clients];
+      serverSide!.emit('error', new Error('ECONNRESET'));
+
+      expect((await websocketErrorsTotal.get()).values[0]?.value).toBe(1);
+    });
   });
 
   describe('heartbeat', () => {
