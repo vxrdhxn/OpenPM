@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "lint": "eslint src/ --ext .ts",
     "migrate": "tsx src/db/migrate.ts",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "migrate:down": "tsx src/db/migrate.ts down",
     "migrate:status": "tsx src/db/migrate.ts status",
     "migrate:prod": "node dist/db/migrate.js"
