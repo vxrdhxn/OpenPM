@@ -1,7 +1,7 @@
 import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { config } from '../config';
+import { getJwtSecret } from '../config';
 import { authFailuresTotal } from '../metrics';
 
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';
@@ -51,7 +51,7 @@ export function authFailureReason(err: unknown): 'missing' | 'expired' | 'invali
 
 export default fp(async function (fastify, _opts) {
   fastify.register(jwt, {
-    secret: config.JWT_SECRET,
+    secret: getJwtSecret(),
     cookie: {
       cookieName: 'auth_token',
       signed: false,

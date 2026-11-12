@@ -9,7 +9,7 @@ const envSchema = z.object({
   PORT: z.string().regex(/^\d+$/).default('3000'),
   DATABASE_URL: z.string().url().default('postgresql://openpm:openpm@localhost:5432/openpm'),
   REDIS_URL: z.string().url().default('redis://:openpm@localhost:6379'),
-  // Optional here so development works out of the box; production is enforced in superRefine below.
+  // Optional here so development works out of the box; production is enforced by getJwtSecret().
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long').optional(),
   CORS_ORIGIN: z.string().url().default('http://localhost:3001'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
@@ -25,19 +25,9 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'), // true for MinIO
   ATTACHMENT_MAX_BYTES: z.string().regex(/^\d+$/).default('10485760').transform(Number), // 10 MiB
-}).superRefine((value, ctx) => {
-  // Outside development/test there is no fallback: a missing secret must stop the process, not
-  // silently sign tokens with a key that is published in this repository.
-  if (value.NODE_ENV === 'production' && !value.JWT_SECRET) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['JWT_SECRET'],
-      message: 'JWT_SECRET is required when NODE_ENV=production',
-    });
-  }
 });
 
-export const DEV_JWT_SECRET = 'super_secret_development_key_change_me_in_prod_123';
+const DEV_JWT_SECRET = 'super_secret_development_key_change_me_in_prod_123';
 
 // .env.example ships these optional settings blank (`S3_BUCKET=`), and a blank value is "unset",
 // not an invalid URL/size. Other variables keep strict semantics: a blank JWT_SECRET must still fail.
@@ -64,7 +54,18 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const config = {
-  ...parsed.data,
-  JWT_SECRET: parsed.data.JWT_SECRET ?? DEV_JWT_SECRET,
-};
+export const config = parsed.data;
+
+/**
+ * The secret used to sign tokens. Outside production a development key is used so the app runs out
+ * of the box; in production a missing secret stops the API instead of silently signing tokens with
+ * a key that is published in this repository. (Checked here, not at config load, so tools that only
+ * need the database, such as migrations, do not need a signing secret.)
+ */
+export function getJwtSecret(): string {
+  if (config.JWT_SECRET) return config.JWT_SECRET;
+  if (config.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET is required when NODE_ENV=production');
+  }
+  return DEV_JWT_SECRET;
+}
