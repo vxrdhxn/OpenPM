@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import { config } from '../config';
+import { RealtimeHub, Handler } from '../realtime/hub';
 
 const client = new Redis(config.REDIS_URL, {
   maxRetriesPerRequest: null,
@@ -38,25 +39,28 @@ export const cache = {
     await client.publish(channel, JSON.stringify(message));
   },
 
-  // Subscriber logic should use a separate connection to avoid blocking the main client
-  async subscribe(channel: string, handler: (message: any) => void): Promise<() => void> {
-    const subClient = new Redis(config.REDIS_URL);
-    
-    await subClient.subscribe(channel);
-    
-    subClient.on('message', (ch, msg) => {
-      if (ch === channel) {
-        try {
-          handler(JSON.parse(msg));
-        } catch (e) {
-          console.error('Error parsing Redis message', e);
-        }
-      }
-    });
-
-    return () => {
-      subClient.unsubscribe(channel);
-      subClient.quit();
-    };
+  /**
+   * Subscribe to a channel. All local subscriptions share ONE dedicated Redis subscriber
+   * connection per process (see RealtimeHub), instead of one connection per caller.
+   * Returns an idempotent unsubscribe function.
+   */
+  async subscribe(channel: string, handler: Handler): Promise<() => void> {
+    return getHub().subscribe(channel, handler);
   }
 };
+
+// A connection in subscriber mode can't run normal commands, so it must be separate from `client`.
+// Created lazily so importing this module doesn't open a second connection until it's needed.
+let hub: RealtimeHub | null = null;
+
+function getHub(): RealtimeHub {
+  if (!hub) {
+    const subscriber = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
+    subscriber.on('error', (err) => {
+      console.error('Redis subscriber connection error:', err);
+    });
+    // ioredis re-issues SUBSCRIBE for active channels after a reconnect (autoResubscribe, default on).
+    hub = new RealtimeHub(subscriber);
+  }
+  return hub;
+}
