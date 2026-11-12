@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../logger', () => ({ logger: { error: vi.fn() } }));
 vi.mock('./client', () => ({
   db: { query: vi.fn(), getClient: vi.fn() },
 }));
 
 import { db } from './client';
+import { logger } from '../logger';
 import { withTransaction } from './transaction';
 
 const client = { query: vi.fn(), release: vi.fn() };
@@ -44,7 +46,6 @@ describe('withTransaction', () => {
   });
 
   it('does not let a failing ROLLBACK mask the original error', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     client.query.mockImplementation(async (sql: string) => {
       if (sql === 'ROLLBACK') throw new Error('connection lost');
       return { rows: [] };
@@ -57,6 +58,8 @@ describe('withTransaction', () => {
       })
     ).rejects.toBe(original);
     expect(client.release).toHaveBeenCalledTimes(1);
+    // The failed rollback is not swallowed silently: it is logged with its error.
+    expect(logger.error).toHaveBeenCalledWith({ err: expect.objectContaining({ message: 'connection lost' }) }, 'ROLLBACK failed');
   });
 
   it('rolls back nothing and still releases when COMMIT fails', async () => {

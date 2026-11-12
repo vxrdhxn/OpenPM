@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { db } from './client';
+import { logger } from '../logger';
 
 /**
  * Run `fn` inside a database transaction.
@@ -24,7 +25,7 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
       try {
         await client.query('ROLLBACK');
       } catch (rollbackErr) {
-        console.error('ROLLBACK failed', rollbackErr);
+        logger.error({ err: rollbackErr }, 'ROLLBACK failed');
       }
       throw err;
     }

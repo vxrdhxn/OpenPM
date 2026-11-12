@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import { config } from '../config';
+import { logger } from '../logger';
 import { RealtimeHub, Handler } from '../realtime/hub';
 
 const client = new Redis(config.REDIS_URL, {
@@ -8,7 +9,7 @@ const client = new Redis(config.REDIS_URL, {
 });
 
 client.on('error', (err) => {
-  console.error('Redis connection error:', err);
+  logger.error({ err }, 'Redis connection error');
 });
 
 export const cache = {
@@ -57,7 +58,7 @@ function getHub(): RealtimeHub {
   if (!hub) {
     const subscriber = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
     subscriber.on('error', (err) => {
-      console.error('Redis subscriber connection error:', err);
+      logger.error({ err }, 'Redis subscriber connection error');
     });
     // ioredis re-issues SUBSCRIBE for active channels after a reconnect (autoResubscribe, default on).
     hub = new RealtimeHub(subscriber);

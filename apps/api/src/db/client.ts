@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { config } from '../config';
+import { logger } from '../logger';
 
 // WHY max 20 connections:
 // PostgreSQL has a default max_connections of 100.
@@ -14,7 +15,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle pg client', err);
+  logger.error({ err }, 'Unexpected error on idle pg client');
   process.exit(-1);
 });
 
@@ -24,7 +25,7 @@ export const db = {
     const res = await pool.query(text, params);
     const duration = Date.now() - start;
     if (config.NODE_ENV === 'development') {
-      console.log('Executed query', { text, duration, rows: res.rowCount });
+      logger.debug({ text, duration, rows: res.rowCount }, 'Executed query');
     }
     return res.rows as T[];
   },
