@@ -10,6 +10,8 @@ import client from 'prom-client';
 
 import { config } from './config';
 import { httpRequestDurationMicroseconds, httpRequestsTotal } from './metrics';
+import { genReqId, loggerOptions } from './logger';
+import requestIdPlugin from './plugins/requestId';
 import authPlugin from './plugins/auth';
 import healthRoutes from './routes/health';
 import metricsRoutes from './routes/metrics';
@@ -34,7 +36,9 @@ client.collectDefaultMetrics();
 
 
 const fastify = Fastify({
-  logger: true,
+  logger: loggerOptions,
+  genReqId,
+  requestIdLogLabel: 'request_id',
   bodyLimit: 1048576, // 1MB request size limit
   ajv: {
     customOptions: {
@@ -101,6 +105,9 @@ if (config.NODE_ENV !== 'production') {
     routePrefix: '/docs',
   });
 }
+
+// Request ids (X-Request-Id in/out) must be registered before the routes
+fastify.register(requestIdPlugin);
 
 // Custom Auth Plugin
 fastify.register(authPlugin);

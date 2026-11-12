@@ -40,6 +40,14 @@ declare module '@fastify/jwt' {
   }
 }
 
+/** Coarse, safe classification of a JWT failure for logs and metrics. */
+export function authFailureReason(err: unknown): 'missing' | 'expired' | 'invalid' {
+  const code = String((err as { code?: string })?.code ?? '');
+  if (code.includes('NO_AUTHORIZATION')) return 'missing';
+  if (code.includes('EXPIRED')) return 'expired';
+  return 'invalid';
+}
+
 export default fp(async function (fastify, _opts) {
   fastify.register(jwt, {
     secret: config.JWT_SECRET,
@@ -52,9 +60,18 @@ export default fp(async function (fastify, _opts) {
   fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
     try {
       await request.jwtVerify();
-    } catch {
-      reply.code(401).send({ error: 'Unauthorized' });
+    } catch (err) {
+      // Log why, never the credential itself.
+      request.log.warn({ event: 'auth_failure', reason: authFailureReason(err) }, 'Authentication failed');
+      return reply.code(401).send({ error: 'Unauthorized' });
     }
+
+    // From here on every log line for this request (including Fastify's own "request completed")
+    // carries who made it. Only ids are added: no email, name or token.
+    const { user_id, org_id } = request.user;
+    const log = request.log.child({ user_id, org_id });
+    request.log = log;
+    reply.log = log;
   });
 
   fastify.decorate('requireRole', function (minRole: Role) {

@@ -11,6 +11,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().url().default('redis://:openpm@localhost:6379'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long').default('super_secret_development_key_change_me_in_prod_123'),
   CORS_ORIGIN: z.string().url().default('http://localhost:3001'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   // Attachment storage: any S3-compatible service (AWS S3, MinIO, ...).
   // Deliberately no defaults for credentials: if these are unset, attachments are disabled
@@ -28,6 +29,7 @@ const envSchema = z.object({
 // .env.example ships these optional settings blank (`S3_BUCKET=`), and a blank value is "unset",
 // not an invalid URL/size. Other variables keep strict semantics: a blank JWT_SECRET must still fail.
 const BLANK_MEANS_UNSET = new Set([
+  'LOG_LEVEL',
   'S3_ENDPOINT',
   'S3_PUBLIC_ENDPOINT',
   'S3_REGION',
