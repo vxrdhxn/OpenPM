@@ -19,6 +19,7 @@ vi.mock('../db/client', () => ({
 
 import { db } from '../db/client';
 import authPlugin from '../plugins/auth';
+import { authFailuresTotal } from '../metrics';
 import authRoutes from './auth';
 
 const mockClient = { query: vi.fn(), release: vi.fn() };
@@ -157,6 +158,44 @@ describe('Auth routes', () => {
       expect(wrongPw.statusCode).toBe(401);
       expect(unknown.statusCode).toBe(401);
       expect(wrongPw.json()).toEqual(unknown.json());
+    });
+  });
+
+  describe('login failure metrics', () => {
+    const attempt = (email: string, password: string) =>
+      app.inject({ method: 'POST', url: '/auth/login', payload: { email, password } });
+    const failures = async () =>
+      (await authFailuresTotal.get()).values.find((v) => v.labels.reason === 'bad_credentials')?.value ?? 0;
+
+    beforeEach(() => authFailuresTotal.reset());
+
+    it('counts a wrong password and an unknown user under the same reason (no enumeration signal)', async () => {
+      const hash = await bcrypt.hash('password123', 4);
+      vi.mocked(db.query).mockResolvedValueOnce([{ id: 'u1', org_id: 'o1', role: 'member', password_hash: hash }]);
+      await attempt('known@b.com', 'wrong-password');
+
+      vi.mocked(db.query).mockResolvedValueOnce([]);
+      await attempt('nobody@b.com', 'whatever123');
+
+      expect(await failures()).toBe(2);
+    });
+
+    it('does not count a successful login', async () => {
+      const hash = await bcrypt.hash('password123', 4);
+      vi.mocked(db.query).mockResolvedValueOnce([{ id: 'u1', org_id: 'o1', role: 'member', password_hash: hash }]);
+
+      const res = await attempt('known@b.com', 'password123');
+
+      expect(res.statusCode).toBe(200);
+      expect(await failures()).toBe(0);
+    });
+
+    it('does not put the email address in any metric label', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([]);
+
+      await attempt('private.person@example.org', 'whatever123');
+
+      expect(JSON.stringify((await authFailuresTotal.get()).values)).not.toContain('private.person');
     });
   });
 

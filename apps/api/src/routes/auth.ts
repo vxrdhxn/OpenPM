@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import bcrypt from 'bcrypt';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
+import { authFailuresTotal } from '../metrics';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Register: Create Org + User
@@ -107,17 +108,25 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const { email, password } = request.body as any;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const users = await db.query('SELECT id, org_id, role, password_hash FROM users WHERE email = $1', [normalizedEmail]);
-    
-    if (users.length === 0) {
+    // One reason for both "no such user" and "wrong password", in the response AND in metrics/logs,
+    // so nothing observable distinguishes the two. The email address is deliberately not recorded.
+    const rejectLogin = () => {
+      authFailuresTotal.inc({ reason: 'bad_credentials' });
+      request.log.warn({ event: 'login_failed', reason: 'bad_credentials' }, 'Login failed');
       return reply.code(401).send({ error: 'Invalid credentials' });
+    };
+
+    const users = await db.query('SELECT id, org_id, role, password_hash FROM users WHERE email = $1', [normalizedEmail]);
+
+    if (users.length === 0) {
+      return rejectLogin();
     }
 
     const user = users[0];
     const match = await bcrypt.compare(password, user.password_hash);
 
     if (!match) {
-      return reply.code(401).send({ error: 'Invalid credentials' });
+      return rejectLogin();
     }
 
     const token = fastify.jwt.sign(
