@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege: every job only reads the repository.
+permissions:
+  contents: read
+
+# A new push to a PR supersedes its running checks; main always runs to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "20"           # matches the node:20-alpine runtime images
+  HELM_VERSION: v3.16.4
+  GITLEAKS_VERSION: "8.30.1"
+  # sha256 of gitleaks_<version>_linux_x64.tar.gz from the release's checksums file.
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  # Image vulnerability scanning is REPORT-ONLY for now: the dependency tree currently has known
+  # HIGH/CRITICAL advisories (several need major upgrades, e.g. Fastify 5, Next 15+, Zod 4), so
+  # blocking on them would fail every build for reasons unrelated to the change. Set to "1" to make
+  # HIGH/CRITICAL findings fail the build once that backlog is cleared. See docs/ci.md.
+  TRIVY_EXIT_CODE: "0"
+
+jobs:
+  node:
+    name: Lint, build, test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # npm ci fails if package-lock.json and the package.json files disagree.
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Builds the API, worker and frontend (tsc / next build); this is also the type-check.
+      - name: Build
+        run: npm run build
+
+      # Runs every package's tests, then the cross-package checks (dashboards vs. metrics).
+      # A package that finds no tests fails rather than passing silently.
+      - name: Test
+        run: npm test
+
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      # --strict turns lint warnings into failures. Each variant exercises different template branches.
+      - name: Lint (defaults, production values, monitoring on)
+        run: |
+          helm lint --strict helm/openpm
+          helm lint --strict helm/openpm -f helm/openpm/values.prod.yaml
+          helm lint --strict helm/openpm --set serviceMonitor.enabled=true --set grafana.dashboards.enabled=true
+
+      # Lint doesn't catch everything; actually render each variant.
+      - name: Render
+        run: |
+          helm template openpm helm/openpm > /dev/null
+          helm template openpm helm/openpm -f helm/openpm/values.prod.yaml > /dev/null
+          helm template openpm helm/openpm \
+            --set serviceMonitor.enabled=true --set serviceMonitor.namespace=monitoring \
+            --set grafana.dashboards.enabled=true > /dev/null
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # scan the whole history, not just the tip
+          persist-credentials: false
+
+      # Pinned version, verified against the published checksum before it is executed.
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP/bin" gitleaks
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      # A broken config can silently detect nothing (this repo's did: it replaced the built-in rules).
+      # Prove, on every run, that it still reports known fake secrets. The values are assembled from
+      # fragments so this file itself doesn't look like a leak to the scanner.
+      - name: Check the config still detects secrets
+        run: |
+          mkdir "$RUNNER_TEMP/canary"
+          kind=RSA
+          printf -- '-----BEGIN %s PRIVATE KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7MaeEAMPLEEXAMPLE\n-----END %s PRIVATE KEY-----\n' \
+            "$kind" "$kind" > "$RUNNER_TEMP/canary/key.pem"
+          scheme=postgresql
+          printf "const url = '%s://admin:Tr0ub4dor-9x-real@db.prod.example.com:5432/app';\n" "$scheme" > "$RUNNER_TEMP/canary/db.ts"
+          if gitleaks detect --no-git --source "$RUNNER_TEMP/canary" --config .gitleaks.toml --no-banner > /dev/null 2>&1; then
+            echo "::error::gitleaks reported nothing for files containing known fake secrets: the configuration is not detecting"
+            exit 1
+          fi
+          echo "Canary detected as expected."
+
+      - name: Scan history
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
+
+  images:
+    name: Image (${{ matrix.app }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, worker, frontend]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Build only (nothing is pushed). Proves the Dockerfile builds from a clean checkout.
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: false
+          load: true
+          tags: openpm-${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: openpm-${{ matrix.app }}:ci
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true # only report what has a fix available
+          exit-code: ${{ env.TRIVY_EXIT_CODE }}
