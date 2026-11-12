@@ -1,7 +1,8 @@
-import { Worker, Job } from 'bullmq';
+import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { pool } from './lib/db';
-import processTaskCreated from './processors/taskCreated';
+import { logger } from './lib/logger';
+import { handleJob, jobLogger } from './handler';
 import dotenv from 'dotenv';
 
 // Load env for local dev (ignored in K8s)
@@ -10,29 +11,32 @@ dotenv.config({ path: '../../.env' });
 const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
 });
+redisConnection.on('error', (err) => logger.error({ err }, 'Redis connection error'));
 
-const worker = new Worker('tasks', async (job: Job) => {
-  console.log(`Processing job ${job.id} of type ${job.name}...`);
+const worker = new Worker('tasks', (job) => handleJob(job), { connection: redisConnection });
 
-  if (job.name === 'task_created') {
-    await processTaskCreated(job);
-  }
-
-}, { connection: redisConnection });
-
-worker.on('completed', job => {
-  console.log(`${job.id} has completed!`);
+worker.on('completed', (job) => {
+  jobLogger(job).info(
+    { duration_ms: job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : undefined },
+    'Job completed'
+  );
 });
 
 worker.on('failed', (job, err) => {
-  console.log(`${job?.id} has failed with ${err.message}`);
+  const log = job ? jobLogger(job) : logger;
+  log.error(
+    { err, attempts_made: job?.attemptsMade, max_attempts: job?.opts?.attempts ?? 1 },
+    'Job failed'
+  );
 });
 
-console.log('Worker is running and listening to "tasks" queue...');
+worker.on('error', (err) => logger.error({ err }, 'Worker error'));
+
+logger.info({ queue: 'tasks' }, 'Worker is running and listening for jobs');
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
-  console.log('Shutting down worker...');
+  logger.info('Shutting down worker');
   await worker.close();
   await pool.end();
   process.exit(0);

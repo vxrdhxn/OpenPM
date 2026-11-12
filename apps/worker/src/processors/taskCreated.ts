@@ -1,13 +1,15 @@
 import { Job } from 'bullmq';
 import { pool } from '../lib/db';
 import { sendEmailNotification } from '../lib/email';
+import { logger, Logger } from '../lib/logger';
 
-export default async function processTaskCreated(job: Job) {
+/** `log` is the per-job logger from handleJob (it already carries job_id and request_id). */
+export default async function processTaskCreated(job: Job, log: Logger = logger) {
   const { task_id, assignee_id, org_id: _org_id } = job.data;
 
   // If no assignee, nothing to notify
   if (!assignee_id) {
-    console.log(`Task ${task_id} has no assignee. Skipping notification.`);
+    log.info({ task_id }, 'Task has no assignee; skipping notification');
     return;
   }
 
@@ -15,13 +17,19 @@ export default async function processTaskCreated(job: Job) {
   try {
     // Get task details
     const taskRes = await client.query('SELECT title, project_id FROM tasks WHERE id = $1', [task_id]);
-    if (taskRes.rows.length === 0) return;
+    if (taskRes.rows.length === 0) {
+      log.warn({ task_id }, 'Task no longer exists; skipping notification');
+      return;
+    }
     const taskTitle = taskRes.rows[0].title;
     const projectId = taskRes.rows[0].project_id;
 
     // Get assignee email
     const userRes = await client.query('SELECT name, email FROM users WHERE id = $1', [assignee_id]);
-    if (userRes.rows.length === 0) return;
+    if (userRes.rows.length === 0) {
+      log.warn({ task_id, assignee_id }, 'Assignee no longer exists; skipping notification');
+      return;
+    }
     const { name, email } = userRes.rows[0];
 
     // Get project name
@@ -31,10 +39,11 @@ export default async function processTaskCreated(job: Job) {
     await sendEmailNotification(
       email,
       `You've been assigned a new task: ${taskTitle}`,
-      `Hi ${name},\n\nYou have been assigned to "${taskTitle}" in the project "${projName}".\nLog in to OpenPM to view it.`
+      `Hi ${name},\n\nYou have been assigned to "${taskTitle}" in the project "${projName}".\nLog in to OpenPM to view it.`,
+      log
     );
-    
-    console.log(`Successfully processed task_created for task ${task_id}`);
+
+    log.info({ task_id, assignee_id }, 'Processed task_created');
   } finally {
     client.release();
   }
