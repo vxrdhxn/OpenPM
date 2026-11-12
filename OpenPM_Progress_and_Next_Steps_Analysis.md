@@ -115,7 +115,7 @@ Tasks are divided into immediate, near-term, and production release phases:
 
 ### Phase C: Database & Migration Framework Polish (Next Focus)
 - [x] **Task C.1:** Standardize schema migrations with rollback support. (`npm run migrate`, `migrate:down [n]`, `migrate:status`; unit-tested with a fake client — not yet exercised against a live Postgres.)
-- [ ] **Task C.2:** Add indexes for foreign key lookups (`tasks(project_id)`, `projects(org_id)`, `organization_memberships(user_id, org_id)`).
+- [x] **Task C.2:** Add indexes for foreign key lookups. Migration `008_query_indexes` adds `tasks(project_id, created_at)`, `projects(org_id, created_at DESC)`, `password_reset_tokens(user_id)` and `activity_log(user_id)`. `organization_memberships` does not exist (users carry a single `users.org_id`), so that index is N/A until a membership model is introduced. Not yet run against a live Postgres.
 - [ ] **Task C.3:** Add database transaction wrappers around multi-step operations (e.g., user registration creating default organization).
 
 ### Phase D: Multi-Node Scaling & Media Attachments
