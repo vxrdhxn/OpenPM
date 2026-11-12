@@ -118,8 +118,8 @@ Tasks are divided into immediate, near-term, and production release phases:
 - [x] **Task C.2:** Add indexes for foreign key lookups. Migration `008_query_indexes` adds `tasks(project_id, created_at)`, `projects(org_id, created_at DESC)`, `password_reset_tokens(user_id)` and `activity_log(user_id)`. `organization_memberships` does not exist (users carry a single `users.org_id`), so that index is N/A until a membership model is introduced. Not yet run against a live Postgres.
 - [x] **Task C.3:** Add database transaction wrappers around multi-step operations. `withTransaction` (`apps/api/src/db/transaction.ts`) now backs every transactional route (auth, projects, tasks): commit on success, rollback on throw without masking the original error, client always released.
 
-### Phase D: Multi-Node Scaling & Media Attachments (Next Focus)
-- [ ] **Task D.1:** Upgrade WebSocket handler with Redis Pub/Sub so task events broadcast across multi-instance API deployments.
+### Phase D: Multi-Node Scaling & Media Attachments (In Progress)
+- [x] **Task D.1:** Redis Pub/Sub backplane for multi-pod WebSocket delivery. One shared, ref-counted subscriber per pod (`RealtimeHub`) instead of one Redis connection per client; cookie auth + Origin check; heartbeat; close on JWT expiry; no subscription leak on early disconnect; frontend reconnects with backoff. Unit-tested incl. real-socket route tests; not yet exercised against a live Redis or across two running pods.
 - [ ] **Task D.2:** Implement file attachment upload service (`/api/tasks/:id/attachments`) using MinIO / AWS S3 client.
 - [ ] **Task D.3:** Create frontend dropzone UI for task attachments.
 
@@ -141,5 +141,5 @@ Tasks are divided into immediate, near-term, and production release phases:
 | **Kubernetes & DevOps**| 🟢 Complete | Validate ArgoCD sync & Helm deployment rehearsal (Phase E) |
 
 ### Recommended Immediate Action:
-Begin **Phase D** with Task D.1: a Redis Pub/Sub backplane so WebSocket events reach clients on every API pod.
+Continue **Phase D** with Task D.2: file attachments (`/api/tasks/:id/attachments`) via S3/MinIO. Before that, run D.1 against a real Redis with two API instances to confirm cross-pod delivery.
 
