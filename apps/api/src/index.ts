@@ -9,6 +9,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import client from 'prom-client';
 
 import { config } from './config';
+import { httpRequestDurationMicroseconds, httpRequestsTotal } from './metrics';
 import authPlugin from './plugins/auth';
 import healthRoutes from './routes/health';
 import metricsRoutes from './routes/metrics';
@@ -29,24 +30,6 @@ declare module 'fastify' {
 
 // Initialize Prometheus metrics
 client.collectDefaultMetrics();
-
-const httpRequestDurationMicroseconds = new client.Histogram({
-  name: 'http_request_duration_seconds',
-  help: 'Duration of HTTP requests in seconds',
-  labelNames: ['method', 'route', 'code'],
-  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10]
-});
-
-const httpRequestsTotal = new client.Counter({
-  name: 'http_requests_total',
-  help: 'Total number of HTTP requests',
-  labelNames: ['method', 'route', 'code']
-});
-
-export const activeWebsocketConnections = new client.Gauge({
-  name: 'active_websocket_connections',
-  help: 'Number of active WebSocket connections',
-});
 
 
 const fastify = Fastify({
