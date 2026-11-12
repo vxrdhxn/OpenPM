@@ -150,5 +150,23 @@ describe('migration engine', () => {
       expect(real.length).toBeGreaterThan(0);
       expect(real.filter((m) => !m.downPath).map((m) => m.version)).toEqual([]);
     });
+
+    it('every table/index an up migration creates is dropped by its rollback', () => {
+      // An index counts as covered if it is dropped explicitly OR its table is dropped.
+      const created = /CREATE\s+(?:UNIQUE\s+)?(TABLE|INDEX)\s+(?:IF NOT EXISTS\s+)?(\w+)(?:\s+ON\s+(\w+))?/gi;
+      const drops = (down: string, kind: string, name: string) =>
+        new RegExp(String.raw`DROP\s+${kind}\s+(?:IF EXISTS\s+)?${name}\b`, 'i').test(down);
+      const problems: string[] = [];
+
+      for (const m of listMigrations(path.join(__dirname, 'migrations'))) {
+        const up = fs.readFileSync(m.upPath, 'utf8');
+        const down = fs.readFileSync(m.downPath!, 'utf8');
+        for (const [, kind, name, table] of up.matchAll(created)) {
+          const covered = drops(down, kind!, name!) || (kind!.toUpperCase() === 'INDEX' && drops(down, 'TABLE', table!));
+          if (!covered) problems.push(`${m.version}: ${kind} ${name} is not dropped by its rollback`);
+        }
+      }
+      expect(problems).toEqual([]);
+    });
   });
 });
