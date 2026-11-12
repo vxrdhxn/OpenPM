@@ -57,7 +57,7 @@ Backend     Node.js + Fastify + TypeScript (strict)
 Database    PostgreSQL 16
 Cache       Redis 7 + BullMQ
 Deploy      Docker multi-stage + Helm + ArgoCD
-CI/CD       GitHub Actions + CodeQL + Trivy
+CI/CD       GitHub Actions (lint, build, test, Helm, gitleaks, Trivy)
 ```
 
 ---
@@ -256,7 +256,7 @@ OpenPM is designed to be self-hosted and open-source. Security is defence-in-dep
 - **API**: Rate limiting, Helmet security headers, strict CORS, 1MB body limit.
 - **Containers**: Non-root (UID 1001), multi-stage builds, minimal base images.
 - **Network**: Kubernetes NetworkPolicy with default deny-all.
-- **CI**: CodeQL static analysis, Trivy container scanning, `npm audit` checks.
+- **CI**: gitleaks secret scanning, Trivy image scanning (report-only until the dependency advisories are cleared), Helm lint. CodeQL and an `npm audit` gate are not set up yet. See [docs/ci.md](docs/ci.md).
 - **Dependencies**: Dependabot auto-updates for npm, Actions, and Docker.
 
 ### Reporting Vulnerabilities
