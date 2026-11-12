@@ -61,7 +61,11 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
     if (!lastMessage) return;
 
     if (lastMessage.project_id === params.id) {
-      if (lastMessage.type === 'task_created' || lastMessage.type === 'task_updated') {
+      if (
+        lastMessage.type === 'task_created' ||
+        lastMessage.type === 'task_updated' ||
+        lastMessage.type === 'task_deleted'
+      ) {
         // Re-fetch to guarantee consistency on collaborative edits
         fetchTasks();
       }
