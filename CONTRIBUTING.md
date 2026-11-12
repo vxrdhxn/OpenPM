@@ -42,7 +42,7 @@ Enhancement suggestions are tracked as GitHub issues.
 OpenPM uses a monorepo structure with npm workspaces.
 
 ### Prerequisites
-* Node.js >= 20
+* Node.js >= 22
 * Docker & Docker Compose
 * Git
 

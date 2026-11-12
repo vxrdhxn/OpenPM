@@ -19,7 +19,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License" />
-  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node" />
+  <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen" alt="Node" />
   <img src="https://img.shields.io/badge/TypeScript-strict-blue" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome" />
 </p>
@@ -66,7 +66,7 @@ CI/CD       GitHub Actions (lint, build, test, Helm, gitleaks, Trivy)
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) ≥ 20
+- [Node.js](https://nodejs.org/) ≥ 22
 - [Docker](https://www.docker.com/) + Docker Compose
 - [Git](https://git-scm.com/)
 

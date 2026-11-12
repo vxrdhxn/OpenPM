@@ -20,7 +20,7 @@
     "test:repo": "vitest run --config vitest.repo.config.ts"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "devDependencies": {
     "vitest": "^1.3.1"

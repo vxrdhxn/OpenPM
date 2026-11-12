@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: "20"           # matches the node:20-alpine runtime images
+  NODE_VERSION: "22"           # matches the node:22-alpine runtime images
   HELM_VERSION: v3.16.4
   GITLEAKS_VERSION: "8.30.1"
   # sha256 of gitleaks_<version>_linux_x64.tar.gz from the release's checksums file.
