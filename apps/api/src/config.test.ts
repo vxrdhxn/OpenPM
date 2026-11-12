@@ -8,17 +8,17 @@ async function loadConfig(env: Record<string, string>) {
     if (key.startsWith('S3_') || key === 'ATTACHMENT_MAX_BYTES') delete process.env[key];
   }
   Object.assign(process.env, env);
-  return (await import('./config')).config;
+  return (await import('./config.js')).config;
 }
 
 describe('config: attachment storage settings', () => {
   const saved = { ...process.env };
-  let exit: ReturnType<typeof vi.spyOn>;
+  let exit: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     exit = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit');
-    }) as never);
+    }) as never) as unknown as ReturnType<typeof vi.fn>;
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
