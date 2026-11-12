@@ -114,7 +114,7 @@ Tasks are divided into immediate, near-term, and production release phases:
 - [x] **Task B.3:** Create worker process unit tests testing BullMQ payload consumption and Nodemailer dispatch mocks (`apps/worker`).
 
 ### Phase C: Database & Migration Framework Polish (Next Focus)
-- [ ] **Task C.1:** Standardize schema migrations with rollback support.
+- [x] **Task C.1:** Standardize schema migrations with rollback support. (`npm run migrate`, `migrate:down [n]`, `migrate:status`; unit-tested with a fake client — not yet exercised against a live Postgres.)
 - [ ] **Task C.2:** Add indexes for foreign key lookups (`tasks(project_id)`, `projects(org_id)`, `organization_memberships(user_id, org_id)`).
 - [ ] **Task C.3:** Add database transaction wrappers around multi-step operations (e.g., user registration creating default organization).
 
