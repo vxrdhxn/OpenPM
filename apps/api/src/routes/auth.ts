@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import bcrypt from 'bcrypt';
 import { db } from '../db/client';
+import { withTransaction } from '../db/transaction';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Register: Create Org + User
@@ -29,39 +30,37 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     
     const normalizedEmail = email.toLowerCase().trim();
 
-    const client = await db.getClient();
     try {
-      await client.query('BEGIN');
+      const { orgId, userId } = await withTransaction(async (client) => {
+        // Check slug uniqueness
+        const orgCheck = await client.query('SELECT id FROM organizations WHERE slug = $1', [org_slug]);
+        if (orgCheck.rows.length > 0) {
+          throw new Error('SLUG_TAKEN');
+        }
 
-      // Check slug uniqueness
-      const orgCheck = await client.query('SELECT id FROM organizations WHERE slug = $1', [org_slug]);
-      if (orgCheck.rows.length > 0) {
-        throw new Error('SLUG_TAKEN');
-      }
+        // Check email uniqueness
+        const emailCheck = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+        if (emailCheck.rows.length > 0) {
+          throw new Error('EMAIL_TAKEN');
+        }
 
-      // Check email uniqueness
-      const emailCheck = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
-      if (emailCheck.rows.length > 0) {
-        throw new Error('EMAIL_TAKEN');
-      }
+        const passwordHash = await bcrypt.hash(password, 12);
 
-      const passwordHash = await bcrypt.hash(password, 12);
+        // Create organization
+        const orgRes = await client.query(
+          'INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id',
+          [org_name, org_slug]
+        );
+        const orgId = orgRes.rows[0].id;
 
-      // Create organization
-      const orgRes = await client.query(
-        'INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id',
-        [org_name, org_slug]
-      );
-      const orgId = orgRes.rows[0].id;
+        // Create user
+        const userRes = await client.query(
+          'INSERT INTO users (org_id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+          [orgId, normalizedEmail, passwordHash, name, 'admin']
+        );
 
-      // Create user
-      const userRes = await client.query(
-        'INSERT INTO users (org_id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [orgId, normalizedEmail, passwordHash, name, 'admin']
-      );
-      const userId = userRes.rows[0].id;
-
-      await client.query('COMMIT');
+        return { orgId, userId: userRes.rows[0].id };
+      });
 
       // Sign JWT
       const token = fastify.jwt.sign(
@@ -80,12 +79,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.code(201).send({ token });
     } catch (err: any) {
-      await client.query('ROLLBACK');
       if (err.message === 'SLUG_TAKEN') return reply.code(409).send({ error: 'Organization slug is already taken' });
       if (err.message === 'EMAIL_TAKEN') return reply.code(409).send({ error: 'Email is already registered' });
       throw err;
-    } finally {
-      client.release();
     }
   });
 
@@ -207,34 +203,30 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { token, password } = request.body as any;
 
-    const client = await db.getClient();
     try {
-      await client.query('BEGIN');
-      const tokenRes = await client.query(
-        'SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1',
-        [token]
-      );
+      await withTransaction(async (client) => {
+        const tokenRes = await client.query(
+          'SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1',
+          [token]
+        );
 
-      if (tokenRes.rows.length === 0 || tokenRes.rows[0].expires_at < new Date()) {
-        throw new Error('INVALID_TOKEN');
-      }
+        if (tokenRes.rows.length === 0 || tokenRes.rows[0].expires_at < new Date()) {
+          throw new Error('INVALID_TOKEN');
+        }
 
-      const userId = tokenRes.rows[0].user_id;
-      const passwordHash = await bcrypt.hash(password, 12);
+        const userId = tokenRes.rows[0].user_id;
+        const passwordHash = await bcrypt.hash(password, 12);
 
-      await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
-      await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+        await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+        await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+      });
 
-      await client.query('COMMIT');
       return reply.send({ success: true });
     } catch (err: any) {
-      await client.query('ROLLBACK');
       if (err.message === 'INVALID_TOKEN') {
         return reply.code(400).send({ error: 'Invalid or expired reset token' });
       }
       throw err;
-    } finally {
-      client.release();
     }
   });
 };
