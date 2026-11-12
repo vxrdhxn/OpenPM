@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Plus, GripVertical, AlertCircle } from 'lucide-react';
+import TaskDetailModal, { CurrentUser } from '@/components/TaskDetailModal';
 
 const COLUMNS = [
   { id: 'todo', title: 'To Do', color: 'bg-slate-200 dark:bg-slate-800' },
@@ -26,6 +27,22 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
   // The auth cookie is httpOnly, so the page can't (and shouldn't) read it; the browser sends it
   // with the WebSocket handshake on its own.
   const { isConnected, lastMessage, connectionEpoch } = useWebsocket();
+
+  // Task detail dialog. Keep only the id and look the task up in the live board data, so the dialog
+  // always shows the latest version and closes by itself if the task is deleted by someone else.
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [me, setMe] = useState<CurrentUser | null>(null);
+  const selectedTask = selectedTaskId
+    ? Object.values(tasks).flat().find((t) => t.id === selectedTaskId) ?? null
+    : null;
+
+  useEffect(() => {
+    api.get('/auth/me').then((data) => setMe(data.user)).catch(() => setMe(null));
+  }, []);
+
+  useEffect(() => {
+    if (selectedTaskId && !selectedTask) setSelectedTaskId(null);
+  }, [selectedTaskId, selectedTask]);
 
   const fetchTasks = async () => {
     try {
@@ -177,10 +194,21 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className={`bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-3 group ${snapshot.isDragging ? 'shadow-xl scale-105 ring-2 ring-indigo-500' : 'hover:border-indigo-300 dark:hover:border-indigo-500'} transition-all`}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Open task: ${task.title}`}
+                              onClick={() => setSelectedTaskId(task.id)}
+                              onKeyDown={(e) => {
+                                // Only when the card itself has focus, so the drag handle's own keys are left alone.
+                                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                                  e.preventDefault();
+                                  setSelectedTaskId(task.id);
+                                }
+                              }}
+                              className={`bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-3 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${snapshot.isDragging ? 'shadow-xl scale-105 ring-2 ring-indigo-500' : 'hover:border-indigo-300 dark:hover:border-indigo-500'} transition-all`}
                             >
                               <div className="flex items-start gap-2">
-                                <div {...provided.dragHandleProps} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity mt-1 cursor-grab active:cursor-grabbing">
+                                <div {...provided.dragHandleProps} onClick={(e) => e.stopPropagation()} className="text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity mt-1 cursor-grab active:cursor-grabbing">
                                   <GripVertical className="w-4 h-4" />
                                 </div>
                                 <div className="flex-1">
@@ -213,6 +241,15 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
           </div>
         </DragDropContext>
       </div>
+
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          projectId={params.id}
+          me={me}
+          onClose={() => setSelectedTaskId(null)}
+        />
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
