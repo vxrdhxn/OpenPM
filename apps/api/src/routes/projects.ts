@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
+import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 
 const projectRoutes: FastifyPluginAsync = async (fastify) => {
@@ -33,28 +34,21 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     const { name, description } = request.body as any;
     const { org_id, user_id } = request.user;
 
-    const client = await db.getClient();
-    try {
-      await client.query('BEGIN');
+    const newProject = await withTransaction(async (client) => {
       const res = await client.query(
         'INSERT INTO projects (org_id, name, description, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
         [org_id, name, description, user_id]
       );
-      const newProject = res.rows[0];
+      const created = res.rows[0];
 
-      await logActivity(client, org_id, user_id, newProject.id, 'created', { name });
-      await client.query('COMMIT');
+      await logActivity(client, org_id, user_id, created.id, 'created', { name });
+      return created;
+    });
 
-      // Invalidate cache
-      await cache.del(`org:${org_id}:projects`);
+    // Invalidate cache
+    await cache.del(`org:${org_id}:projects`);
 
-      return reply.code(201).send(newProject);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    return reply.code(201).send(newProject);
   });
 
   // GET / (Viewer or higher)
@@ -127,72 +121,72 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
       status?: 'active' | 'archived';
     };
 
-    const client = await db.getClient();
-
     try {
-      await client.query('BEGIN');
+      const updated = await withTransaction(async (client) => {
+        // Verify the project belongs to the authenticated user's organization.
+        const check = await client.query(
+            'SELECT id FROM projects WHERE id = $1 AND org_id = $2',
+            [id, org_id]
+        );
 
-      // Verify the project belongs to the authenticated user's organization.
-      const check = await client.query(
-          'SELECT id FROM projects WHERE id = $1 AND org_id = $2',
-          [id, org_id]
-      );
-
-      if (check.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return reply.code(404).send({ error: 'Project not found' });
-      }
-
-      // Only explicitly permitted fields can become SQL column names.
-      const columnByField: Record<string, string> = {
-        name: 'name',
-        description: 'description',
-        status: 'status'
-      };
-
-      const setClauses: string[] = [];
-      const values: unknown[] = [];
-
-      for (const [key, value] of Object.entries(updates)) {
-        const column = columnByField[key];
-
-        if (!column) {
-          await client.query('ROLLBACK');
-          return reply.code(400).send({
-            error: `Unsupported project field: ${key}`
-          });
+        if (check.rows.length === 0) {
+          throw new Error('NOT_FOUND');
         }
 
-        values.push(value);
-        setClauses.push(`${column} = $${values.length}`);
-      }
+        // Only explicitly permitted fields can become SQL column names.
+        const columnByField: Record<string, string> = {
+          name: 'name',
+          description: 'description',
+          status: 'status'
+        };
 
-      const projectIdParam = values.length + 1;
-      const orgIdParam = values.length + 2;
+        const setClauses: string[] = [];
+        const values: unknown[] = [];
 
-      values.push(id, org_id);
+        for (const [key, value] of Object.entries(updates)) {
+          const column = columnByField[key];
 
-      const res = await client.query(
-          `UPDATE projects
-           SET ${setClauses.join(', ')}
-           WHERE id = $${projectIdParam}
-             AND org_id = $${orgIdParam}
-             RETURNING *`,
-          values
-      );
+          if (!column) {
+            throw new Error(`UNSUPPORTED_FIELD:${key}`);
+          }
 
-      await logActivity(client, org_id, user_id, id, 'updated', updates);
-      await client.query('COMMIT');
+          values.push(value);
+          setClauses.push(`${column} = $${values.length}`);
+        }
+
+        const projectIdParam = values.length + 1;
+        const orgIdParam = values.length + 2;
+
+        values.push(id, org_id);
+
+        const res = await client.query(
+            `UPDATE projects
+             SET ${setClauses.join(', ')}
+             WHERE id = $${projectIdParam}
+               AND org_id = $${orgIdParam}
+               RETURNING *`,
+            values
+        );
+
+        await logActivity(client, org_id, user_id, id, 'updated', updates);
+        return res.rows[0];
+      });
 
       // Invalidate the organization-specific project cache.
       await cache.del(`org:${org_id}:projects`);
 
-      return reply.send(res.rows[0]);
+      return reply.send(updated);
     } catch (err) {
-      await client.query('ROLLBACK');
+      const message = err instanceof Error ? err.message : '';
+      if (message === 'NOT_FOUND') {
+        return reply.code(404).send({ error: 'Project not found' });
+      }
+      if (message.startsWith('UNSUPPORTED_FIELD:')) {
+        return reply.code(400).send({
+          error: `Unsupported project field: ${message.slice('UNSUPPORTED_FIELD:'.length)}`
+        });
+      }
       throw err;
-    } finally {
-      client.release();
     }
   });
 
