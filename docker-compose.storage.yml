@@ -1,0 +1,59 @@
+# Optional: local S3-compatible storage (MinIO) for task attachments.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.storage.yml up
+#
+# NOTE: MINIO_IMAGE is intentionally overridable and unpinned here. MinIO's published image
+# location/tags have changed over time and this file has not been run against a specific tag.
+# Pin MINIO_IMAGE / MC_IMAGE to a release you have verified before relying on it.
+# These credentials are for local development only.
+
+services:
+  minio:
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:latest}
+    container_name: openpm-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-openpm-dev}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-openpm-dev-secret}
+      # Browsers PUT/GET presigned URLs directly, so the frontend origin must be allowed.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: ${MC_IMAGE:-quay.io/minio/mc:latest}
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-openpm-attachments}
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-openpm-dev}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-openpm-dev-secret}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+      mc mb --ignore-existing local/$$S3_BUCKET"
+
+  api:
+    environment:
+      - S3_ENDPOINT=http://minio:9000
+      - S3_PUBLIC_ENDPOINT=http://localhost:9000
+      - S3_BUCKET=${S3_BUCKET:-openpm-attachments}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-openpm-dev}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-openpm-dev-secret}
+      - S3_FORCE_PATH_STYLE=true
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+volumes:
+  minio_data:

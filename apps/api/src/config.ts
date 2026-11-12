@@ -11,6 +11,18 @@ const envSchema = z.object({
   REDIS_URL: z.string().url().default('redis://:openpm@localhost:6379'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long').default('super_secret_development_key_change_me_in_prod_123'),
   CORS_ORIGIN: z.string().url().default('http://localhost:3001'),
+
+  // Attachment storage: any S3-compatible service (AWS S3, MinIO, ...).
+  // Deliberately no defaults for credentials: if these are unset, attachments are disabled
+  // (the routes return 503) instead of silently using well-known dev credentials.
+  S3_ENDPOINT: z.string().url().optional(), // internal endpoint used by the API (omit for AWS S3)
+  S3_PUBLIC_ENDPOINT: z.string().url().optional(), // endpoint browsers use for presigned URLs; defaults to S3_ENDPOINT
+  S3_REGION: z.string().default('us-east-1'),
+  S3_BUCKET: z.string().min(3).optional(),
+  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'), // true for MinIO
+  ATTACHMENT_MAX_BYTES: z.string().regex(/^\d+$/).default('10485760').transform(Number), // 10 MiB
 });
 
 const parsed = envSchema.safeParse(process.env);
