@@ -23,10 +23,9 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   
-  const token = typeof window !== 'undefined' ? 
-    document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1] || null : null;
-
-  const { isConnected, lastMessage } = useWebsocket(token);
+  // The auth cookie is httpOnly, so the page can't (and shouldn't) read it; the browser sends it
+  // with the WebSocket handshake on its own.
+  const { isConnected, lastMessage, connectionEpoch } = useWebsocket();
 
   const fetchTasks = async () => {
     try {
@@ -68,6 +67,12 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
       }
     }
   }, [lastMessage, params.id]);
+
+  // Events published while the socket was down are not replayed, so catch up after a reconnect.
+  // (Epoch 1 is the first connect, when the initial fetch above already ran.)
+  useEffect(() => {
+    if (connectionEpoch > 1) fetchTasks();
+  }, [connectionEpoch]);
 
   const onDragEnd = async (result: any) => {
     if (!result.destination) return;
