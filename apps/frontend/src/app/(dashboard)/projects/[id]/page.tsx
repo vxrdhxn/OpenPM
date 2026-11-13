@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
 import { Plus, GripVertical, AlertCircle } from 'lucide-react';
 import TaskDetailModal, { CurrentUser } from '@/components/TaskDetailModal';
 
@@ -181,7 +181,7 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
                 </div>
                 
                 <Droppable droppableId={col.id}>
-                  {(provided, snapshot) => (
+                  {(provided: DroppableProvided, snapshot: DroppableStateSnapshot) => (
                     <div 
                       ref={provided.innerRef}
                       {...provided.droppableProps}
