@@ -42,8 +42,13 @@ For MinIO set `MINIO_API_CORS_ALLOW_ORIGIN` to your frontend origin (see `docker
 docker compose -f docker-compose.yml -f docker-compose.storage.yml up
 ```
 
-`docker-compose.storage.yml` is opt-in and its MinIO image reference is overridable
-(`MINIO_IMAGE`, `MC_IMAGE`). It has **not been run against a pinned tag**; pin one you have verified.
+`docker-compose.storage.yml` is opt-in. MinIO no longer publishes images to Docker Hub or quay.io, so it
+uses Chainguard's maintained build (`cgr.dev/chainguard/minio`), which also provides `mc` for the bucket-init
+step. The image is overridable with `MINIO_IMAGE` (any image with `minio`, `mc` and `sh`); Chainguard's free
+tier only publishes `latest`, so pin a digest for reproducible runs (see the comment in the file).
+
+Verified against a live stack: browser-style CORS preflight, presigned upload, completion, download with
+forced-download headers, and object removal on delete.
 
 ## API
 
