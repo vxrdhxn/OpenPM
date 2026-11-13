@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import Fastify, { FastifyRequest } from 'fastify';
+import Fastify, { FastifyRequest, LogController } from 'fastify';
 import cookie from '@fastify/cookie';
 import pino from 'pino';
 import authPlugin, { authFailureReason } from './plugins/auth';
@@ -116,7 +116,7 @@ describe('request context in logs', () => {
     app = Fastify({
       loggerInstance: pino(loggerOptions, out.stream), // Fastify 5: a ready-made pino instance goes in `loggerInstance`
       genReqId,
-      requestIdLogLabel: 'request_id', // same wiring as src/index.ts
+      logController: new LogController({ requestIdLogLabel: 'request_id' }), // same wiring as src/index.ts
     });
     await app.register(cookie); // as in src/index.ts: the JWT plugin reads the auth cookie via it
     await app.register(requestIdPlugin);

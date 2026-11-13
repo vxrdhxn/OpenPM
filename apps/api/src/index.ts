@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
 import { corsOptions } from './corsOptions';
 import cookie from '@fastify/cookie';
@@ -39,7 +39,7 @@ client.collectDefaultMetrics();
 const fastify = Fastify({
   logger: loggerOptions,
   genReqId,
-  requestIdLogLabel: 'request_id',
+  logController: new LogController({ requestIdLogLabel: 'request_id' }),
   bodyLimit: 1048576, // 1MB request size limit
   ajv: {
     customOptions: {

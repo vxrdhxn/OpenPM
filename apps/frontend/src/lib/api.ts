@@ -19,6 +19,8 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   // Handle 401 Unauthorized globally if possible (in client components)
   if (response.status === 401 && typeof window !== 'undefined') {
     if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+      // Deliberate hard navigation: fetchApi runs outside React, and a full reload drops stale client state.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/login';
     }
   }

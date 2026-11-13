@@ -5,7 +5,7 @@ import { logger, Logger } from '../lib/logger';
 
 /** `log` is the per-job logger from handleJob (it already carries job_id and request_id). */
 export default async function processTaskCreated(job: Job, log: Logger = logger) {
-  const { task_id, assignee_id, org_id: _org_id } = job.data;
+  const { task_id, assignee_id } = job.data;
 
   // If no assignee, nothing to notify
   if (!assignee_id) {

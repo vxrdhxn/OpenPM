@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import Fastify from 'fastify';
+import Fastify, { LogController } from 'fastify';
 
 vi.mock('../db/client', () => ({
   db: { query: vi.fn(), getClient: vi.fn() },
@@ -329,7 +329,7 @@ describe('Task routes lifecycle', () => {
 
   describe('job correlation', () => {
     it('hands the request id to the background job so logs can be followed into the worker', async () => {
-      const wired = Fastify({ genReqId, requestIdLogLabel: 'request_id' }); // same wiring as src/index.ts
+      const wired = Fastify({ genReqId, logController: new LogController({ requestIdLogLabel: 'request_id' }) }); // same wiring as src/index.ts
       await wired.register(authPlugin);
       await wired.register(taskRoutes, { prefix: '/projects' });
       await wired.ready();
