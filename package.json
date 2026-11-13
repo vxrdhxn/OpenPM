@@ -17,7 +17,7 @@
     "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/worker && npm run build --workspace=apps/frontend",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm test --workspaces --if-present && npm run test:repo",
-    "test:repo": "vitest run --config vitest.repo.config.ts"
+    "test:repo": "vitest run --config vitest.repo.config.mts"
   },
   "engines": {
     "node": ">=22.0.0"
