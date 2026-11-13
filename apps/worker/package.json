@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "lint": "eslint src/ --ext .ts",
+    "lint": "eslint src/",
     "test": "vitest run"
   },
   "dependencies": {
@@ -20,10 +20,14 @@
     "resend": "^6.38.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.2",
+    "eslint": "^9.39.5",
+    "globals": "^14.0.0",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3",
+    "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"
   }
 }

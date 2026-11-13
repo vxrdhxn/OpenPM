@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node scripts/copy-migrations.js",
     "start": "node dist/index.js",
-    "lint": "eslint src/ --ext .ts",
+    "lint": "eslint src/",
     "migrate": "tsx src/db/migrate.ts",
     "test": "vitest run",
     "migrate:down": "tsx src/db/migrate.ts down",
@@ -37,11 +37,15 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
+    "@eslint/js": "^9.39.5",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.2",
     "@types/ws": "^8.18.2",
+    "eslint": "^9.39.5",
+    "globals": "^14.0.0",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3",
+    "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"
   }
 }
