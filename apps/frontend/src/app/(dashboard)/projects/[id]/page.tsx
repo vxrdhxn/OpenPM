@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
@@ -40,38 +40,39 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
     api.get('/auth/me').then((data) => setMe(data.user)).catch(() => setMe(null));
   }, []);
 
-  useEffect(() => {
-    if (selectedTaskId && !selectedTask) setSelectedTaskId(null);
-  }, [selectedTaskId, selectedTask]);
+  // Close the dialog if its task disappeared (adjusting state during render, not in an effect).
+  if (selectedTaskId && !selectedTask) setSelectedTaskId(null);
 
-  const fetchTasks = async () => {
-    try {
-      const data = await api.get(`/projects/${params.id}/tasks`);
-      // API returns grouped tasks
-      setTasks({
-        todo: data.todo || [],
-        in_progress: data.in_progress || [],
-        in_review: data.in_review || [],
-        done: data.done || []
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const fetchTasks = useCallback(
+    () =>
+      api
+        .get(`/projects/${params.id}/tasks`)
+        .then((data) => {
+          // API returns grouped tasks
+          setTasks({
+            todo: data.todo || [],
+            in_progress: data.in_progress || [],
+            in_review: data.in_review || [],
+            done: data.done || []
+          });
+        })
+        .catch((e) => console.error(e)),
+    [params.id]
+  );
 
-  const fetchProject = async () => {
-    try {
-      const data = await api.get(`/projects/${params.id}`);
-      setProject(data);
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const fetchProject = useCallback(
+    () =>
+      api
+        .get(`/projects/${params.id}`)
+        .then((data) => setProject(data))
+        .catch((e) => console.error(e)),
+    [params.id]
+  );
 
   useEffect(() => {
     fetchProject();
     fetchTasks();
-  }, [params.id]);
+  }, [fetchProject, fetchTasks]);
 
   // Handle real-time WebSocket updates
   useEffect(() => {
@@ -87,13 +88,13 @@ export default function KanbanBoard({ params }: { params: { id: string } }) {
         fetchTasks();
       }
     }
-  }, [lastMessage, params.id]);
+  }, [lastMessage, params.id, fetchTasks]);
 
   // Events published while the socket was down are not replayed, so catch up after a reconnect.
   // (Epoch 1 is the first connect, when the initial fetch above already ran.)
   useEffect(() => {
     if (connectionEpoch > 1) fetchTasks();
-  }, [connectionEpoch]);
+  }, [connectionEpoch, fetchTasks]);
 
   const onDragEnd = async (result: any) => {
     if (!result.destination) return;

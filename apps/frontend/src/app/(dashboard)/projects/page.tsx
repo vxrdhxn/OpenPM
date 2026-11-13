@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { Plus, FolderKanban, Clock, Loader2 } from 'lucide-react';
@@ -12,20 +12,19 @@ export default function Projects() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
 
-  const loadProjects = async () => {
-    try {
-      const data = await api.get('/projects');
-      setProjects(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadProjects = useCallback(
+    () =>
+      api
+        .get('/projects')
+        .then((data) => setProjects(data))
+        .catch((err) => console.error(err))
+        .finally(() => setLoading(false)),
+    []
+  );
 
   useEffect(() => {
     loadProjects();
-  }, []);
+  }, [loadProjects]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

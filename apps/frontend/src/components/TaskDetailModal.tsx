@@ -38,7 +38,9 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabi
 export default function TaskDetailModal({ task, projectId, me, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   // Move focus into the dialog, and put it back on whatever opened it when we close.
   useEffect(() => {

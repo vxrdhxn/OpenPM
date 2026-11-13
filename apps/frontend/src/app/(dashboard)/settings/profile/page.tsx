@@ -16,7 +16,7 @@ export default function ProfileSettings() {
         setProfile({ name: data.name, email: data.email });
         setLoading(false);
       })
-      .catch(err => {
+      .catch(() => {
         setMessage({ type: 'error', text: 'Failed to load profile' });
         setLoading(false);
       });

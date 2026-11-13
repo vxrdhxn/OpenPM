@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Trash2, UserPlus, Mail, Shield } from 'lucide-react';
 
@@ -12,20 +12,19 @@ export default function OrganizationSettings() {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  const fetchInvites = useCallback(
+    () =>
+      api
+        .get('/invites')
+        .then((data) => setInvites(data))
+        .catch((err) => console.error('Failed to fetch invites:', err))
+        .finally(() => setLoading(false)),
+    []
+  );
+
   useEffect(() => {
     fetchInvites();
-  }, []);
-
-  const fetchInvites = async () => {
-    try {
-      const data = await api.get('/invites');
-      setInvites(data);
-    } catch (err) {
-      console.error('Failed to fetch invites:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [fetchInvites]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();

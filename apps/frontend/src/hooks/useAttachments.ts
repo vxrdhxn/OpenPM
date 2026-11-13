@@ -47,22 +47,34 @@ export function useAttachments(projectId: string, taskId: string) {
     };
   }, []);
 
-  const refresh = useCallback(async () => {
-    try {
-      const list = await listAttachments(projectId, taskId);
-      if (!mounted.current) return;
-      setAttachments(list);
-      setLoadError(null);
-    } catch (err) {
-      if (!mounted.current) return;
-      setLoadError(err instanceof Error ? err.message : 'Could not load attachments');
-    } finally {
-      if (mounted.current) setLoading(false);
-    }
-  }, [projectId, taskId]);
+  const refresh = useCallback(
+    () =>
+      listAttachments(projectId, taskId)
+        .then((list) => {
+          if (!mounted.current) return;
+          setAttachments(list);
+          setLoadError(null);
+        })
+        .catch((err) => {
+          if (!mounted.current) return;
+          setLoadError(err instanceof Error ? err.message : 'Could not load attachments');
+        })
+        .finally(() => {
+          if (mounted.current) setLoading(false);
+        }),
+    [projectId, taskId]
+  );
+
+  // Show the loading state again when the view switches to another task (adjusting state during
+  // render rather than in an effect).
+  const taskKey = `${projectId}/${taskId}`;
+  const [loadedKey, setLoadedKey] = useState(taskKey);
+  if (loadedKey !== taskKey) {
+    setLoadedKey(taskKey);
+    setLoading(true);
+  }
 
   useEffect(() => {
-    setLoading(true);
     refresh();
   }, [refresh]);
 
