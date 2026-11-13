@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
@@ -14,7 +15,9 @@ const COLUMNS = [
   { id: 'done', title: 'Done', color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' },
 ];
 
-export default function KanbanBoard({ params }: { params: { id: string } }) {
+export default function KanbanBoard() {
+  // Next 15+ passes `params` to pages as a Promise, so read the route param with the hook instead.
+  const params = useParams<{ id: string }>();
   const [tasks, setTasks] = useState<Record<string, any[]>>({
     todo: [], in_progress: [], in_review: [], done: []
   });

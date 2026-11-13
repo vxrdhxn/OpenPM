@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { corsOptions } from './corsOptions';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -73,10 +74,7 @@ fastify.register(helmet, {
   contentSecurityPolicy: false // Usually configured based on frontend needs, keeping default for API
 });
 
-fastify.register(cors, {
-  origin: config.CORS_ORIGIN,
-  credentials: true,
-});
+fastify.register(cors, corsOptions(config.CORS_ORIGIN));
 
 fastify.register(cookie);
 

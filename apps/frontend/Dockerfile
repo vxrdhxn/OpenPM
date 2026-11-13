@@ -9,6 +9,9 @@ RUN npm install
 
 # Copy source
 COPY apps/frontend/ ./apps/frontend/
+# attachments.test.ts imports the server's allowlist (relative, on purpose) and `next build`
+# type-checks it, so that one file has to be present in the build stage.
+COPY apps/api/src/attachments/policy.ts ./apps/api/src/attachments/policy.ts
 
 # Build
 WORKDIR /app/apps/frontend

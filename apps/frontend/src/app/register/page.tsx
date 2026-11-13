@@ -75,7 +75,7 @@ export default function Register() {
             
             <div>
               <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Workspace Slug</label>
-              <input type="text" name="org_slug" className="input-field" placeholder="acme-corp" pattern="^[a-z0-9-]+$" title="Lowercase letters, numbers, and hyphens only" value={formData.org_slug} onChange={handleChange} required />
+              <input type="text" name="org_slug" className="input-field" placeholder="acme-corp" pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only" value={formData.org_slug} onChange={handleChange} required />
             </div>
 
             <div className="md:col-span-2 mt-4">
