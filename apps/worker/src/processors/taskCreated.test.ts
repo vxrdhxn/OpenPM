@@ -47,7 +47,7 @@ describe('processTaskCreated', () => {
     await processTaskCreated(job({ task_id: 't1', assignee_id: 'u1', org_id: 'o1' }), asLogger(log));
 
     expect(sendEmailNotification).toHaveBeenCalledTimes(1);
-    const [to, subject, body] = sendEmailNotification.mock.calls[0];
+    const [to, subject, body] = sendEmailNotification.mock.calls[0]!;
     expect(to).toBe('ada@example.com');
     expect(subject).toContain('Fix bug');
     expect(body).toContain('Ada');
@@ -63,7 +63,7 @@ describe('processTaskCreated', () => {
 
     await processTaskCreated(job({ task_id: 't1', assignee_id: 'u1', org_id: 'o1' }), asLogger(log));
 
-    expect(sendEmailNotification.mock.calls[0][2]).toContain('Unknown Project');
+    expect(sendEmailNotification.mock.calls[0]![2]).toContain('Unknown Project');
   });
 
   it('does not send mail if the task or assignee no longer exists, and still releases the client', async () => {

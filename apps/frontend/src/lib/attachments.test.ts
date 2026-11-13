@@ -86,7 +86,7 @@ describe('uploadAttachment', () => {
   const created = { attachment: { id: 'att-1', status: 'pending' }, upload };
   const ready = { id: 'att-1', status: 'ready', filename: 'diagram.png' };
 
-  type PutMock = Mock<[PutArgs], Promise<void>>;
+  type PutMock = Mock<(args: PutArgs) => Promise<void>>;
 
   function setup(over: Partial<{ post: ApiLike['post']; put: PutMock }> = {}) {
     const calls: string[] = [];
@@ -101,7 +101,7 @@ describe('uploadAttachment', () => {
       }),
     };
     if (over.post) client.post = vi.fn(over.post);
-    const put: PutMock = over.put ?? vi.fn<[PutArgs], Promise<void>>(async () => undefined);
+    const put: PutMock = over.put ?? vi.fn<(args: PutArgs) => Promise<void>>(async () => undefined);
     return { client, put, calls };
   }
 

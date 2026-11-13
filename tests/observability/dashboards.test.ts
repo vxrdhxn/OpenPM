@@ -5,7 +5,7 @@ import client from 'prom-client';
 
 // Importing db/client constructs a pg Pool (which does not connect until used); stub it anyway so
 // this test can never open a connection.
-vi.mock('pg', () => ({ Pool: vi.fn().mockImplementation(() => ({ on: vi.fn(), query: vi.fn(), connect: vi.fn() })) }));
+vi.mock('pg', () => ({ Pool: vi.fn().mockImplementation(function () { return { on: vi.fn(), query: vi.fn(), connect: vi.fn() }; }) }));
 
 import '../../apps/api/src/metrics';
 import '../../apps/api/src/db/client';

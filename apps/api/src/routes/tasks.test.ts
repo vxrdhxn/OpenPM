@@ -9,7 +9,7 @@ vi.mock('../cache/redis', () => ({
 }));
 const { queueAdd } = vi.hoisted(() => ({ queueAdd: vi.fn() }));
 vi.mock('bullmq', () => ({
-  Queue: vi.fn().mockImplementation(() => ({ add: queueAdd })),
+  Queue: vi.fn().mockImplementation(function () { return { add: queueAdd }; }),
 }));
 const { getStorage } = vi.hoisted(() => ({ getStorage: vi.fn() }));
 vi.mock('../storage', () => ({ getStorage }));
@@ -22,7 +22,7 @@ import taskRoutes from './tasks';
 
 const mockClient = { query: vi.fn(), release: vi.fn() };
 const rows = (r: unknown[] = []) => ({ rows: r, rowCount: r.length });
-const sqlOf = (c: unknown[]) => String(c[0]);
+const sqlOf = (c: unknown[] | undefined) => String(c?.[0]);
 const P = '11111111-1111-1111-1111-111111111111';
 const T = '22222222-2222-2222-2222-222222222222';
 

@@ -14,7 +14,7 @@ const { pool } = vi.hoisted(() => ({
     waitingCount: 0,
   },
 }));
-vi.mock('pg', () => ({ Pool: vi.fn().mockImplementation(() => pool) }));
+vi.mock('pg', () => ({ Pool: vi.fn().mockImplementation(function () { return pool; }) }));
 
 import { db } from './db/client';
 import authPlugin from './plugins/auth';

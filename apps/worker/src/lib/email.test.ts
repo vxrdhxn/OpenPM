@@ -4,7 +4,7 @@ import type { Logger } from './logger';
 const { send, emailInc } = vi.hoisted(() => ({ send: vi.fn(), emailInc: vi.fn() }));
 vi.mock('../metrics', () => ({ emailsTotal: { inc: emailInc } }));
 vi.mock('resend', () => ({
-  Resend: vi.fn().mockImplementation(() => ({ emails: { send } })),
+  Resend: vi.fn().mockImplementation(function () { return { emails: { send } }; }),
 }));
 vi.mock('dotenv', () => ({ default: { config: vi.fn() } }));
 
