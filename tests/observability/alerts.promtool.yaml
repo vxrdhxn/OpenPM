@@ -1,0 +1,216 @@
+# Unit tests for helm/openpm/alerts/openpm.rules.yaml, run with promtool:
+#
+#   docker run --rm --entrypoint promtool -v "$PWD:/w:ro" prom/prometheus:v3.5.0 \
+#     test rules /w/tests/observability/alerts.promtool.yaml
+#
+# (CI runs the same command.) Each case feeds in time series and states which alerts must, or must
+# not, be firing at a given moment, so a threshold or expression change that silences an alert fails.
+rule_files:
+  - ../../helm/openpm/alerts/openpm.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # --- API ---------------------------------------------------------------------------------------
+  - name: 20% of requests failing with 5xx fires, with enough traffic
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{namespace="ns",route="/api/x",method="GET",code="500"}'
+        values: '0+12x30'
+      - series: 'http_requests_total{namespace="ns",route="/api/x",method="GET",code="200"}'
+        values: '0+48x30'
+    alert_rule_test:
+      - eval_time: 4m # not yet sustained for 5 minutes
+        alertname: OpenPMApiHighErrorRate
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: OpenPMApiHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: ns
+            exp_annotations:
+              summary: "More than 5% of OpenPM API requests fail with 5xx"
+              description: "20% of API requests in ns returned 5xx over the last 5 minutes."
+
+  - name: a healthy API does not alert
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{namespace="ns",route="/api/x",method="GET",code="500"}'
+        values: '0+0x30'
+      - series: 'http_requests_total{namespace="ns",route="/api/x",method="GET",code="200"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: OpenPMApiHighErrorRate
+        exp_alerts: []
+
+  - name: all requests failing, but almost no traffic, does not page
+    interval: 1m
+    input_series:
+      # 1 request per minute (~0.017/s), all failing: below the 0.1 req/s floor.
+      - series: 'http_requests_total{namespace="ns",route="/api/x",method="GET",code="500"}'
+        values: '0+1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: OpenPMApiHighErrorRate
+        exp_alerts: []
+
+  - name: a scrape target that stops responding fires after 2 minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="openpm-api",namespace="ns",pod="api-1"}'
+        values: '1 1 0+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: OpenPMApiDown
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: OpenPMApiDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: openpm-api
+              namespace: ns
+              pod: api-1
+            exp_annotations:
+              summary: "OpenPM API instance is down"
+              description: "Prometheus cannot scrape api-1 (ns) for 2 minutes."
+
+  - name: no API target at all is reported (and a healthy worker target is not an API target)
+    interval: 1m
+    input_series:
+      - series: 'up{job="openpm-worker",namespace="ns",pod="w-1"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OpenPMApiTargetMissing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "No OpenPM API metrics target exists"
+              description: "Prometheus has no scrape target for the API. Check serviceMonitor.enabled, its namespace and labels, and that the API is deployed."
+      - eval_time: 15m
+        alertname: OpenPMWorkerTargetMissing
+        exp_alerts: []
+
+  - name: websocket upgrades do not count towards the latency alert
+    interval: 1m
+    input_series:
+      # Every websocket request is "slow" (open for minutes); ordinary requests are fast.
+      - series: 'http_request_duration_seconds_bucket{namespace="ns",route="/ws",le="10"}'
+        values: '0+0x30'
+      - series: 'http_request_duration_seconds_bucket{namespace="ns",route="/ws",le="+Inf"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{namespace="ns",route="/api/x",le="0.1"}'
+        values: '0+60x30'
+      - series: 'http_request_duration_seconds_bucket{namespace="ns",route="/api/x",le="+Inf"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: OpenPMApiHighLatency
+        exp_alerts: []
+
+  - name: requests waiting for a database connection fire after 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'db_pool_connections{namespace="ns",pod="api-1",state="waiting"}'
+        values: '0 0 3+0x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpenPMDbPoolExhausted
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: OpenPMDbPoolExhausted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: ns
+              pod: api-1
+            exp_annotations:
+              summary: "OpenPM API requests are queueing for a database connection"
+              description: "api-1 has had requests waiting for a free database connection for 5 minutes. Look for slow queries or raise the pool size."
+
+  # --- Worker ------------------------------------------------------------------------------------
+  - name: a queue lagging 2 minutes warns but is not yet stalled
+    interval: 1m
+    input_series:
+      - series: 'worker_queue_oldest_waiting_age_seconds{namespace="ns",pod="w-1"}'
+        values: '120+0x30'
+      - series: 'worker_queue_oldest_waiting_age_seconds{namespace="ns",pod="w-2"}'
+        values: '120+0x30' # a second replica reports the same queue-wide number
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OpenPMQueueLagHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: ns
+            exp_annotations:
+              summary: "OpenPM background jobs are waiting more than a minute"
+              description: "The oldest waiting job in ns is 2m 0s old."
+      - eval_time: 10m
+        alertname: OpenPMQueueStalled
+        exp_alerts: []
+
+  - name: jobs waiting while nothing is processed fires
+    interval: 1m
+    input_series:
+      - series: 'worker_queue_jobs{namespace="ns",state="waiting"}'
+        values: '5+0x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: OpenPMWorkerNotProcessing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: ns
+            exp_annotations:
+              summary: "OpenPM jobs are queued but none are being processed"
+              description: "ns has waiting jobs and no job has completed or failed in 10 minutes."
+
+  - name: jobs waiting while the worker keeps completing jobs does not fire
+    interval: 1m
+    input_series:
+      - series: 'worker_queue_jobs{namespace="ns",state="waiting"}'
+        values: '5+0x40'
+      - series: 'worker_jobs_total{namespace="ns",job_name="task_created",status="completed"}'
+        values: '0+3x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: OpenPMWorkerNotProcessing
+        exp_alerts: []
+
+  - name: an empty queue with an idle worker does not fire
+    interval: 1m
+    input_series:
+      - series: 'worker_queue_jobs{namespace="ns",state="waiting"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: OpenPMWorkerNotProcessing
+        exp_alerts: []
+
+  - name: a failed job raises an alert that clears once it leaves the window
+    interval: 1m
+    input_series:
+      - series: 'worker_jobs_total{namespace="ns",job_name="task_created",status="failed"}'
+        values: '0 0 0 1+0x40'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: OpenPMJobsFailing
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: OpenPMJobsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: ns
+              job_name: task_created
+            exp_annotations:
+              summary: "OpenPM task_created jobs are failing"
+              description: "1 task_created job(s) failed in the last 15 minutes in ns. Search the worker logs for the job_name."
+      - eval_time: 30m
+        alertname: OpenPMJobsFailing
+        exp_alerts: []

@@ -207,6 +207,18 @@ serviceMonitor:
   interval: 15s
   labels: {}
 
+# Prometheus alert rules (API availability/errors/latency, database, Redis, worker queue lag and
+# failures), shipped as a PrometheusRule for the Prometheus Operator. The rules are in
+# alerts/openpm.rules.yaml; see docs/observability.md for what each one means.
+prometheusRule:
+  enabled: false
+  # Namespace Prometheus looks for rules in. Empty = the release namespace.
+  namespace: ""
+  # Prometheus selects rules by label; kube-prometheus-stack's default selector is `release: <its release name>`.
+  labels: {}
+  #  release: kube-prometheus-stack
+  annotations: {}
+
 # Grafana dashboards (API performance, worker/queue lag, error rates), shipped as ConfigMaps that
 # Grafana's dashboard sidecar picks up (the kube-prometheus-stack default is the label below).
 grafana:

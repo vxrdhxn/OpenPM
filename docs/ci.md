@@ -7,7 +7,7 @@ request cancels that PR's older run.
 | Job | What it checks | Blocks merge? |
 |---|---|---|
 | **Lint, build, test** | `npm ci` (lockfile must match every `package.json`), `npm run lint`, `npm run build` (API, worker and frontend; also the type-check), `npm test` (every package, then the cross-package dashboard check) | Yes |
-| **Helm chart** | `helm lint --strict` and `helm template` for default values, `values.prod.yaml`, and monitoring + dashboards enabled | Yes |
+| **Helm chart** | `helm lint --strict` and `helm template` for default values, `values.prod.yaml`, and monitoring + dashboards + alert rules enabled; `promtool check rules` and `promtool test rules` on the alert rules (promtool from the Prometheus image, pinned by digest) | Yes |
 | **Secret scan (gitleaks)** | Whole git history against `.gitleaks.toml`, plus a canary that proves the config still detects secrets | Yes |
 | **Image (api / worker / frontend)** | Builds each Dockerfile from a clean checkout, then scans the image with Trivy (HIGH/CRITICAL, fixable only) | Build: yes. Scan: **no, report-only** (see below) |
 

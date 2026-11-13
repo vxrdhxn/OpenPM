@@ -2,7 +2,7 @@
   "name": "openpm",
   "version": "0.1.0",
   "private": true,
-  "description": "OpenPM \u2014 Self-hostable project management on Kubernetes",
+  "description": "OpenPM — Self-hostable project management on Kubernetes",
   "license": "AGPL-3.0-only",
   "workspaces": [
     "apps/api",
@@ -30,6 +30,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "vite": "^8.3.8",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "yaml": "^2.9.1"
   }
 }

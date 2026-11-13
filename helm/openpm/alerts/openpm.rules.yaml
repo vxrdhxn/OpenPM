@@ -1,0 +1,203 @@
+# Prometheus alert rules for OpenPM, in plain Prometheus rule-file format.
+#
+# Rendered into a PrometheusRule by templates/prometheus-rules.yaml (prometheusRule.enabled=true), and
+# also usable as-is: reference it from `rule_files:` in a standalone Prometheus. It is kept as a plain
+# file (not a Helm template) so `{{ $value }}` in annotations is Prometheus templating, and so
+# `promtool check rules` / `promtool test rules` can run on it directly.
+#
+# Checked by CI: `promtool check rules`, the unit tests in tests/observability/alerts.promtool.yaml,
+# and tests/observability/alerts.test.ts (every metric and label used here must exist in the code).
+#
+# Scrape jobs come from the ServiceMonitors, so the job is the Service name: "<release>-api" and
+# "<release>-worker". The `up` alerts match on that suffix.
+#
+# Thresholds are starting points chosen without production traffic. Tune them after observing real load.
+groups:
+  - name: openpm-api
+    rules:
+      - alert: OpenPMApiDown
+        expr: up{job=~".*-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenPM API instance is down"
+          description: "Prometheus cannot scrape {{ $labels.pod }} ({{ $labels.namespace }}) for 2 minutes."
+
+      - alert: OpenPMApiTargetMissing
+        expr: absent(up{job=~".*-api"})
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No OpenPM API metrics target exists"
+          description: "Prometheus has no scrape target for the API. Check serviceMonitor.enabled, its namespace and labels, and that the API is deployed."
+
+      - alert: OpenPMApiHighErrorRate
+        expr: |
+          (
+            sum by (namespace) (rate(http_requests_total{code=~"5.."}[5m]))
+            /
+            sum by (namespace) (rate(http_requests_total[5m]))
+          ) > 0.05
+          and
+          sum by (namespace) (rate(http_requests_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 5% of OpenPM API requests fail with 5xx"
+          description: "{{ $value | humanizePercentage }} of API requests in {{ $labels.namespace }} returned 5xx over the last 5 minutes."
+
+      - alert: OpenPMApiHighLatency
+        # WebSocket upgrades stay open for as long as the client is connected, so they are excluded.
+        expr: |
+          histogram_quantile(0.95,
+            sum by (namespace, le) (rate(http_request_duration_seconds_bucket{route!="/ws"}[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM API p95 latency is above 1s"
+          description: "p95 request latency in {{ $labels.namespace }} is {{ $value | humanizeDuration }} (10 minutes sustained)."
+
+      - alert: OpenPMApiRateLimiting
+        expr: sum by (namespace) (rate(http_requests_total{code="429"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM API is rate limiting clients"
+          description: "{{ $value | humanize }} requests/s are being rejected with 429 in {{ $labels.namespace }}. Either a client is misbehaving or the limit is too low."
+
+      - alert: OpenPMLoginFailuresHigh
+        expr: sum by (namespace) (rate(auth_failures_total{reason="bad_credentials"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Many failed OpenPM logins (possible credential stuffing)"
+          description: "{{ $value | humanize }} failed logins/s in {{ $labels.namespace }}. Search the API logs for event=login_failed."
+
+      - alert: OpenPMDbPoolExhausted
+        expr: max by (namespace, pod) (db_pool_connections{state="waiting"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM API requests are queueing for a database connection"
+          description: "{{ $labels.pod }} has had requests waiting for a free database connection for 5 minutes. Look for slow queries or raise the pool size."
+
+      - alert: OpenPMDbQueryErrors
+        expr: |
+          (
+            sum by (namespace) (rate(db_query_duration_seconds_count{outcome="error"}[5m]))
+            /
+            sum by (namespace) (rate(db_query_duration_seconds_count[5m]))
+          ) > 0.05
+          and
+          sum by (namespace) (rate(db_query_duration_seconds_count[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 5% of OpenPM database queries fail"
+          description: "{{ $value | humanizePercentage }} of queries in {{ $labels.namespace }} errored over the last 5 minutes. Check database health and connectivity."
+
+      - alert: OpenPMRedisErrors
+        expr: sum by (namespace, client) (rate(redis_errors_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM API sees Redis errors"
+          description: "The {{ $labels.client }} Redis client in {{ $labels.namespace }} has been erroring for 5 minutes. Realtime updates and rate limiting depend on Redis."
+
+      - alert: OpenPMWebsocketErrors
+        expr: sum by (namespace) (rate(websocket_errors_total[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM WebSocket connections are erroring"
+          description: "{{ $value | humanize }} socket errors/s in {{ $labels.namespace }}."
+
+      - alert: OpenPMEventLoopLag
+        expr: max by (namespace, pod) (nodejs_eventloop_lag_p99_seconds{job=~".*-api"}) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM API event loop is blocked"
+          description: "{{ $labels.pod }} p99 event-loop lag is {{ $value | humanizeDuration }}. Something is doing heavy synchronous work."
+
+  - name: openpm-worker
+    rules:
+      - alert: OpenPMWorkerDown
+        expr: up{job=~".*-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenPM worker instance is down"
+          description: "Prometheus cannot scrape {{ $labels.pod }} ({{ $labels.namespace }}) for 2 minutes."
+
+      - alert: OpenPMWorkerTargetMissing
+        expr: absent(up{job=~".*-worker"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No OpenPM worker metrics target exists"
+          description: "Prometheus has no scrape target for the worker. Check worker.metrics.enabled and serviceMonitor.enabled."
+
+      - alert: OpenPMQueueLagHigh
+        # Every replica reports the same queue-wide number, hence max() and not sum().
+        expr: max by (namespace) (worker_queue_oldest_waiting_age_seconds) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM background jobs are waiting more than a minute"
+          description: "The oldest waiting job in {{ $labels.namespace }} is {{ $value | humanizeDuration }} old."
+
+      - alert: OpenPMQueueStalled
+        expr: max by (namespace) (worker_queue_oldest_waiting_age_seconds) > 600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenPM background jobs have been waiting over 10 minutes"
+          description: "The oldest waiting job in {{ $labels.namespace }} is {{ $value | humanizeDuration }} old. Workers are down, stuck or overwhelmed."
+
+      - alert: OpenPMWorkerNotProcessing
+        # Jobs are waiting but nothing at all has finished recently. `unless` also covers a worker that
+        # has never completed a job (no worker_jobs_total series yet).
+        expr: |
+          max by (namespace) (worker_queue_jobs{state="waiting"}) > 0
+          unless
+          sum by (namespace) (increase(worker_jobs_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenPM jobs are queued but none are being processed"
+          description: "{{ $labels.namespace }} has waiting jobs and no job has completed or failed in 10 minutes."
+
+      - alert: OpenPMJobsFailing
+        # Jobs are enqueued without retries today, so every failure is a lost notification.
+        expr: sum by (namespace, job_name) (increase(worker_jobs_total{status="failed"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM {{ $labels.job_name }} jobs are failing"
+          description: "{{ $value | humanize }} {{ $labels.job_name }} job(s) failed in the last 15 minutes in {{ $labels.namespace }}. Search the worker logs for the job_name."
+
+      - alert: OpenPMEmailsFailing
+        expr: sum by (namespace) (increase(emails_total{result="failed"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM is failing to send email"
+          description: "{{ $value | humanize }} email(s) failed to send in the last 15 minutes in {{ $labels.namespace }}. Check the email provider and RESEND_API_KEY."

@@ -74,7 +74,7 @@ jobs:
         run: |
           helm lint --strict helm/openpm
           helm lint --strict helm/openpm -f helm/openpm/values.prod.yaml
-          helm lint --strict helm/openpm --set serviceMonitor.enabled=true --set grafana.dashboards.enabled=true
+          helm lint --strict helm/openpm --set serviceMonitor.enabled=true --set grafana.dashboards.enabled=true --set prometheusRule.enabled=true
 
       # Lint doesn't catch everything; actually render each variant.
       - name: Render
@@ -83,7 +83,18 @@ jobs:
           helm template openpm helm/openpm -f helm/openpm/values.prod.yaml > /dev/null
           helm template openpm helm/openpm \
             --set serviceMonitor.enabled=true --set serviceMonitor.namespace=monitoring \
-            --set grafana.dashboards.enabled=true > /dev/null
+            --set grafana.dashboards.enabled=true \
+            --set prometheusRule.enabled=true --set prometheusRule.namespace=monitoring > /dev/null
+
+      # Syntax-check the alert rules, then run their unit tests (series in, firing alerts out).
+      # promtool comes from the Prometheus image, pinned by digest (v3.5.0).
+      - name: Alert rules (promtool check + test)
+        run: |
+          PROMTOOL_IMAGE=prom/prometheus@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+          docker run --rm --entrypoint promtool -v "$PWD:/w:ro" "$PROMTOOL_IMAGE" \
+            check rules /w/helm/openpm/alerts/openpm.rules.yaml
+          docker run --rm --entrypoint promtool -v "$PWD:/w:ro" "$PROMTOOL_IMAGE" \
+            test rules /w/tests/observability/alerts.promtool.yaml
 
   secrets:
     name: Secret scan (gitleaks)

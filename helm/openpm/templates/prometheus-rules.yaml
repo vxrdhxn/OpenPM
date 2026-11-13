@@ -1,0 +1,23 @@
+{{- if .Values.prometheusRule.enabled }}
+# Alert rules for the Prometheus Operator. The rules live in alerts/openpm.rules.yaml (plain Prometheus
+# format, so promtool can test them). .Files.Get does not run Helm templating on the file, so the
+# Prometheus templating inside the annotations reaches Prometheus untouched.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "openpm.fullname" . }}-alerts
+  {{- if .Values.prometheusRule.namespace }}
+  namespace: {{ .Values.prometheusRule.namespace }}
+  {{- end }}
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.prometheusRule.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+{{ .Files.Get "alerts/openpm.rules.yaml" | indent 2 }}
+{{- end }}
