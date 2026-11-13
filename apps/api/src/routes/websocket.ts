@@ -24,8 +24,7 @@ const MAX_TIMER_MS = 2_147_483_647;
 const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastify, opts) => {
   const heartbeatMs = opts.heartbeatMs ?? 30_000;
 
-  fastify.get('/ws', { websocket: true }, async (connection, request) => {
-    const socket = connection.socket;
+  fastify.get('/ws', { websocket: true }, async (socket, request) => {
 
     // Everything that must be torn down when the socket goes away. Registered before any
     // `await`, so a client that disconnects mid-setup can never leak a subscription.

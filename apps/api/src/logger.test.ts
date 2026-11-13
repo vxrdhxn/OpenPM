@@ -114,7 +114,7 @@ describe('request context in logs', () => {
   async function build() {
     const out = capture();
     app = Fastify({
-      logger: pino(loggerOptions, out.stream), // Fastify 4: a ready-made pino instance goes in `logger`
+      loggerInstance: pino(loggerOptions, out.stream), // Fastify 5: a ready-made pino instance goes in `loggerInstance`
       genReqId,
       requestIdLogLabel: 'request_id', // same wiring as src/index.ts
     });
