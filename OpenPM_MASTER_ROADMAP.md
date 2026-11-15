@@ -3,6 +3,8 @@
 > Single source of truth for finishing OpenPM.
 >
 > **Goal:** Build OpenPM into a polished, secure, reliable, observable, self-hostable, Kubernetes-native project-management platform without sacrificing engineering quality for speed.
+>
+> **Last audited against the code:** 2026-11-15 (commit `c0c3cbc`). A box is ticked only when the code exists and is covered by tests or CI. Items marked *partial* exist but are incomplete. "Mocked DB" means the tests use a fake database, not a live Postgres. Nothing has been deployed to a cluster yet, so every deployment, restore and failure test is still open. The summary is in section 36.
 
 ---
 
@@ -79,51 +81,51 @@ npm test
 
 ## Backend
 
-- [ ] Separate routes, validation, business logic, persistence, and infrastructure.
+- [ ] Separate routes, validation, business logic, persistence, and infrastructure. — *partial:* SQL and business logic still live in route handlers
 - [ ] Keep route handlers thin.
-- [ ] Centralize authentication middleware.
-- [ ] Centralize authorization.
-- [ ] Centralize error handling.
-- [ ] Establish consistent API error responses.
-- [ ] Add request/correlation IDs.
-- [ ] Implement graceful shutdown.
-- [ ] Cleanly close DB/Redis/WebSocket connections.
+- [x] Centralize authentication middleware. — `fastify.authenticate` (`plugins/auth.ts`), applied per route plugin
+- [x] Centralize authorization. — `fastify.requireRole` (owner > admin > member > viewer)
+- [ ] Centralize error handling. — *partial:* routes map ad-hoc thrown strings (`NOT_FOUND`, ...) to responses; no shared error handler
+- [ ] Establish consistent API error responses. — *partial:* handlers return `{ error }`, but Fastify validation errors use a different shape
+- [x] Add request/correlation IDs. — `X-Request-Id` in/out, propagated to worker jobs
+- [x] Implement graceful shutdown. — API and worker handle SIGTERM/SIGINT
+- [ ] Cleanly close DB/Redis/WebSocket connections. — *partial:* worker closes its pool; the API only calls `fastify.close()` and never ends the pg pool or Redis clients
 
 ## TypeScript
 
-- [ ] Use strict TypeScript settings where practical.
-- [ ] Remove unsafe `any` from important paths.
+- [x] Use strict TypeScript settings where practical. — `strict` plus `noUncheckedIndexedAccess` etc. in `tsconfig.base.json`
+- [ ] Remove unsafe `any` from important paths. — *partial:* route handlers still cast `request.body/params as any`
 - [ ] Avoid duplicated domain types.
-- [ ] Validate external input at runtime.
-- [ ] Validate environment variables at startup.
+- [ ] Validate external input at runtime. — *partial:* JSON-schema validation on request bodies; path params (UUIDs) are not validated
+- [ ] Validate environment variables at startup. — *partial:* API validates with zod (`config.ts`); the worker reads `process.env` directly
 
 ## Dependencies
 
 - [ ] Remove unused dependencies.
-- [ ] Review dependency vulnerabilities.
-- [ ] Keep dependency versions intentional.
+- [x] Review dependency vulnerabilities. — npm audit cleared (Nov 2026 upgrades), Dependabot enabled
+- [x] Keep dependency versions intentional. — Dependabot, Node 22 LTS, majors upgraded deliberately
 - [ ] Avoid unnecessary packages.
 
 ---
 
 # 3. Authentication
 
-- [ ] Verify JWT signatures correctly.
-- [ ] Validate expiration.
+- [x] Verify JWT signatures correctly. — `@fastify/jwt`; invalid-token tests
+- [x] Validate expiration. — 24h `expiresIn`; expired-token tests (HTTP and WebSocket)
 - [ ] Validate issuer/audience where applicable.
-- [ ] Reject malformed tokens.
-- [ ] Reject missing authentication.
+- [x] Reject malformed tokens.
+- [x] Reject missing authentication.
 - [ ] Prevent JWT algorithm-confusion attacks.
-- [ ] Keep signing keys/secrets outside source code.
-- [ ] Never log tokens.
-- [ ] Define access-token lifetime.
+- [x] Keep signing keys/secrets outside source code. — `JWT_SECRET` required in production; a dev-only fallback key remains in `config.ts`
+- [x] Never log tokens. — credentials redacted in logs; tested
+- [x] Define access-token lifetime. — 24h, httpOnly SameSite=strict cookie
 - [ ] Define refresh-token strategy if applicable.
 - [ ] Define token rotation/revocation.
-- [ ] Define logout behavior.
-- [ ] Rate-limit authentication endpoints.
-- [ ] Prevent account enumeration.
-- [ ] Audit security-sensitive authentication events.
-- [ ] Add authentication bypass tests.
+- [x] Define logout behavior. — clears the cookie; the JWT itself stays valid until expiry (no revocation)
+- [ ] Rate-limit authentication endpoints. — *partial:* login/register 10/min; forgot/reset-password only have the global 100/min
+- [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform; register still returns "Email is already registered"
+- [ ] Audit security-sensitive authentication events. — *partial:* auth failures are logged and counted (`auth_failures_total`), not written to an audit table
+- [x] Add authentication bypass tests. — `security_rbac.test.ts`, `websocket.test.ts`
 
 ---
 
@@ -133,15 +135,15 @@ OpenPM must never allow one organization to access another organization's data.
 
 ## Organization isolation
 
-- [ ] Derive organization identity from authenticated context.
-- [ ] Never trust client-supplied `org_id` as authority.
-- [ ] Apply tenant filtering at the data-access layer.
-- [ ] Verify ownership before read.
-- [ ] Verify ownership before update.
-- [ ] Verify ownership before delete.
-- [ ] Verify nested-resource ownership.
-- [ ] Verify WebSocket authorization.
-- [ ] Verify worker/job authorization context.
+- [x] Derive organization identity from authenticated context.
+- [x] Never trust client-supplied `org_id` as authority.
+- [ ] Apply tenant filtering at the data-access layer. — *partial:* every query filters by the JWT `org_id`, but per query in route handlers, not in a shared layer
+- [x] Verify ownership before read.
+- [x] Verify ownership before update.
+- [x] Verify ownership before delete.
+- [x] Verify nested-resource ownership. — task -> project -> org, attachment -> task -> org
+- [x] Verify WebSocket authorization. — JWT + Origin check; channel derived from the token
+- [ ] Verify worker/job authorization context. — *partial:* jobs carry `org_id`, but the worker looks up tasks/users by id without an org filter
 
 ## RBAC
 
@@ -155,18 +157,18 @@ Viewer
 ```
 
 - [ ] Document permissions.
-- [ ] Enforce permissions server-side.
-- [ ] Add UI restrictions only as a UX layer, never as the security boundary.
-- [ ] Add authorization tests.
-- [ ] Test privilege escalation.
+- [x] Enforce permissions server-side.
+- [x] Add UI restrictions only as a UX layer, never as the security boundary.
+- [x] Add authorization tests. — `security_rbac.test.ts`
+- [ ] Test privilege escalation. — *partial:* unknown keys (e.g. `role`) are rejected by the profile schema, but no test asserts it
 
 ## IDOR/BOLA testing
 
-- [ ] User A cannot read User B's project.
-- [ ] User A cannot modify User B's project.
-- [ ] User A cannot delete User B's task.
-- [ ] User A cannot access another organization using guessed IDs.
-- [ ] User A cannot join another organization's WebSocket channel.
+- [x] User A cannot read User B's project. — route tests with a mocked DB
+- [x] User A cannot modify User B's project. — route tests with a mocked DB
+- [x] User A cannot delete User B's task. — route tests with a mocked DB
+- [x] User A cannot access another organization using guessed IDs. — route tests with a mocked DB
+- [x] User A cannot join another organization's WebSocket channel.
 
 ---
 
@@ -176,30 +178,30 @@ Viewer
 
 Review/finalize:
 
-- [ ] Users.
-- [ ] Organizations.
-- [ ] Organization memberships.
-- [ ] Projects.
+- [x] Users.
+- [x] Organizations.
+- [ ] Organization memberships. — *partial:* no membership table; each user has a single `users.org_id`
+- [x] Projects.
 - [ ] Project members.
-- [ ] Tasks/issues.
-- [ ] Status.
-- [ ] Priority.
+- [x] Tasks/issues.
+- [x] Status.
+- [x] Priority.
 - [ ] Labels/tags.
 - [ ] Comments.
-- [ ] Attachments.
-- [ ] Activity/audit events.
+- [x] Attachments.
+- [x] Activity/audit events. — `activity_log`
 - [ ] Notifications.
-- [ ] Invitations.
+- [x] Invitations.
 
 ## Integrity
 
-- [ ] Foreign keys.
-- [ ] Unique constraints.
-- [ ] Appropriate indexes.
+- [x] Foreign keys.
+- [x] Unique constraints.
+- [x] Appropriate indexes. — migration 008
 - [ ] Intentional cascade behavior.
-- [ ] Consistent timestamps.
+- [ ] Consistent timestamps. — *partial:* `projects` and `organizations` have no `updated_at`
 - [ ] Optimistic concurrency where needed.
-- [ ] Reproducible migrations.
+- [x] Reproducible migrations. — numbered up/down SQL; `migrate`, `migrate:down`, `migrate:status`; run by Docker Compose
 
 ## Query quality
 
@@ -207,15 +209,15 @@ Review/finalize:
 - [ ] Add pagination to collections.
 - [ ] Prevent unbounded queries.
 - [ ] Select only required fields where useful.
-- [ ] Review transaction boundaries.
-- [ ] Use transactions for atomic multi-step writes.
+- [x] Review transaction boundaries. — `withTransaction`
+- [x] Use transactions for atomic multi-step writes.
 - [ ] Profile slow queries.
-- [ ] Add indexes based on evidence.
+- [x] Add indexes based on evidence. — derived from the routes' query patterns, not measured
 
 ## Database security
 
-- [ ] Credentials from secrets.
-- [ ] Database not publicly exposed.
+- [x] Credentials from secrets. — Helm Secrets
+- [x] Database not publicly exposed. — ClusterIP + NetworkPolicy
 - [ ] Least-privilege DB user.
 - [ ] Automated backups in production.
 - [ ] Restore procedure documented and tested.
@@ -225,12 +227,12 @@ Review/finalize:
 
 # 6. Organizations & Memberships
 
-- [ ] Create organization.
+- [x] Create organization. — on registration
 - [ ] Organization settings.
 - [ ] Organization member list.
-- [ ] Invite member.
+- [ ] Invite member. — *partial:* admins can create/revoke invites, but no invite email is sent
 - [ ] Accept invitation.
-- [ ] Reject/expire invitation.
+- [ ] Reject/expire invitation. — *partial:* invites expire after 7 days and can be revoked; no reject flow
 - [ ] Remove member.
 - [ ] Change member role.
 - [ ] Transfer ownership.
@@ -243,14 +245,14 @@ Review/finalize:
 
 # 7. Projects
 
-- [ ] Create project.
-- [ ] Edit project.
-- [ ] Archive project.
-- [ ] Restore project.
-- [ ] Delete project.
+- [x] Create project.
+- [x] Edit project.
+- [x] Archive project. — `status: archived` via PATCH
+- [x] Restore project. — `status: active` via PATCH
+- [x] Delete project. — also removes attachment files
 - [ ] Project members.
 - [ ] Project settings.
-- [ ] Project activity.
+- [ ] Project activity. — *partial:* recorded in `activity_log`; no endpoint or UI exposes it
 - [ ] Project statistics.
 - [ ] Project-level authorization.
 - [ ] Project empty states.
@@ -262,30 +264,30 @@ Review/finalize:
 
 Core fields:
 
-- [ ] Title.
-- [ ] Description.
-- [ ] Status.
-- [ ] Priority.
-- [ ] Assignee.
-- [ ] Creator/reporter.
+- [x] Title.
+- [x] Description.
+- [x] Status.
+- [x] Priority.
+- [x] Assignee.
+- [x] Creator/reporter.
 - [ ] Labels.
-- [ ] Due date.
-- [ ] Created timestamp.
-- [ ] Updated timestamp.
-- [ ] Project association.
+- [x] Due date.
+- [x] Created timestamp.
+- [x] Updated timestamp.
+- [x] Project association.
 
 Actions:
 
-- [ ] Create task.
-- [ ] Edit task.
-- [ ] Delete task.
-- [ ] Assign task.
-- [ ] Change status.
-- [ ] Change priority.
+- [x] Create task.
+- [x] Edit task.
+- [x] Delete task.
+- [x] Assign task.
+- [x] Change status.
+- [x] Change priority.
 - [ ] Add/remove labels.
-- [ ] Set/clear due date.
+- [x] Set/clear due date.
 - [ ] Archive/restore if supported.
-- [ ] Audit important task actions.
+- [x] Audit important task actions. — `activity_log` for create/update/delete
 
 ---
 
@@ -343,9 +345,9 @@ Actions:
 
 ## Task UI
 
-- [ ] Task creation.
+- [x] Task creation.
 - [ ] Task editing.
-- [ ] Status control.
+- [x] Status control. — drag and drop on the board
 - [ ] Priority control.
 - [ ] Assignee control.
 - [ ] Labels.
@@ -361,10 +363,10 @@ Actions:
 - [ ] Loading skeletons.
 - [ ] Error states.
 - [ ] Empty states.
-- [ ] Confirmation dialogs for destructive actions.
+- [ ] Confirmation dialogs for destructive actions. — *partial:* attachment delete is confirmed; other deletes are not reviewed
 - [ ] Toast/notification system.
 - [ ] Keyboard accessibility.
-- [ ] Focus management.
+- [x] Focus management. — task dialog: focus trap, Escape, focus restored
 - [ ] Screen-reader labels.
 - [ ] Responsive layouts.
 - [ ] Consistent spacing and typography.
@@ -377,11 +379,11 @@ Actions:
 
 ## WebSocket security
 
-- [ ] Authenticate WebSocket connections.
-- [ ] Reject unauthenticated clients.
-- [ ] Validate organization membership.
-- [ ] Validate project membership before channel subscription.
-- [ ] Prevent arbitrary channel subscription.
+- [x] Authenticate WebSocket connections. — httpOnly cookie or Bearer header; never the query string
+- [x] Reject unauthenticated clients.
+- [x] Validate organization membership. — channel is derived from the JWT org
+- [ ] Validate project membership before channel subscription. — *partial:* no project membership model; one org-wide channel
+- [x] Prevent arbitrary channel subscription.
 
 ## Events
 
@@ -407,18 +409,18 @@ For every event:
 - [ ] Sender.
 - [ ] Recipients.
 - [ ] Retry/ordering behavior.
-- [ ] Tenant isolation.
+- [x] Tenant isolation. — per-org Redis channel
 
 ## Reliability
 
-- [ ] Reconnection.
-- [ ] Heartbeat/ping-pong.
-- [ ] Stale connection cleanup.
+- [x] Reconnection. — exponential backoff with jitter
+- [x] Heartbeat/ping-pong.
+- [x] Stale connection cleanup. — missed heartbeat or JWT expiry closes the socket
 - [ ] Connection limits.
 - [ ] Backpressure strategy.
 - [ ] Duplicate-event handling.
 - [ ] Ordering strategy where needed.
-- [ ] Multi-instance Redis/pub-sub testing.
+- [ ] Multi-instance Redis/pub-sub testing. — *partial:* `RealtimeHub` design supports it; never run across two live pods
 
 ---
 
@@ -426,28 +428,28 @@ For every event:
 
 ## Cache
 
-- [ ] Define cacheable data.
-- [ ] Define TTLs.
-- [ ] Define invalidation.
+- [x] Define cacheable data. — project list (5 min) and task board (60 s), org-scoped keys
+- [x] Define TTLs.
+- [x] Define invalidation. — deleted on every write
 - [ ] Prevent stale authorization data.
-- [ ] Avoid unnecessary sensitive-data caching.
-- [ ] Gracefully handle Redis outages.
+- [x] Avoid unnecessary sensitive-data caching.
+- [ ] Gracefully handle Redis outages. — *partial:* connection errors are logged and counted, but a failed cache read still fails the request
 
 ## Pub/Sub
 
 - [ ] Document channels.
-- [ ] Prevent cross-tenant event leakage.
-- [ ] Handle reconnects.
-- [ ] Handle subscriber failures.
-- [ ] Test multiple API replicas.
+- [x] Prevent cross-tenant event leakage.
+- [x] Handle reconnects. — ioredis auto-resubscribe
+- [x] Handle subscriber failures. — socket closed with 1011; tested
+- [ ] Test multiple API replicas. — *partial:* not run against live replicas
 
 ## Security
 
-- [ ] Redis authentication in production.
-- [ ] Redis network isolation.
-- [ ] No public exposure.
-- [ ] Secrets managed securely.
-- [ ] Memory limits.
+- [x] Redis authentication in production. — password in the Redis URL from a Secret
+- [x] Redis network isolation. — NetworkPolicy
+- [x] No public exposure.
+- [x] Secrets managed securely. — Kubernetes Secrets
+- [x] Memory limits. — container resources
 - [ ] Intentional eviction policy.
 
 ---
@@ -457,7 +459,7 @@ For every event:
 For every queue:
 
 - [ ] Define payload.
-- [ ] Define retry policy.
+- [ ] Define retry policy. — *partial:* jobs are enqueued without `attempts`/`backoff`, so a failed email is not retried
 - [ ] Define backoff.
 - [ ] Define timeout.
 - [ ] Define concurrency.
@@ -466,21 +468,21 @@ For every queue:
 
 Worker reliability:
 
-- [ ] Graceful shutdown.
+- [x] Graceful shutdown.
 - [ ] Retry handling.
-- [ ] Failed/dead-letter visibility.
+- [x] Failed/dead-letter visibility. — failure logs and `jobs_total{status="failed"}`; BullMQ failed set
 - [ ] Duplicate side-effect protection.
-- [ ] Malformed-job handling.
-- [ ] Job ID logging.
-- [ ] Processing-duration metrics.
-- [ ] Failure metrics.
+- [ ] Malformed-job handling. — *partial:* unknown job names are logged and skipped; payload fields are not validated
+- [x] Job ID logging.
+- [x] Processing-duration metrics.
+- [x] Failure metrics.
 - [ ] Restart behavior tests.
 
 Operational controls:
 
-- [ ] Queue health metric.
-- [ ] Queue depth metric.
-- [ ] Failed-job metric.
+- [x] Queue health metric. — queue lag + alerts
+- [x] Queue depth metric.
+- [x] Failed-job metric.
 - [ ] Stuck-job recovery procedure.
 
 ---
@@ -498,7 +500,7 @@ Operational controls:
 
 Triggers:
 
-- [ ] Assignment.
+- [ ] Assignment. — *partial:* email to the assignee when a task is created with one; not on reassignment, no in-app notification
 - [ ] Mention.
 - [ ] Comment.
 - [ ] Status change.
@@ -516,8 +518,8 @@ Track important actions:
 - [ ] Organization creation.
 - [ ] Membership changes.
 - [ ] Role changes.
-- [ ] Project creation/deletion.
-- [ ] Task deletion.
+- [ ] Project creation/deletion. — *partial:* creation is logged; project deletion is not
+- [x] Task deletion.
 - [ ] Permission changes.
 - [ ] Invitation actions.
 - [ ] Sensitive configuration changes.
@@ -535,9 +537,9 @@ request_id
 metadata
 ```
 
-- [ ] Normal users cannot modify audit records.
-- [ ] Tenant isolation enforced.
-- [ ] Secrets never stored in metadata.
+- [x] Normal users cannot modify audit records. — no endpoint writes or edits `activity_log`
+- [x] Tenant isolation enforced. — `org_id` on every row
+- [x] Secrets never stored in metadata.
 - [ ] Retention policy documented.
 - [ ] Audit logs queryable.
 
@@ -545,24 +547,24 @@ metadata
 
 # 17. API Design & Hardening
 
-- [ ] Consistent endpoint naming.
-- [ ] Consistent HTTP status codes.
+- [x] Consistent endpoint naming.
+- [x] Consistent HTTP status codes.
 - [ ] Consistent error structure.
 - [ ] Consistent pagination.
 - [ ] Consistent filtering.
 - [ ] Consistent validation.
-- [ ] Consistent authorization.
+- [x] Consistent authorization.
 - [ ] Validate path parameters.
 - [ ] Validate query parameters.
-- [ ] Validate request bodies.
+- [x] Validate request bodies. — JSON schema, unknown keys rejected on PATCH
 - [ ] Validate WebSocket payloads.
-- [ ] Request body size limits.
-- [ ] Rate limiting.
-- [ ] Strict CORS.
-- [ ] Security headers where appropriate.
+- [x] Request body size limits. — 1 MB
+- [x] Rate limiting. — global 100/min, auth 10/min
+- [x] Strict CORS. — single configured origin; tested
+- [x] Security headers where appropriate. — `@fastify/helmet`
 - [ ] Request timeouts.
-- [ ] Safe error responses.
-- [ ] OpenAPI documentation.
+- [ ] Safe error responses. — *partial:* unhandled 500s use Fastify's default handler, which returns the error message
+- [ ] OpenAPI documentation. — *partial:* Swagger UI in non-production only; routes lack response schemas
 - [ ] Authentication documentation.
 - [ ] WebSocket event documentation.
 
@@ -572,40 +574,40 @@ metadata
 
 ## Secrets
 
-- [ ] No secrets in Git.
-- [ ] No secrets in Docker images.
-- [ ] No secrets in frontend bundles.
-- [ ] No secrets in logs.
-- [ ] `.env.example` contains placeholders only.
-- [ ] Production secrets use Kubernetes Secrets or an external secret manager.
+- [x] No secrets in Git. — gitleaks over full history in CI
+- [x] No secrets in Docker images. — `.dockerignore`
+- [x] No secrets in frontend bundles.
+- [x] No secrets in logs.
+- [x] `.env.example` contains placeholders only.
+- [x] Production secrets use Kubernetes Secrets or an external secret manager.
 - [ ] Rotation procedure documented.
 
 ## HTTP
 
-- [ ] HTTPS in production.
-- [ ] Strict CORS.
-- [ ] Security headers.
-- [ ] Request limits.
-- [ ] Rate limits.
+- [x] HTTPS in production. — TLS ingress in `values.prod.yaml`, secure cookies; not deployed yet
+- [x] Strict CORS.
+- [x] Security headers.
+- [x] Request limits.
+- [x] Rate limits.
 - [ ] Safe error responses.
 
 ## Input
 
-- [ ] Validate all external input.
-- [ ] Prevent injection.
+- [ ] Validate all external input. — *partial:* bodies yes; path params no
+- [x] Prevent injection. — parameterized SQL, whitelisted column names
 - [ ] Sanitize rich text/HTML.
 - [ ] Validate URLs where accepted.
-- [ ] Prevent path traversal.
-- [ ] Secure file uploads.
+- [x] Prevent path traversal. — random storage keys
+- [x] Secure file uploads. — see section 19
 
 ## Tooling
 
 - [ ] CodeQL passes.
-- [ ] Trivy passes or has documented exceptions.
-- [ ] Secret scanning enabled.
-- [ ] Dependency scanning enabled.
-- [ ] Container scanning enabled.
-- [ ] Security workflows run on PRs/releases.
+- [x] Trivy passes or has documented exceptions. — report-only, documented in `docs/ci.md`
+- [x] Secret scanning enabled.
+- [x] Dependency scanning enabled. — Dependabot
+- [x] Container scanning enabled. — Trivy
+- [x] Security workflows run on PRs/releases. — on push and PR; first GitHub run not yet confirmed
 
 ---
 
@@ -613,19 +615,19 @@ metadata
 
 If attachments are supported:
 
-- [ ] File type allowlist.
-- [ ] File size limits.
-- [ ] Filename normalization.
-- [ ] Randomized storage names.
-- [ ] Authorization before download.
-- [ ] Authorization before deletion.
-- [ ] Content-type validation.
+- [x] File type allowlist.
+- [x] File size limits.
+- [x] Filename normalization.
+- [x] Randomized storage names.
+- [x] Authorization before download.
+- [x] Authorization before deletion.
+- [x] Content-type validation. — magic bytes checked on completion
 - [ ] Malware scanning strategy.
-- [ ] Storage abstraction.
-- [ ] Prevent executable exposure.
-- [ ] Prevent path traversal.
+- [x] Storage abstraction. — `storage/types.ts`
+- [x] Prevent executable exposure. — allowlist + forced-download headers
+- [x] Prevent path traversal.
 - [ ] Retention policy.
-- [ ] Orphan cleanup.
+- [ ] Orphan cleanup. — *partial:* files are deleted with their task/project; no reaper for abandoned pending uploads
 
 ---
 
@@ -635,54 +637,54 @@ If attachments are supported:
 
 Review:
 
-- [ ] API Deployment.
-- [ ] Frontend Deployment.
-- [ ] Worker Deployment.
-- [ ] PostgreSQL strategy.
-- [ ] Redis strategy.
-- [ ] Services.
-- [ ] Ingress.
-- [ ] ConfigMaps.
-- [ ] Secrets.
+- [x] API Deployment.
+- [x] Frontend Deployment.
+- [x] Worker Deployment.
+- [x] PostgreSQL strategy. — in-chart Deployment for dev, `externalDatabase` for prod
+- [x] Redis strategy. — in-chart Deployment for dev, `externalRedis` for prod
+- [x] Services.
+- [x] Ingress.
+- [x] ConfigMaps.
+- [x] Secrets.
 
 ## Pod security
 
-- [ ] Non-root.
-- [ ] `allowPrivilegeEscalation: false`.
-- [ ] Read-only root filesystem where practical.
-- [ ] Drop unnecessary Linux capabilities.
-- [ ] Seccomp profile.
-- [ ] Resource requests.
-- [ ] Resource limits.
-- [ ] Probes.
+- [x] Non-root.
+- [x] `allowPrivilegeEscalation: false`.
+- [x] Read-only root filesystem where practical.
+- [x] Drop unnecessary Linux capabilities.
+- [x] Seccomp profile. — RuntimeDefault
+- [x] Resource requests.
+- [x] Resource limits.
+- [x] Probes.
 
 ## Reliability
 
-- [ ] Liveness probes.
-- [ ] Readiness probes.
-- [ ] Startup probes where needed.
-- [ ] PodDisruptionBudget.
-- [ ] HorizontalPodAutoscaler.
-- [ ] Rolling strategy.
-- [ ] Graceful termination.
+- [x] Liveness probes.
+- [x] Readiness probes. — API and frontend
+- [x] Startup probes where needed. — API
+- [x] PodDisruptionBudget.
+- [x] HorizontalPodAutoscaler.
+- [x] Rolling strategy. — Deployment default
+- [x] Graceful termination.
 - [ ] Anti-affinity/topology rules where appropriate.
 
 ## Network
 
-- [ ] Default-deny NetworkPolicy where practical.
-- [ ] Explicit API-to-DB access.
-- [ ] Explicit API-to-Redis access.
-- [ ] Explicit worker-to-DB access.
-- [ ] Explicit worker-to-Redis access.
-- [ ] Restrict unnecessary east-west traffic.
+- [x] Default-deny NetworkPolicy where practical.
+- [x] Explicit API-to-DB access.
+- [x] Explicit API-to-Redis access.
+- [x] Explicit worker-to-DB access.
+- [x] Explicit worker-to-Redis access.
+- [x] Restrict unnecessary east-west traffic.
 
 ## Helm
 
-- [ ] Validate templates.
+- [x] Validate templates. — `helm lint` + `helm template` for three value sets in CI
 - [ ] Validate values.
-- [ ] Safe defaults.
-- [ ] No hardcoded secrets.
-- [ ] Production values documented.
+- [x] Safe defaults.
+- [ ] No hardcoded secrets. — *partial:* `values.yaml` ships dev default secrets meant to be overridden
+- [x] Production values documented. — `values.prod.yaml`
 - [ ] Install tested.
 - [ ] Upgrade tested.
 - [ ] Rollback tested.
@@ -691,12 +693,12 @@ Review:
 
 # 21. ArgoCD / GitOps
 
-- [ ] Reproducible ArgoCD application.
-- [ ] Environment separation.
-- [ ] Intentional sync policy.
+- [x] Reproducible ArgoCD application. — app-of-apps
+- [x] Environment separation. — dev/prod apps and namespaces
+- [ ] Intentional sync policy. — *partial:* automated sync everywhere, and prod tracks `HEAD`
 - [ ] Intentional prune policy.
 - [ ] Intentional self-healing.
-- [ ] No plaintext production secrets in Git.
+- [x] No plaintext production secrets in Git. — `values.prod.yaml` holds placeholders only
 - [ ] Rollback procedure documented.
 - [ ] Drift detection tested.
 - [ ] Clean-cluster deployment tested.
@@ -705,18 +707,18 @@ Review:
 
 # 22. Docker
 
-- [ ] Multi-stage builds.
-- [ ] Minimal production images.
-- [ ] Non-root runtime.
-- [ ] No dev dependencies in production image.
-- [ ] Complete `.dockerignore`.
-- [ ] Deterministic builds where practical.
-- [ ] Vulnerability scanning.
+- [x] Multi-stage builds.
+- [x] Minimal production images. — node:22-alpine
+- [x] Non-root runtime.
+- [x] No dev dependencies in production image.
+- [x] Complete `.dockerignore`.
+- [ ] Deterministic builds where practical. — *partial:* runtime stage uses `npm install --omit=dev`, not `npm ci`
+- [x] Vulnerability scanning. — Trivy in CI
 - [ ] Image versioning/tag strategy.
-- [ ] Environment configuration outside images.
-- [ ] Health checks.
-- [ ] Correct signal handling.
-- [ ] Graceful shutdown.
+- [x] Environment configuration outside images.
+- [ ] Health checks. — *partial:* API and frontend; the worker image has none
+- [x] Correct signal handling.
+- [x] Graceful shutdown.
 
 ---
 
@@ -724,39 +726,39 @@ Review:
 
 ## Logging
 
-- [ ] Structured logs.
-- [ ] Request IDs.
-- [ ] Safe user/org context.
-- [ ] Appropriate stack traces.
-- [ ] No passwords/tokens/secrets.
-- [ ] Consistent log levels.
+- [x] Structured logs.
+- [x] Request IDs.
+- [x] Safe user/org context. — ids only
+- [x] Appropriate stack traces.
+- [x] No passwords/tokens/secrets.
+- [x] Consistent log levels. — `LOG_LEVEL`
 - [ ] Retention policy.
 
 ## Metrics
 
 Track:
 
-- [ ] HTTP request count.
-- [ ] HTTP latency.
-- [ ] HTTP error rate.
-- [ ] Active WebSocket connections.
-- [ ] WebSocket errors.
-- [ ] Database latency.
-- [ ] Redis latency/errors.
-- [ ] Queue depth.
-- [ ] Worker duration.
-- [ ] Worker failures.
-- [ ] Authentication failures.
+- [x] HTTP request count.
+- [x] HTTP latency.
+- [x] HTTP error rate. — from status labels
+- [x] Active WebSocket connections.
+- [x] WebSocket errors.
+- [x] Database latency.
+- [ ] Redis latency/errors. — *partial:* errors counted; latency not measured
+- [x] Queue depth.
+- [x] Worker duration.
+- [x] Worker failures.
+- [x] Authentication failures.
 - [ ] Rate-limit events.
 
 ## Prometheus/Grafana
 
-- [ ] Prometheus scraping.
-- [ ] API dashboard.
-- [ ] Worker dashboard.
+- [x] Prometheus scraping. — ServiceMonitors for API and worker
+- [x] API dashboard.
+- [x] Worker dashboard.
 - [ ] Infrastructure dashboard.
 - [ ] Redis/PostgreSQL dashboards where appropriate.
-- [ ] Alerts for critical failures.
+- [x] Alerts for critical failures. — 18 rules, promtool-tested
 
 ---
 
@@ -764,21 +766,21 @@ Track:
 
 ## Unit
 
-- [ ] Validation.
-- [ ] Business logic.
-- [ ] Authorization.
-- [ ] Permission checks.
-- [ ] Utilities.
-- [ ] Queue processors.
+- [x] Validation.
+- [x] Business logic.
+- [x] Authorization.
+- [x] Permission checks.
+- [x] Utilities.
+- [x] Queue processors.
 
 ## Integration
 
-- [ ] API + database.
-- [ ] Authentication.
-- [ ] Tenant isolation.
-- [ ] RBAC.
-- [ ] Project CRUD.
-- [ ] Task CRUD.
+- [ ] API + database. — *partial:* all route tests mock the database; nothing runs against real Postgres in CI
+- [x] Authentication. — route-level, mocked DB
+- [x] Tenant isolation. — route-level, mocked DB
+- [x] RBAC. — route-level, mocked DB
+- [x] Project CRUD. — route-level, mocked DB
+- [x] Task CRUD. — route-level, mocked DB
 - [ ] Comments.
 - [ ] Notifications.
 - [ ] Redis.
@@ -788,13 +790,13 @@ Track:
 
 Explicitly test:
 
-- [ ] IDOR/BOLA.
-- [ ] Cross-tenant access.
+- [x] IDOR/BOLA.
+- [x] Cross-tenant access.
 - [ ] Privilege escalation.
-- [ ] Missing authentication.
-- [ ] Invalid JWT.
-- [ ] Expired JWT.
-- [ ] Unauthorized WebSocket subscription.
+- [x] Missing authentication.
+- [x] Invalid JWT.
+- [x] Expired JWT.
+- [x] Unauthorized WebSocket subscription.
 - [ ] Malicious payloads.
 - [ ] Rate limiting.
 
@@ -824,7 +826,7 @@ Notification
 Audit event
 ```
 
-- [ ] Automate this flow.
+- [ ] Automate this flow. — *partial:* Playwright is set up with a single login spec
 - [ ] Add failure-path tests.
 
 ## Load testing
@@ -844,17 +846,17 @@ Audit event
 
 ## Pull Request
 
-- [ ] Install.
-- [ ] Lint.
-- [ ] Typecheck.
-- [ ] Unit tests.
+- [x] Install. — `npm ci`
+- [x] Lint.
+- [x] Typecheck. — via `tsc`/`next build`
+- [x] Unit tests.
 - [ ] Integration tests.
-- [ ] Build.
+- [x] Build.
 - [ ] Dependency audit.
-- [ ] Secret scanning.
+- [x] Secret scanning.
 - [ ] CodeQL.
-- [ ] Container scan.
-- [ ] Helm validation.
+- [x] Container scan. — Trivy, report-only
+- [x] Helm validation.
 
 ## Release
 
@@ -882,8 +884,8 @@ Audit event
 
 - [ ] Profile slow endpoints.
 - [ ] Optimize DB queries.
-- [ ] Add evidence-based indexes.
-- [ ] Cache appropriate reads.
+- [x] Add evidence-based indexes.
+- [x] Cache appropriate reads.
 - [ ] Avoid unnecessary serialization.
 - [ ] Request timeouts.
 
@@ -950,7 +952,7 @@ Define:
 
 - [ ] Document stored user data.
 - [ ] Minimize unnecessary personal data.
-- [ ] Do not log sensitive data.
+- [x] Do not log sensitive data.
 - [ ] Define retention periods.
 - [ ] Define account deletion.
 - [ ] Define organization deletion.
@@ -1005,12 +1007,12 @@ For every threat:
 
 ## Developer
 
-- [ ] README.
-- [ ] Architecture.
-- [ ] Repository structure.
-- [ ] Local setup.
-- [ ] Environment variables.
-- [ ] Database migrations.
+- [x] README.
+- [x] Architecture.
+- [x] Repository structure.
+- [x] Local setup.
+- [x] Environment variables.
+- [ ] Database migrations. — *partial:* how to run them is documented; rollback is not
 - [ ] Testing.
 - [ ] API development.
 - [ ] Worker development.
@@ -1019,14 +1021,14 @@ For every threat:
 
 ## Operations
 
-- [ ] Docker deployment.
-- [ ] Kubernetes deployment.
-- [ ] Helm configuration.
-- [ ] ArgoCD deployment.
+- [x] Docker deployment.
+- [x] Kubernetes deployment.
+- [x] Helm configuration.
+- [x] ArgoCD deployment.
 - [ ] Secret management.
 - [ ] Backup/restore.
 - [ ] Rollback.
-- [ ] Monitoring.
+- [x] Monitoring. — `docs/observability.md`
 - [ ] Incident response.
 
 ## Security
@@ -1037,7 +1039,7 @@ For every threat:
 - [ ] Authorization model.
 - [ ] Tenant isolation model.
 - [ ] Secret management.
-- [ ] Vulnerability reporting.
+- [x] Vulnerability reporting. — `SECURITY.md`
 - [ ] Security assumptions.
 
 ---
@@ -1073,30 +1075,30 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Gate 1 — Build
 
-- [ ] Install succeeds.
-- [ ] Lint succeeds.
-- [ ] Typecheck succeeds.
-- [ ] Build succeeds.
+- [x] Install succeeds.
+- [x] Lint succeeds.
+- [x] Typecheck succeeds.
+- [x] Build succeeds.
 
 ## Gate 2 — Tests
 
-- [ ] Unit tests pass.
+- [x] Unit tests pass.
 - [ ] Integration tests pass.
 - [ ] Critical E2E path passes.
-- [ ] Security tests pass.
+- [x] Security tests pass. — unit/route level
 
 ## Gate 3 — Security
 
 - [ ] CodeQL passes.
-- [ ] Trivy passes or exceptions are documented.
-- [ ] Secret scanning passes.
-- [ ] No unresolved critical vulnerabilities.
+- [x] Trivy passes or exceptions are documented.
+- [x] Secret scanning passes.
+- [x] No unresolved critical vulnerabilities. — npm audit clean after the Nov 2026 upgrades
 - [ ] Tenant isolation verified.
 
 ## Gate 4 — Infrastructure
 
-- [ ] Docker builds.
-- [ ] Helm validates.
+- [x] Docker builds.
+- [x] Helm validates.
 - [ ] Kubernetes deployment succeeds.
 - [ ] Probes work.
 - [ ] HPA works where applicable.
@@ -1128,21 +1130,21 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Phase 1 — Foundation
 
-- [ ] Repository audit.
-- [ ] Baseline tests.
+- [x] Repository audit.
+- [x] Baseline tests.
 - [ ] Architecture cleanup.
-- [ ] Environment validation.
+- [x] Environment validation.
 - [ ] Database schema finalization.
-- [ ] Authentication hardening.
-- [ ] Authorization foundation.
-- [ ] Tenant isolation.
+- [ ] Authentication hardening. — *partial:* no revocation, register leaks existing emails
+- [x] Authorization foundation.
+- [x] Tenant isolation.
 
 ## Phase 2 — Core Product
 
 - [ ] Organizations.
 - [ ] Memberships.
-- [ ] Projects.
-- [ ] Tasks.
+- [ ] Projects. — *partial:* CRUD/archive done; no project members or settings
+- [ ] Tasks. — *partial:* everything except labels
 - [ ] Comments.
 - [ ] Labels.
 - [ ] Search/filtering.
@@ -1150,56 +1152,56 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Phase 3 — Collaboration
 
-- [ ] WebSockets.
-- [ ] Real-time task updates.
+- [x] WebSockets.
+- [x] Real-time task updates.
 - [ ] Real-time comments.
 - [ ] Notifications.
-- [ ] Redis pub/sub.
-- [ ] Reconnection handling.
+- [x] Redis pub/sub.
+- [x] Reconnection handling.
 
 ## Phase 4 — Async Infrastructure
 
-- [ ] BullMQ.
-- [ ] Worker jobs.
+- [x] BullMQ.
+- [x] Worker jobs.
 - [ ] Retry policies.
 - [ ] Failure handling.
-- [ ] Queue metrics.
+- [x] Queue metrics.
 
 ## Phase 5 — Security
 
 - [ ] Threat model.
-- [ ] Security tests.
-- [ ] Rate limiting.
+- [x] Security tests.
+- [x] Rate limiting.
 - [ ] Input hardening.
-- [ ] File security.
+- [x] File security.
 - [ ] Audit logs.
 - [ ] Secret management.
 
 ## Phase 6 — Kubernetes
 
-- [ ] Container hardening.
-- [ ] Helm hardening.
-- [ ] NetworkPolicies.
-- [ ] Pod security.
-- [ ] Probes.
-- [ ] HPA.
-- [ ] PDB.
-- [ ] Resource limits.
+- [x] Container hardening.
+- [x] Helm hardening.
+- [x] NetworkPolicies.
+- [x] Pod security.
+- [x] Probes.
+- [x] HPA.
+- [x] PDB.
+- [x] Resource limits.
 
 ## Phase 7 — Observability
 
-- [ ] Structured logging.
-- [ ] Metrics.
-- [ ] Prometheus.
-- [ ] Grafana.
-- [ ] Alerts.
-- [ ] Correlation IDs.
+- [x] Structured logging.
+- [x] Metrics.
+- [x] Prometheus.
+- [x] Grafana.
+- [x] Alerts.
+- [x] Correlation IDs.
 
 ## Phase 8 — CI/CD
 
-- [ ] PR pipeline.
-- [ ] Security scanning.
-- [ ] Container scanning.
+- [x] PR pipeline.
+- [x] Security scanning.
+- [x] Container scanning.
 - [ ] Release pipeline.
 - [ ] GitOps deployment.
 - [ ] Rollback.
@@ -1295,41 +1297,43 @@ DO NOT:
 
 # 36. Completion Tracking
 
-| Area                  | Status | Notes                                                                                                                    |
-| --------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Repository foundation | 🟢     | Audited codebase, configured ESLint for apps/api & apps/worker, fixed type & lint bugs, verified install/build/lint/test |
-| Architecture          | 🟢     | Layered Fastify microservice API, Next.js 14 frontend, BullMQ background worker, Redis & Postgres                        |
-| Authentication        | 🟢     | JWT verification with cookie support, password hashing, registration, login & password reset                            |
-| Authorization/RBAC    | 🟢     | Fastify requireRole middleware (Owner, Admin, Member, Viewer) with server-side role permission checks                   |
-| Multi-tenancy         | 🟢     | Session-derived org_id scoping across all API routes with IDOR security test suite                                       |
-| Database              | ⬜     |                                                                                                                          |
-| Organizations         | ⬜     |                                                                                                                          |
-| Projects              | ⬜     |                                                                                                                          |
-| Tasks                 | ⬜     |                                                                                                                          |
-| Comments              | ⬜     |                                                                                                                          |
-| Search/filtering      | ⬜     |                                                                                                                          |
-| Dashboard             | ⬜     |                                                                                                                          |
-| WebSockets            | ⬜     |                                                                                                                          |
-| Redis                 | ⬜     |                                                                                                                          |
-| BullMQ/Workers        | ⬜     |                                                                                                                          |
-| Notifications         | ⬜     |                                                                                                                          |
-| Audit logging         | ⬜     |                                                                                                                          |
-| API hardening         | ⬜     |                                                                                                                          |
-| Security              | ⬜     |                                                                                                                          |
-| File handling         | ⬜     |                                                                                                                          |
-| Docker                | ⬜     |                                                                                                                          |
-| Kubernetes            | ⬜     |                                                                                                                          |
-| Helm                  | ⬜     |                                                                                                                          |
-| ArgoCD                | ⬜     |                                                                                                                          |
-| Observability         | ⬜     |                                                                                                                          |
-| Testing               | ⬜     |                                                                                                                          |
-| CI/CD                 | ⬜     |                                                                                                                          |
-| Performance           | ⬜     |                                                                                                                          |
-| Reliability           | ⬜     |                                                                                                                          |
-| Backup/restore        | ⬜     |                                                                                                                          |
-| Documentation         | ⬜     |                                                                                                                          |
-| UX polish             | ⬜     |                                                                                                                          |
-| Production readiness  | ⬜     |                                                                                                                          |
+Audited 2026-11-15 against commit `c0c3cbc`.
+
+| Area                  | Status | Notes |
+| --------------------- | ------ | ----- |
+| Repository foundation | 🟢     | Install/lint/build/test clean on Node 22. Dependencies upgraded (Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6) with npm audit clean. |
+| Architecture          | 🟡     | Central auth/role checks, request IDs and graceful shutdown are in place. SQL and business logic still sit in route handlers, error handling is ad hoc, and the API never closes its pg pool or Redis clients on shutdown. |
+| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Still missing: revocation/refresh, rate limits on forgot/reset-password, and register still reveals whether an email exists. **The password-reset email is never sent**: a token is stored but not delivered. |
+| Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
+| Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`, with IDOR tests (mocked DB). Gaps: no shared data-access layer, and the worker does not filter by org. |
+| Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications, memberships or project-member tables. No pagination anywhere. No backups. |
+| Organizations         | 🔴     | Only "create on register" and creating/revoking invites. **There is no endpoint to accept an invite** and no invite email, so a second user cannot join an organization. No member list, role change, removal or org deletion. |
+| Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
+| Tasks                 | 🟡     | All core fields and actions, Kanban board, activity log. No labels, no archive. |
+| Comments              | ⬜     | No table, routes or UI. |
+| Search/filtering      | ⬜     | No search, filters or pagination. |
+| Dashboard             | ⬜     | |
+| WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Not yet run across two live pods. |
+| Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. A Redis outage still fails cached reads. No eviction policy. |
+| BullMQ/Workers        | 🟡     | One job (`task_created` -> assignee email), logs carry job/request ids, metrics and alerts. **No retry/backoff** (`attempts` is not set) and no payload validation. |
+| Notifications         | ⬜     | Only the assignment email on task creation. |
+| Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
+| API hardening         | 🟡     | Body schemas, 1 MB limit, rate limits, helmet, strict CORS. Path params are not validated, there are no request timeouts, Swagger is dev-only, and 500 responses can echo error messages. |
+| Security              | 🟡     | gitleaks, Trivy (report-only), Dependabot, no secrets in images or bundles. No CodeQL, no threat model, no rotation procedure. |
+| File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Not yet run against real S3/MinIO in a browser. |
+| Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`. Runtime stage uses `npm install`, not `npm ci`. No tag strategy. |
+| Kubernetes            | 🟢     | Hardened pod security context, probes, HPA, PDB, default-deny NetworkPolicy with explicit egress (including HTTPS for email/S3). **Never deployed to a cluster.** |
+| Helm                  | 🟡     | Lint and render checked in CI for three value sets. No `values.schema.json`; `values.yaml` ships dev secrets; install/upgrade/rollback never tested. |
+| ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
+| Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Not loaded into a live Prometheus/Grafana; no log retention policy. |
+| Testing               | 🟡     | Broad unit and route tests (mocked DB/Redis/S3). No tests against real Postgres, no E2E beyond one Playwright login spec, no load tests (the k6 script mentioned in the README does not exist). |
+| CI/CD                 | 🟡     | PR/push pipeline: lint, build, test, Helm, gitleaks, image build + Trivy. No CodeQL, no integration tests, no release pipeline, no branch protection. First GitHub run not yet confirmed. |
+| Performance           | ⬜     | Indexes and caching only; nothing measured. |
+| Reliability           | ⬜     | No failure testing. |
+| Backup/restore        | ⬜     | |
+| Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
+| UX polish             | ⬜     | |
+| Production readiness  | 🔴     | Blocked on the invite-acceptance and password-reset email gaps, and on a first live deployment. |
 
 ### Status legend
 

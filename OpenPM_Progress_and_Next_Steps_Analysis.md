@@ -1,22 +1,25 @@
 # OpenPM — System Status, Architectural Audit & Actionable Roadmap
 
-**Date:** October 5, 2026  
-**Repository:** `OpenPM`  
-**Status Overview:** Baseline Operational 🟢 | Build & Lint & Test Clean 🟢 | Phase 1-5 Core Implemented 🟢
+**Date:** November 15, 2026 (audited against commit `c0c3cbc`)
+**Repository:** `OpenPM`
+**Status Overview:** Build, lint and test clean on Node 22 🟢 | Phases A–E implemented 🟢 | Never deployed 🟡 | Two broken user flows 🔴
+
+The detailed checklist is in `OpenPM_MASTER_ROADMAP.md` (section 36 has the per-area summary). This document gives the overview and the next steps.
 
 ---
 
 ## 1. Executive Summary
 
-OpenPM is designed as an open-source, self-hostable, enterprise-grade, Kubernetes-native project management platform built to compete with Jira and Linear. 
+OpenPM is designed as an open-source, self-hostable, enterprise-grade, Kubernetes-native project management platform built to compete with Jira and Linear.
 
-Over recent development, the project has transitioned into a functional full-stack architecture with containerization and GitOps deployment manifests. All three workspace microservices (`apps/api`, `apps/worker`, `apps/frontend`) compile without errors, pass linting checks, and execute automated tests cleanly.
+All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lint and pass their tests (~315 test cases) on Node 22. Production-readiness Phases A–E (security, tests, migrations, scaling/attachments, observability/CI) are implemented. In November 2026 every dependency with an advisory was upgraded and npm audit is clean.
 
-This document provides a comprehensive breakdown of:
-1. **What has been accomplished so far** (by subsystem and feature area).
-2. **Current system baseline verification**.
-3. **Identified technical debt, security gaps, and risks**.
-4. **Detailed, prioritized step-by-step next steps** to reach production readiness.
+Two things stand between the project and a usable multi-user product:
+
+1. **Most of the system has only been tested with fakes.** Route tests use a mocked database, Redis and S3. The stack has run under Docker Compose, but has never been deployed to Kubernetes, synced by ArgoCD, or monitored by a live Prometheus/Grafana.
+2. **Two user flows are broken end to end:**
+   - **Invites can be created but never accepted.** No endpoint consumes an invite token and no invite email is sent, so a second user cannot join an organization.
+   - **Password reset never sends its email.** `/api/auth/forgot-password` stores a token, but nothing delivers it to the user.
 
 ---
 
@@ -26,125 +29,163 @@ This document provides a comprehensive breakdown of:
 +-----------------------------------------------------------------------------------+
 |                                 OpenPM Architecture                               |
 +-----------------------------------------------------------------------------------+
-|  [ Frontend - Next.js 14 ]  <--- (WebSockets / HTTP) --->  [ API - Fastify TS ]    |
-|    - Kanban Board UI                                         - JWT Auth & RBAC    |
-|    - App Router & Tailwind                                   - REST & WS Gateway  |
+|  [ Frontend - Next.js 16 ]  <--- (WebSockets / HTTP) --->  [ API - Fastify 5 TS ]  |
+|    - Kanban Board UI, React 19                               - JWT Auth & RBAC    |
+|    - Task dialog + attachments                               - REST & WS Gateway  |
 |    - Settings & Password Reset                               - Prometheus Metrics |
 +-----------------------------------------------------------------------------------+
-                                                                 |
-                                                   +-------------+-------------+
-                                                   |                           |
-                                           [ PostgreSQL ]                [ Redis Cache ]
-                                           - Multi-Tenant Data           - Queue Broker
-                                           - Migrations                  - WS PubSub Context
+                                  |                              |
+                          [ S3 / MinIO ]           +-------------+-------------+
+                          - Attachments            |                           |
+                                           [ PostgreSQL ]                [ Redis ]
+                                           - Multi-Tenant Data           - Cache + Queue Broker
+                                           - Reversible Migrations       - WS Pub/Sub Backplane
                                                                                |
                                                                         [ BullMQ Worker ]
-                                                                        - Email Alerts
-                                                                        - Async Events
+                                                                        - Assignment email (Resend)
+                                                                        - Queue metrics
 +-----------------------------------------------------------------------------------+
 |                   DevOps & Kubernetes Infrastructure                              |
-|  - Docker Multi-Stage Builds | Helm Charts | ArgoCD App-of-Apps GitOps           |
+|  Docker multi-stage | Helm (HPA, PDB, NetworkPolicy, ServiceMonitor, alerts)      |
+|  ArgoCD app-of-apps (dev/prod) | GitHub Actions CI | Grafana dashboards           |
 +-----------------------------------------------------------------------------------+
 ```
 
 ### 2.1 Backend API (`apps/api`)
-- **Core Server & Middleware:** Fastify engine with TypeScript, custom config schema validation (`zod`), CORS, cookie parsing, and correlation tracking.
-- **Database & Data Access Layer:** PostgreSQL client connection pool (`pg`) with initial schema migrations for `users`, `organizations`, `organization_memberships`, `projects`, `tasks`, `comments`, `invites`, and `password_reset_tokens`.
-- **Authentication & Security:** JWT-based authentication plugin with password hashing (`bcrypt`), cookie token storage, registration (`/api/auth/register`), login (`/api/auth/login`), and password reset workflow (`/api/auth/forgot-password`, `/api/auth/reset-password`).
-- **Domain API Endpoints:**
-  - **Projects API (`/api/projects`):** Full CRUD for projects, organization filtering, user membership management.
-  - **Tasks API (`/api/tasks`):** Create, update, delete, assign tasks, update status/priority, auto-log activity events.
-  - **Invites API (`/api/invites`):** Organization invite issuance and acceptance flow.
-  - **Profile API (`/api/profile`):** User metadata management and organization list fetching.
-- **Real-Time Communication:** Fastify WebSockets integration (`/ws`) for broadcasting real-time task creation/updates to connected clients.
-- **Observability:** `/health` endpoint returning system health and database ping, plus `/metrics` returning Prometheus-compatible telemetry.
+- **Core server:** Fastify 5 with TypeScript (strict), environment validation with zod, helmet, strict CORS, 1 MB body limit, global and auth-specific rate limits, request IDs (`X-Request-Id`), graceful shutdown.
+- **Database:** `pg` pool and 9 reversible SQL migrations (`migrate`, `migrate:down`, `migrate:status`): organizations, users, projects, tasks, activity_log, organization_invites, password_reset_tokens, query indexes, task_attachments. Multi-step writes use `withTransaction`. Docker Compose runs the migrations before the API and worker start.
+- **Authentication:** bcrypt, a 24h JWT in an httpOnly SameSite=strict cookie, register/login/logout, a forgot/reset-password API (no email delivery, see 3.1), `JWT_SECRET` required in production.
+- **Authorization:** `requireRole` (owner > admin > member > viewer) on every route. The organization always comes from the JWT, never from the request.
+- **Endpoints:** projects (CRUD plus archive/restore), tasks (CRUD, assignment, status, priority, due date), attachments (presigned upload, complete, list, download, delete), invites (create, list, revoke), profile.
+- **Real-time:** `/ws` authenticated by cookie or Bearer header, with an Origin check, one channel per org, heartbeat, close on JWT expiry, and one shared Redis subscriber per pod (`RealtimeHub`).
+- **Observability:** structured JSON logs with user/org/request ids and redaction; metrics for HTTP, DB latency and pool, auth failures, WebSocket and Redis errors.
 
 ### 2.2 Background Worker (`apps/worker`)
-- **Queue System:** BullMQ queue listener connected to Redis.
-- **Event Handlers:** Asynchronous job processors for `taskCreated` notifications and user activity events.
-- **Email Gateway:** Nodemailer integration (`src/lib/email.ts`) for sending transactional emails (invitations, password reset links, task updates).
+- BullMQ consumer for the `tasks` queue. Its only job is `task_created`, which emails the assignee through **Resend**. When `RESEND_API_KEY` is unset, mail is printed in development and suppressed in production.
+- Logs carry `job_id` and the originating `request_id`. A metrics endpoint exposes job outcomes and durations, queue depth, queue lag and email results.
 
-### 2.3 Web Frontend UI (`apps/frontend`)
-- **Framework & Styling:** Next.js 14 App Router, TypeScript, and Tailwind CSS with custom theme styling.
-- **Authentication Flows:** Dedicated responsive pages for Login, Registration, Forgot Password, and Password Reset.
-- **Interactive Kanban Board:** Full task management interface at `/projects/[id]` displaying column-based status organization (BACKLOG, IN_PROGRESS, IN_REVIEW, DONE), task detail modals, creation dialogs, and instant filter updates.
-- **Real-Time WebSockets Client:** Custom React hook establishing persistent WebSocket connections to reflect multi-user task updates without page refreshes.
-- **Organization & User Settings:** Settings views at `/settings/organization` (member listing, invite management) and `/settings/profile`.
+### 2.3 Web Frontend (`apps/frontend`)
+- Next.js 16 App Router, React 19, Tailwind. The middleware is renamed to `proxy.ts` (the Next 16 convention).
+- Login, registration, forgot/reset-password pages; projects list; Kanban board with drag-and-drop status changes and live updates over WebSocket (reconnects with backoff).
+- Accessible task detail dialog with an attachments panel (drag and drop, progress, cancel, confirmed delete).
+- Organization settings (create/revoke invites) and profile settings.
 
-### 2.4 DevOps & Kubernetes Infrastructure
-- **Containerization:** Multi-stage production-ready Dockerfiles for both `apps/api` and `apps/frontend` featuring unprivileged runtime users and HTTP healthchecks. Unified local execution via `docker-compose.yml` (PostgreSQL, Redis, API, Worker, Frontend).
-- **Helm Configuration:** Modular Kubernetes Helm chart (`helm/openpm`) configured for automated deployments with configurable replicas, ingress rules, secret management, and resource requests/limits.
-- **GitOps Integration:** ArgoCD App-of-Apps structure (`argocd/`) enabling declaratively managed environment pipelines (staging vs. production).
-
-### 2.5 Engineering Baseline & Verification
-- **Code Quality:** Configured workspace-wide ESLint and TypeScript compilation.
-- **Automated Testing:** Vitest integration test suite for API health and routes.
-- **Build Status:** Clean execution of `npm run build`, `npm run lint`, and `npm test` across all workspaces with zero errors.
+### 2.4 DevOps & Kubernetes
+- Multi-stage, non-root Alpine images for the API, worker and frontend; `.dockerignore`; Docker Compose with Postgres, Redis and MinIO (a maintained image; `quay.io/minio` now returns 401).
+- Helm chart: restricted pod security context, probes, HPA, PDB, default-deny NetworkPolicy with explicit DB/Redis/DNS rules and HTTPS egress (for email and S3), ServiceMonitors, 2 Grafana dashboards, 18 alert rules (`PrometheusRule`).
+- ArgoCD app-of-apps for dev and prod.
+- CI (`.github/workflows/ci.yml`): `npm ci`, lint, build, test; Helm lint/render for three value sets plus promtool checks on the alerts; gitleaks over the full history; per-image build and Trivy scan. Actions are pinned to SHAs, and Dependabot covers npm, Docker and Actions.
 
 ---
 
 ## 3. Gap Analysis & Technical Debt
 
-While core functional building blocks are operational, achieving **production readiness** requires addressing the following key gaps:
+### 3.1 Broken or missing product flows (🔴 High)
 
-| Area | Current State | Target Standard / Gap | Priority |
-| :--- | :--- | :--- | :--- |
-| **Multi-Tenancy & Authorization** | Basic `org_id` filtering in individual SQL queries. | Automated DB-level or middleware-enforced tenant guard to strictly eliminate IDOR/BOLA risks. | 🔴 **High** |
-| **RBAC Security** | Roles exist in schema (`Owner`, `Admin`, `Member`, `Viewer`). | Granular permission check middleware enforced on every mutating API route. | 🔴 **High** |
-| **Database Migrations** | Raw SQL migration runner script (`migrate.ts`). | Production-grade migration engine (Prisma or Drizzle) with rollback support and schema validation. | 🟡 **Medium** |
-| **WebSocket Scale-Out** | Single-node in-memory WebSocket client broadcasting. | Redis Pub/Sub backplane (`@fastify/redis` / Socket.io Redis adapter) for multi-pod scaling. | 🟡 **Medium** |
-| **Test Coverage** | Initial Vitest test suite (`health.test.ts`). | Comprehensive unit & integration tests covering auth, tenant boundary, task updates, worker queues, and frontend hooks. | 🔴 **High** |
-| **File Storage** | No attachment handling. | MinIO / S3 integration for uploading and serving task attachment files securely. | 🟢 **Enhancement** |
-| **Observability & Dashboards** | Raw `/metrics` Prometheus endpoint exposed. | Grafana dashboards, alerting rules, and structured JSON logs with correlation/trace IDs. | 🟡 **Medium** |
+| Gap | Detail |
+| :--- | :--- |
+| Invite acceptance | `routes/invites.ts` has create/list/revoke only. No accept endpoint, no invite email, no UI to join. |
+| Password-reset delivery | `routes/auth.ts` stores the token with a "send an email here" comment; no job is queued. |
+| Member management | No member list, role change, removal, leave, ownership transfer or org deletion. |
+| Comments, labels, notifications, search, pagination | Not started. There are no tables for comments, labels or notifications. List endpoints return every row. |
+
+### 3.2 Hardening (🟡 Medium)
+
+| Area | Current state | Gap |
+| :--- | :--- | :--- |
+| Worker retries | `taskQueue.add` sets no `attempts`/`backoff` | A failed email is never retried. The payload is not validated, and the worker looks up rows without an org filter. |
+| API shutdown | `fastify.close()` only | The pg pool and Redis clients are not closed. |
+| Error responses | Ad-hoc string errors | No shared error handler. Unhandled 500s can echo error messages, and validation errors use a different shape. |
+| Auth | Fixed 24h JWT | No revocation or refresh. Forgot/reset-password only have the global rate limit. Register reveals whether an email is already registered. |
+| Input validation | Body schemas | Path params (UUIDs) are not validated; there are no request timeouts. |
+| Redis outage | Errors logged and counted | A failed cache read fails the request instead of falling back to the database. |
+| Audit log | `activity_log` for project/task changes | Project deletion, auth and membership events are not recorded; there is no `request_id` column and no read endpoint. |
+| Attachments | See `docs/attachments.md` | No malware scanning, no reaper for abandoned pending uploads, no retention or quotas. |
+| Helm / ArgoCD | Lint and render checked | `values.yaml` ships dev secrets; no `values.schema.json`; prod auto-syncs from `HEAD`. |
+| Docker | Hardened images | The runtime stage uses `npm install --omit=dev`, not `npm ci`; the worker image has no healthcheck; no tag strategy. |
+| Docs | README, guides | The README refers to `k6/load-test.js`, which does not exist. Permissions, WebSocket events, threat model and backup/rollback are not documented. |
+
+### 3.3 Verification debt (🟡 Medium)
+
+Never run outside tests or Compose: two API replicas sharing live updates, attachments against real S3/MinIO in a browser, `migrate:down` against real Postgres, the Helm chart on a cluster, ArgoCD sync, and the dashboards and alerts in live Prometheus/Grafana. CI has not yet been confirmed green on GitHub. There are no integration tests against real Postgres, no E2E beyond one Playwright login spec, and no load tests.
 
 ---
 
-## 4. Prioritized Next Steps Roadmap
-
-Tasks are divided into immediate, near-term, and production release phases:
+## 4. Completed Phases
 
 ### Phase A: RBAC, Security & Tenant Isolation (Completed 🟢)
-- [x] **Task A.1:** Implement centralized authorization middleware in `apps/api/src/plugins/auth.ts` to verify organization membership and role permissions (`Owner`, `Admin`, `Member`, `Viewer`) before entering route logic.
-- [x] **Task A.2:** Audit every route in `apps/api/src/routes/` (`projects.ts`, `tasks.ts`, `invites.ts`, `profile.ts`) to ensure client-supplied `org_id` parameters can never override authenticated session context.
-- [x] **Task A.3:** Add explicit IDOR / cross-tenant boundary security tests ensuring User A from Org A cannot read or mutate resources owned by Org B.
+- [x] **Task A.1:** Centralized authorization middleware in `apps/api/src/plugins/auth.ts` (`authenticate`, `requireRole`).
+- [x] **Task A.2:** Every route derives `org_id` from the authenticated session; client-supplied values are never trusted.
+- [x] **Task A.3:** IDOR / cross-tenant boundary tests (route level, mocked DB).
 
 ### Phase B: Test Suite Expansion (Completed 🟢)
-- [x] **Task B.1:** Create integration test suites for Authentication flows (`register`, `login`, `password-reset`).
-- [x] **Task B.2:** Create task & project lifecycle integration tests (`apps/api/src/routes/tasks.test.ts`).
-- [x] **Task B.3:** Create worker process unit tests testing BullMQ payload consumption and Nodemailer dispatch mocks (`apps/worker`).
+- [x] **Task B.1:** Authentication flow tests (register, login, password reset).
+- [x] **Task B.2:** Task and project lifecycle tests.
+- [x] **Task B.3:** Worker tests (job dispatch, email sending, metrics).
 
-### Phase C: Database & Migration Framework Polish (Completed 🟢)
-- [x] **Task C.1:** Standardize schema migrations with rollback support. (`npm run migrate`, `migrate:down [n]`, `migrate:status`; unit-tested with a fake client — not yet exercised against a live Postgres.)
-- [x] **Task C.2:** Add indexes for foreign key lookups. Migration `008_query_indexes` adds `tasks(project_id, created_at)`, `projects(org_id, created_at DESC)`, `password_reset_tokens(user_id)` and `activity_log(user_id)`. `organization_memberships` does not exist (users carry a single `users.org_id`), so that index is N/A until a membership model is introduced. Not yet run against a live Postgres.
-- [x] **Task C.3:** Add database transaction wrappers around multi-step operations. `withTransaction` (`apps/api/src/db/transaction.ts`) now backs every transactional route (auth, projects, tasks): commit on success, rollback on throw without masking the original error, client always released.
+### Phase C: Database & Migration Framework (Completed 🟢)
+- [x] **Task C.1:** Reversible migrations (`migrate`, `migrate:down [n]`, `migrate:status`). Compose now runs them on startup; `migrate:down` has not been exercised against a live Postgres.
+- [x] **Task C.2:** Query indexes (migration `008_query_indexes`).
+- [x] **Task C.3:** `withTransaction` wraps every multi-step write.
 
-### Phase D: Multi-Node Scaling & Media Attachments (Completed 🟢, pending live verification)
-- [x] **Task D.1:** Redis Pub/Sub backplane for multi-pod WebSocket delivery. One shared, ref-counted subscriber per pod (`RealtimeHub`) instead of one Redis connection per client; cookie auth + Origin check; heartbeat; close on JWT expiry; no subscription leak on early disconnect; frontend reconnects with backoff. Unit-tested incl. real-socket route tests; not yet exercised against a live Redis or across two running pods.
-- [x] **Task D.2:** File attachments via S3-compatible storage with presigned uploads, at `/api/projects/:projectId/tasks/:taskId/attachments` (project-scoped like every task route). Allowlist, extension and size limits, random storage keys, magic-byte verification on completion, org-scoped authorization on every operation, forced-download headers, and file cleanup when a task or project is deleted. See `docs/attachments.md`. Tested with a fake store; **not yet run against real S3/MinIO**. Not done: malware scanning, an orphan reaper, retention and quotas.
-- [x] **Task D.3:** Frontend attachments UI. Cards on the board now open an accessible task detail dialog (focus trap, Escape, focus restored) containing a drag-and-drop panel: per-file progress and cancel, list, download, confirmed delete; viewers can download but not upload. The upload client derives the content type from the extension, cleans up the pending row on failure, and has unit tests (48, including a guard that keeps its type map identical to the server allowlist). The production build passes. **Not yet exercised in a browser against real storage**; the UI interactions (drag/drop, dialog focus) have no automated tests.
+### Phase D: Multi-Node Scaling & Attachments (Completed 🟢, pending live verification)
+- [x] **Task D.1:** Redis Pub/Sub backplane for WebSocket delivery (`RealtimeHub`), cookie auth, Origin check, heartbeat, expiry close, client reconnect with backoff.
+- [x] **Task D.2:** Attachments in S3-compatible storage with presigned uploads, allowlist, magic-byte verification and file cleanup on delete (`docs/attachments.md`).
+- [x] **Task D.3:** Frontend attachments UI in an accessible task dialog.
 
 ### Phase E: Production Readiness & Observability (Completed 🟢, pending live verification)
-- [x] **Task E.1:** Structured JSON logging with request correlation across API and worker. `X-Request-Id` is honored when well-formed (hostile values replaced), returned to the caller and stamped on every log line; the API passes it to background jobs so the worker logs under the same id; authenticated lines carry `user_id`/`org_id` only; credentials are redacted; `LOG_LEVEL` is configurable; production worker logs never contain email addresses or bodies. Unit-tested, including the real Fastify wiring against a captured stream. Not yet run in a deployed environment; no log retention policy is defined.
-- [x] **Task E.2:** Metrics and Grafana dashboards. New API metrics (DB latency and pool saturation, auth failures, WebSocket rejections/errors, Redis errors, finer latency buckets) and a worker metrics endpoint (job outcomes/durations, queue depth, queue lag, email results). Two dashboards ship in the Helm chart (`grafana.dashboards.enabled`), with a worker Service/ServiceMonitor and a NetworkPolicy rule for scraping; fixed the API ServiceMonitor, which scraped nothing when placed in another namespace. A test checks every dashboard query against the metrics the code registers. Chart verified with real `helm lint`/`helm template`; **not loaded into a live Grafana/Prometheus**. Alert rules added afterwards (18 rules in `helm/openpm/alerts/`, shipped as a `PrometheusRule`, validated and unit-tested with promtool in CI). See `docs/observability.md`.
-- [x] **Task E.3:** GitHub Actions CI (`.github/workflows/ci.yml`): lint + build + test (with `npm ci` lockfile check), Helm lint/render for three value sets, gitleaks over full history with a canary, and per-image build + Trivy scan, with actions pinned to SHAs and Dependabot. Fixed `.gitleaks.toml`, which replaced the built-in rules (private keys went undetected) and reported 10 false positives in history. **Trivy is report-only**: production dependencies have 4 critical / 12 high advisories (several need major upgrades), so blocking would fail every build. Not yet run on GitHub; actionlint and Trivy were not run locally (the images do build and start under `docker compose`). See `docs/ci.md`.
+- [x] **Task E.1:** Structured JSON logging with request correlation from the API through to the worker.
+- [x] **Task E.2:** Metrics, 2 Grafana dashboards, and 18 promtool-tested alert rules (`docs/observability.md`).
+- [x] **Task E.3:** GitHub Actions CI with Dependabot (`docs/ci.md`).
+
+### Since Phase E (November 2026)
+- [x] **Dependency upgrades:** Node 22, Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6, bcrypt 6, Resend 6, ESLint 9 (flat config). All npm audit advisories cleared. Regressions found by running the app were fixed (b707781).
+- [x] **Helm NetworkPolicy:** the worker and API are allowed HTTPS egress (email provider, S3).
+- [x] **`JWT_SECRET`:** required in production, checked when the API starts (migrations don't need it).
+- [x] **Compose:** migrations run before the API and worker start; MinIO moved to a maintained image.
+- [x] **Lint warnings cleared;** Fastify `requestIdLogLabel` deprecation fixed.
 
 ---
 
-## 5. Summary Matrix & Recommendation
+## 5. Next Steps (Prioritized)
+
+### Phase F: Close the broken user flows
+- [ ] **F.1 Invite acceptance:** a BullMQ job to email the invite link, an `/api/invites/accept` endpoint (validates token and expiry, creates the user in the inviting org, deletes the invite, inside a transaction), and a frontend accept page. Include cross-tenant and expired-token tests.
+- [ ] **F.2 Password-reset email:** queue an email job from `forgot-password`, add a per-route rate limit on forgot/reset-password, and store a hash of the token instead of the raw value.
+- [ ] **F.3 Worker job policy:** set `attempts` and exponential `backoff` on enqueue, validate payloads, and scope worker queries by `org_id`.
+
+### Phase G: Verify for real
+- [ ] **G.1** Confirm CI is green on GitHub, then make its jobs required in branch protection. Switch Trivy to blocking (`TRIVY_EXIT_CODE: "1"`) now that advisories are cleared.
+- [ ] **G.2** Add integration tests against a real Postgres (service container in CI), covering the tenant-isolation suite.
+- [ ] **G.3** Full-stack rehearsal: two API replicas with live updates across two browsers, attachment upload/download/delete against MinIO (exercises bucket CORS), `migrate` / `migrate:down` / `migrate`, and the dashboards and alerts against real traffic.
+- [ ] **G.4** Install the Helm chart on a local cluster (kind/k3d), then upgrade and roll back; sync it with ArgoCD.
+
+### Phase H: Hardening
+- [ ] **H.1** Close the pg pool and Redis clients on API shutdown; add a shared error handler with a consistent error shape and no leaked messages; validate path params; set request timeouts.
+- [ ] **H.2** Let cached reads fall back to the database when Redis is unavailable.
+- [ ] **H.3** Make register responses not reveal existing emails; decide on token revocation.
+- [ ] **H.4** Add CodeQL to CI; remove the README's reference to the missing k6 script, or add the script.
+
+### Phase I: Core product
+- [ ] Member management (list, change role, remove, leave), comments, labels, pagination and filtering, in-app notifications, and a dashboard.
+
+---
+
+## 6. Summary Matrix
 
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
-| **Foundation & Build** | 🟢 Complete | Maintain zero-warning baseline in CI |
-| **API Backend & RBAC** | 🟢 Complete | Enforced server-side RBAC & tenant boundary test suite |
-| **Background Worker** | 🟢 Functional | Worker unit tests added (Phase B); add job-retry/backoff coverage |
-| **Frontend UI** | 🟢 Functional | Add attachment handling & granular role views (Phase D) |
-| **Kubernetes & DevOps**| 🟢 Complete | Validate ArgoCD sync & Helm deployment rehearsal (Phase E) |
+| **Foundation & Build** | 🟢 Complete | Confirm CI green on GitHub; make checks required |
+| **API Backend & RBAC** | 🟢 Solid | Shared error handling, path-param validation (H.1) |
+| **Organizations & Invites** | 🔴 Broken | Invite acceptance (F.1) |
+| **Authentication** | 🟡 Partial | Password-reset email (F.2), enumeration fix (H.3) |
+| **Background Worker** | 🟡 Functional | Retry/backoff and payload validation (F.3) |
+| **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
+| **Kubernetes & DevOps** | 🟡 Untested live | Cluster install/upgrade/rollback and ArgoCD sync (G.4) |
+| **Observability** | 🟢 Complete | Load into live Prometheus/Grafana (G.3) |
 
-### Recommended Immediate Action:
-Phases A-E are implemented, but almost nothing has run outside tests. In priority order:
-1. **Push and watch the first CI run** (`.github/workflows/ci.yml`), then mark its jobs as required checks in branch protection.
-2. **Plan the dependency upgrades** behind the 4 critical / 12 high production advisories (Fastify 5, Next 15+, Zod 4, fast-jwt, ...), then set `TRIVY_EXIT_CODE` to `"1"`.
-3. **Fix the Helm NetworkPolicy egress**: with `networkPolicy.enabled` (the default), the worker cannot reach the email provider and the API cannot reach S3, because only Postgres and Redis egress is allowed.
-4. **Run the full stack once** (real Postgres, Redis, two API instances, an S3/MinIO bucket, Prometheus/Grafana): live board updates across two browsers, an attachment upload/download/delete in a browser (exercises bucket CORS), `migrate`/`migrate:down`/`migrate`, and the dashboards against real traffic.
-5. **Require `JWT_SECRET` in production**: `apps/api/src/config.ts` falls back to a public development key, so a misconfigured deployment would sign tokens with a publicly known secret.
-
+### Recommended Immediate Action
+1. **F.1 + F.2:** without invite acceptance and reset emails, OpenPM is single-user in practice.
+2. **G.1:** confirm CI is green and turn on blocking checks.
+3. **F.3:** turn on job retries before relying on emails.
+4. **G.2–G.4:** real-database tests, then the full-stack and cluster rehearsal.
