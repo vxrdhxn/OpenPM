@@ -230,8 +230,8 @@ Review/finalize:
 - [x] Create organization. — on registration
 - [ ] Organization settings.
 - [ ] Organization member list.
-- [ ] Invite member. — *partial:* admins can create/revoke invites, but no invite email is sent
-- [ ] Accept invitation.
+- [x] Invite member. — admin-only; the worker emails a link (`invite_created` job); token stored as a SHA-256 hash
+- [x] Accept invitation. — public `POST /api/invites/lookup` + `/accept` and an `/invite` page; org, role and email come from the invite; verified on real Postgres via Compose
 - [ ] Reject/expire invitation. — *partial:* invites expire after 7 days and can be revoked; no reject flow
 - [ ] Remove member.
 - [ ] Change member role.
@@ -521,7 +521,7 @@ Track important actions:
 - [ ] Project creation/deletion. — *partial:* creation is logged; project deletion is not
 - [x] Task deletion.
 - [ ] Permission changes.
-- [ ] Invitation actions.
+- [x] Invitation actions. — created/revoked/accepted in `activity_log`
 - [ ] Sensitive configuration changes.
 
 Audit record:
@@ -1303,11 +1303,11 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | --------------------- | ------ | ----- |
 | Repository foundation | 🟢     | Install/lint/build/test clean on Node 22. Dependencies upgraded (Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6) with npm audit clean. |
 | Architecture          | 🟡     | Central auth/role checks, request IDs and graceful shutdown are in place. SQL and business logic still sit in route handlers, error handling is ad hoc, and the API never closes its pg pool or Redis clients on shutdown. |
-| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Still missing: revocation/refresh, rate limits on forgot/reset-password, and register still reveals whether an email exists. **The password-reset email is never sent**: a token is stored but not delivered. |
+| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Still missing: revocation/refresh, rate limits on forgot/reset-password, and register still reveals whether an email exists. **The password-reset email is never sent**: a token is stored but not delivered. The reset page was unreachable when signed out until F.1 fixed the frontend proxy. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`, with IDOR tests (mocked DB). Gaps: no shared data-access layer, and the worker does not filter by org. |
 | Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications, memberships or project-member tables. No pagination anywhere. No backups. |
-| Organizations         | 🔴     | Only "create on register" and creating/revoking invites. **There is no endpoint to accept an invite** and no invite email, so a second user cannot join an organization. No member list, role change, removal or org deletion. |
+| Organizations         | 🟡     | Create on register; invite by email, accept via link, revoke (F.1). No member list, role change, removal or org deletion. |
 | Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
 | Tasks                 | 🟡     | All core fields and actions, Kanban board, activity log. No labels, no archive. |
 | Comments              | ⬜     | No table, routes or UI. |
@@ -1333,7 +1333,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Backup/restore        | ⬜     | |
 | Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
 | UX polish             | ⬜     | |
-| Production readiness  | 🔴     | Blocked on the invite-acceptance and password-reset email gaps, and on a first live deployment. |
+| Production readiness  | 🔴     | Blocked on the password-reset email gap (F.2) and a first live deployment. |
 
 ### Status legend
 

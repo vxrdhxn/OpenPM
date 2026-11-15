@@ -8,9 +8,7 @@ vi.mock('../cache/redis', () => ({
   cache: { get: vi.fn(), set: vi.fn(), del: vi.fn(), publish: vi.fn(), subscribe: vi.fn() },
 }));
 const { queueAdd } = vi.hoisted(() => ({ queueAdd: vi.fn() }));
-vi.mock('bullmq', () => ({
-  Queue: vi.fn().mockImplementation(function () { return { add: queueAdd }; }),
-}));
+vi.mock('../queue', () => ({ getJobQueue: () => ({ add: queueAdd }) }));
 const { getStorage } = vi.hoisted(() => ({ getStorage: vi.fn() }));
 vi.mock('../storage', () => ({ getStorage }));
 

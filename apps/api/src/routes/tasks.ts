@@ -1,16 +1,9 @@
 import { FastifyPluginAsync } from 'fastify';
-import { Queue } from 'bullmq';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
-import { config } from '../config';
-
-const taskQueue = new Queue('tasks', {
-  connection: {
-    url: config.REDIS_URL,
-  }
-});
+import { getJobQueue } from '../queue';
 
 // Columns a client may change via PATCH. Everything else (org_id, project_id,
 // created_by, id, ...) is server-controlled and must never be written from a request body.
@@ -74,7 +67,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       // Async background job processing
-      await taskQueue.add('task_created', {
+      await getJobQueue().add('task_created', {
         task_id: newTask.id,
         assignee_id: assignee_id,
         org_id: org_id,

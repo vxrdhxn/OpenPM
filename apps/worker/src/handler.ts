@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import { logger as rootLogger, Logger } from './lib/logger';
 import { jobDurationSeconds, jobNameLabel, jobsTotal } from './metrics';
 import processTaskCreated from './processors/taskCreated';
+import processInviteCreated from './processors/inviteCreated';
 
 /** Logger for one job: every line carries the job, and the originating request when known. */
 export function jobLogger(job: Job, base: Logger = rootLogger): Logger {
@@ -24,6 +25,8 @@ export async function handleJob(job: Job, base: Logger = rootLogger): Promise<vo
   try {
     if (job.name === 'task_created') {
       await processTaskCreated(job, log);
+    } else if (job.name === 'invite_created') {
+      await processInviteCreated(job, log);
     } else {
       // Previously an unknown job completed silently; make a producer/consumer mismatch visible.
       log.warn('No processor for job name; ignoring');

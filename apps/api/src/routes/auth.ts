@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { authFailuresTotal } from '../metrics';
+import { issueSession } from '../plugins/session';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Register: Create Org + User
@@ -63,20 +64,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         return { orgId, userId: userRes.rows[0].id };
       });
 
-      // Sign JWT
-      const token = fastify.jwt.sign(
-        { user_id: userId, org_id: orgId, role: 'admin' },
-        { expiresIn: '24h' }
-      );
-
-      // Set cookie
-      reply.setCookie('auth_token', token, {
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 24 * 60 * 60, // 24 hours
-      });
+      const token = issueSession(fastify, reply, { user_id: userId, org_id: orgId, role: 'admin' });
 
       return reply.code(201).send({ token });
     } catch (err: any) {
@@ -129,18 +117,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return rejectLogin();
     }
 
-    const token = fastify.jwt.sign(
-      { user_id: user.id, org_id: user.org_id, role: user.role },
-      { expiresIn: '24h' }
-    );
-
-    reply.setCookie('auth_token', token, {
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60,
-    });
+    const token = issueSession(fastify, reply, { user_id: user.id, org_id: user.org_id, role: user.role });
 
     return reply.send({ token });
   });

@@ -40,6 +40,20 @@ spec:
                 configMapKeyRef:
                   name: {{ include "openpm.fullname" . }}-config
                   key: LOG_LEVEL
+            - name: APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "openpm.fullname" . }}-config
+                  key: APP_URL
+            - name: EMAIL_FROM_ADDRESS
+              value: {{ .Values.email.fromAddress | quote }}
+            {{- if .Values.secrets.resendApiKey }}
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpm.fullname" . }}-secrets
+                  key: RESEND_API_KEY
+            {{- end }}
             {{- if .Values.worker.metrics.enabled }}
             - name: METRICS_PORT
               value: {{ .Values.worker.metrics.port | default 9100 | quote }}

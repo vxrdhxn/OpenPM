@@ -41,6 +41,13 @@ secrets:
     database: "openpm"
   redis:
     password: "openpm_secure_redis_pass"
+  # Resend API key for outgoing email (invites, assignment notices). Empty = no email is sent and the
+  # worker logs a warning per message. Set it with --set secrets.resendApiKey=... rather than in Git.
+  resendApiKey: ""
+
+# Outgoing email
+email:
+  fromAddress: "notifications@openpm.local"
 
 # Toggle self-hosted dev dependencies (toggled to true by default for simple dev deploys)
 postgres:

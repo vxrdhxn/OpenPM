@@ -16,6 +16,8 @@ data:
     {{- $proto = "https" }}
     {{- $wsProto = "wss" }}
   {{- end }}
+  # Frontend base URL; the worker uses it to build links in emails (e.g. invites).
+  APP_URL: {{ printf "%s://%s" $proto .Values.global.domain | quote }}
   NEXT_PUBLIC_API_URL: {{ printf "%s://%s/api" $proto .Values.global.domain | quote }}
   NEXT_PUBLIC_WS_URL: {{ printf "%s://%s/ws" $wsProto .Values.global.domain | quote }}
   PORT: {{ .Values.frontend.port | default 3001 | quote }}

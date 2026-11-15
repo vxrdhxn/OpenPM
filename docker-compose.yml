@@ -91,6 +91,9 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD:-openpm}@redis:6379/0
       - JWT_SECRET=${JWT_SECRET:-some_super_secret_jwt_key_that_is_long_enough}
       - NODE_ENV=production
+      - APP_URL=${APP_URL:-http://localhost:3001}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-notifications@openpm.local}
     depends_on:
       postgres:
         condition: service_healthy

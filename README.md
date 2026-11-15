@@ -257,6 +257,8 @@ See [`.env.example`](.env.example) for all available configurations. Key variabl
 | `JWT_SECRET` | dev key outside production | **Required when `NODE_ENV=production`** (the API refuses to start without it). Minimum 32 characters |
 | `CORS_ORIGIN` | `http://localhost:3001` | Allowed CORS origins |
 | `NODE_ENV` | `development` | `development` / `production` |
+| `APP_URL` | `http://localhost:3001` | Public frontend URL used in emailed links (invites). **Required for the worker in production** |
+| `RESEND_API_KEY` | _(empty)_ | Email delivery. Empty: emails are printed in development and not sent in production (Helm: `secrets.resendApiKey`) |
 
 ---
 

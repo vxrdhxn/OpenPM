@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Only for signed-out users: signed-in users are sent to the dashboard.
 const publicPaths = ['/login', '/register'];
+// Reachable whether or not you are signed in: these are opened from links in emails.
+const openPaths = ['/invite', '/forgot-password', '/reset-password'];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -12,6 +15,10 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/api') || 
     pathname.includes('.')
   ) {
+    return NextResponse.next();
+  }
+
+  if (openPaths.includes(pathname)) {
     return NextResponse.next();
   }
 
