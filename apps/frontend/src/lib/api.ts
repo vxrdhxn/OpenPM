@@ -5,7 +5,9 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const url = `${API_URL}${endpoint}`;
   
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Content-Type')) {
+  // Only requests with a body are JSON. The API (Fastify) rejects a request that declares
+  // application/json but sends no body with 400, which broke every DELETE from the UI.
+  if (options.body !== undefined && options.body !== null && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
