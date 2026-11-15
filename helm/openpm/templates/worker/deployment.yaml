@@ -13,6 +13,10 @@ spec:
       app.kubernetes.io/component: worker
   template:
     metadata:
+      annotations:
+        # Roll the pods when their config or secrets change; env vars are only read at start.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
       labels:
         {{- include "openpm.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: worker

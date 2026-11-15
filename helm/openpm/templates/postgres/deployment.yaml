@@ -20,6 +20,15 @@ spec:
         {{- include "openpm.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: postgres
     spec:
+      # Run as the image's own postgres user (uid/gid 70 in postgres:*-alpine). The official entrypoint
+      # only chowns its directories when started as root, which fails once capabilities are dropped.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: {{ .Values.postgres.image | default "postgres:16-alpine" }}
@@ -49,6 +58,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "openpm.fullname" . }}-secrets
                   key: POSTGRES_DB
+            # A subdirectory, so initdb creates it with its own ownership and mode (0700) inside the
+            # volume root, which belongs to root and is only group-writable through fsGroup.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           livenessProbe:
             exec:
               command:
@@ -74,7 +87,6 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
-              subPath: postgres-data
       volumes:
         - name: postgres-data
           {{- if .Values.postgres.persistence.enabled }}

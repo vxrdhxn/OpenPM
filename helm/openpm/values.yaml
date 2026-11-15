@@ -95,6 +95,10 @@ api:
     pullPolicy: "IfNotPresent"
   port: 3000
   corsOrigin: "http://openpm.local"
+  # Run database migrations in an init container before each API pod starts. Disable only if you
+  # apply migrations another way (e.g. a CI job running `node apps/api/dist/db/migrate.js up`).
+  migrations:
+    enabled: true
   resources:
     limits:
       cpu: 500m

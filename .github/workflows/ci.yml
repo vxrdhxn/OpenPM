@@ -51,7 +51,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Runs every package's tests, then the cross-package checks (dashboards vs. metrics).
+      # tests/helm renders the chart and checks the rendered objects (CI fails if helm is missing).
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      # Runs every package's tests, then the cross-package checks (dashboards vs. metrics, rendered chart).
       # A package that finds no tests fails rather than passing silently.
       - name: Test
         run: npm test
