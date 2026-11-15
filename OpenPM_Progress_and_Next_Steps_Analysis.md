@@ -16,7 +16,7 @@ All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lin
 
 What still stands between the project and production:
 
-1. **Most of the system has only been tested with fakes.** Route tests use a mocked database, Redis and S3. The stack has run under Docker Compose, but has never been deployed to Kubernetes, synced by ArgoCD, or monitored by a live Prometheus/Grafana.
+1. **It has never been deployed.** The API is now tested against a real Postgres in CI (G.2), and the stack has run under Docker Compose. It has never been deployed to Kubernetes, synced by ArgoCD, or monitored by a live Prometheus/Grafana. Redis and S3 are still faked in tests.
 2. **Hardening (Phase H)** and the missing product features (Phase I). Phase F, the broken user flows, is complete.
 
 ---
@@ -151,7 +151,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 
 ### Phase G: Verify for real
 - [ ] **G.1** Confirm CI is green on GitHub, then make its jobs required in branch protection. Switch Trivy to blocking (`TRIVY_EXIT_CODE: "1"`) now that advisories are cleared.
-- [ ] **G.2** Add integration tests against a real Postgres (service container in CI), covering the tenant-isolation suite.
+- [x] **G.2 Real-database tests (done):** `npm run test:integration` drives the real app (`buildApp()`, split out of `index.ts`) against a throwaway Postgres database, in CI via a Postgres service container. Each run applies every migration, rolls all of them back to an empty schema and applies them again. 29 tests cover tenant isolation (each cross-org read/write/delete returns 404 and the row is unchanged), roles, privilege escalation, register/login, password reset, invites and rate limits. **Found and fixed a cross-tenant bug:** tasks could be assigned to a user from another organization (only the foreign key was checked), which put that user's name on the other org's board. Redis and the queue are in-memory fakes. actionlint now runs clean on the workflow.
 - [ ] **G.3** Full-stack rehearsal: two API replicas with live updates across two browsers, attachment upload/download/delete against MinIO (exercises bucket CORS), `migrate` / `migrate:down` / `migrate`, and the dashboards and alerts against real traffic.
 - [ ] **G.4** Install the Helm chart on a local cluster (kind/k3d), then upgrade and roll back; sync it with ArgoCD.
 
@@ -181,5 +181,4 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 
 ### Recommended Immediate Action
 1. **G.1:** confirm CI is green on GitHub (the Vitest `dist/` fix in `8bf0492` was likely needed) and turn on blocking checks.
-2. **G.2:** integration tests against a real Postgres in CI.
-3. **G.3–G.4:** full-stack and cluster rehearsal.
+2. **G.3–G.4:** full-stack and cluster rehearsal.

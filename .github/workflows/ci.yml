@@ -56,6 +56,44 @@ jobs:
       - name: Test
         run: npm test
 
+  integration:
+    name: Integration tests (Postgres)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        # postgres:16-alpine (16.16), pinned by digest; same major version as docker-compose.yml.
+        image: postgres@sha256:f377d590e5474681d4d7838635031a2b50647923b7abfa803ce9b5ff35d5c663
+        env:
+          POSTGRES_USER: openpm
+          POSTGRES_PASSWORD: openpm
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openpm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # Creates a throwaway database, runs every migration up, down to empty and up again, then drives
+      # the real API (routes, auth, SQL) against it: tenant isolation, roles, account flows, rate limits.
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://openpm:openpm@localhost:5432/postgres
+
   helm:
     name: Helm chart
     runs-on: ubuntu-24.04

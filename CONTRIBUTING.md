@@ -31,7 +31,7 @@ Enhancement suggestions are tracked as GitHub issues.
 
 1. Fork the repo and create your branch from `main`.
 2. If you've added code that should be tested, add tests.
-3. Ensure the test suite passes (`npm test` — if available).
+3. Ensure the tests pass: `npm test` (unit tests) and `npm run test:integration` (API against a real Postgres; see below).
 4. Make sure your code lints (`npm run lint`).
 5. Format your code (e.g. Prettier).
 6. Update the documentation (README.md, etc.) if your changes affect it.
@@ -58,6 +58,11 @@ OpenPM uses a monorepo structure with npm workspaces.
    * `npm run dev:frontend`
 
 The frontend will be available at `http://localhost:3001` and the API at `http://localhost:3000`.
+
+### Tests
+
+* `npm test`: unit tests for every package (no services needed).
+* `npm run test:integration`: the real API against a real Postgres. It needs one it can create databases on: `docker compose up -d postgres`, or set `TEST_DATABASE_URL` (default `postgresql://openpm:openpm@localhost:5432/postgres`). Each run creates and drops its own database, so your data is untouched. Tests live in `apps/api/src/test/integration/*.int.test.ts`; a change to SQL, tenant scoping or permissions should come with one.
 
 ## Architecture Overview
 

@@ -20,7 +20,7 @@ describe('Profile routes', () => {
 
   beforeEach(async () => {
     vi.resetAllMocks();
-    // Same Ajv options as production (src/index.ts): unknown keys are NOT stripped.
+    // Same Ajv options as production (src/app.ts): unknown keys are NOT stripped.
     app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
     await app.register(authPlugin);
     await app.register(profileRoutes, { prefix: '/profile' });

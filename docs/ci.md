@@ -7,6 +7,7 @@ request cancels that PR's older run.
 | Job | What it checks | Blocks merge? |
 |---|---|---|
 | **Lint, build, test** | `npm ci` (lockfile must match every `package.json`), `npm run lint`, `npm run build` (API, worker and frontend; also the type-check), `npm test` (every package, then the cross-package dashboard check) | Yes |
+| **Integration tests (Postgres)** | `npm run test:integration` against a Postgres service container: creates a throwaway database, runs every migration up, down to an empty schema and up again, then drives the real API (routes, auth, SQL) for tenant isolation, roles, account flows (register, password reset, invites) and rate limits. Redis and the job queue are in-memory fakes | Yes |
 | **Helm chart** | `helm lint --strict` and `helm template` for default values, `values.prod.yaml`, and monitoring + dashboards + alert rules enabled; `promtool check rules` and `promtool test rules` on the alert rules (promtool from the Prometheus image, pinned by digest) | Yes |
 | **Secret scan (gitleaks)** | Whole git history against `.gitleaks.toml`, plus a canary that proves the config still detects secrets | Yes |
 | **Image (api / worker / frontend)** | Builds each Dockerfile from a clean checkout, then scans the image with Trivy (HIGH/CRITICAL, fixable only) | Build: yes. Scan: **no, report-only** (see below) |
@@ -63,13 +64,12 @@ Run it locally: `gitleaks detect --source . --config .gitleaks.toml --redact`
 Verified locally, with the same commands the workflow runs: `npm ci --dry-run` (lockfile in sync,
 including the Linux native binaries), the builder stage of the worker Dockerfile, `helm lint --strict`
 and `helm template` for all three variants, the gitleaks canary and history scan (including a
-negative control), YAML parsing, SHA-pin checks, and that every `with:` input exists in each pinned
-action.
+negative control), YAML parsing, SHA-pin checks, that every `with:` input exists in each pinned
+action, `actionlint` (clean), and the integration suite against Postgres 16 in Docker.
 
 **Not verified:**
 
 - The workflow has not run on GitHub yet, so expect to fix small things on the first run.
-- `actionlint` was not run.
 - Trivy was not run. (All three images were built and started with `docker compose up --build` on a
   developer machine, and the stack was exercised end to end, but not from a clean CI runner.)
 - Some API tests are timing-based (heartbeat and token-expiry tests use short real timers); a heavily

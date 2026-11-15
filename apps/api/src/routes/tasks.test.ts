@@ -327,7 +327,7 @@ describe('Task routes lifecycle', () => {
 
   describe('job correlation', () => {
     it('hands the request id to the background job so logs can be followed into the worker', async () => {
-      const wired = Fastify({ genReqId, logController: new LogController({ requestIdLogLabel: 'request_id' }) }); // same wiring as src/index.ts
+      const wired = Fastify({ genReqId, logController: new LogController({ requestIdLogLabel: 'request_id' }) }); // same wiring as src/app.ts
       await wired.register(authPlugin);
       await wired.register(taskRoutes, { prefix: '/projects' });
       await wired.ready();
@@ -352,7 +352,7 @@ describe('Task routes lifecycle', () => {
   });
 
   // Regression: PATCH built its SET clause from request-body keys. With the production
-  // Fastify config (removeAdditional: false, see src/index.ts) unknown keys reached the SQL,
+  // Fastify config (removeAdditional: false, see src/app.ts) unknown keys reached the SQL,
   // allowing SQL injection via a key name and writes to protected columns such as org_id.
   describe('update: unknown / protected fields (production ajv config)', () => {
     let strictApp: ReturnType<typeof Fastify>;

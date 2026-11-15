@@ -160,14 +160,14 @@ Viewer
 - [x] Enforce permissions server-side.
 - [x] Add UI restrictions only as a UX layer, never as the security boundary.
 - [x] Add authorization tests. — `security_rbac.test.ts`
-- [ ] Test privilege escalation. — *partial:* unknown keys (e.g. `role`) are rejected by the profile schema, but no test asserts it
+- [x] Test privilege escalation. — profile `role` change rejected, viewer/member write limits (real Postgres)
 
 ## IDOR/BOLA testing
 
-- [x] User A cannot read User B's project. — route tests with a mocked DB
-- [x] User A cannot modify User B's project. — route tests with a mocked DB
-- [x] User A cannot delete User B's task. — route tests with a mocked DB
-- [x] User A cannot access another organization using guessed IDs. — route tests with a mocked DB
+- [x] User A cannot read User B's project. — route tests and real Postgres
+- [x] User A cannot modify User B's project. — route tests and real Postgres
+- [x] User A cannot delete User B's task. — route tests and real Postgres
+- [x] User A cannot access another organization using guessed IDs. — route tests and real Postgres
 - [x] User A cannot join another organization's WebSocket channel.
 
 ---
@@ -775,12 +775,12 @@ Track:
 
 ## Integration
 
-- [ ] API + database. — *partial:* all route tests mock the database; nothing runs against real Postgres in CI
-- [x] Authentication. — route-level, mocked DB
-- [x] Tenant isolation. — route-level, mocked DB
-- [x] RBAC. — route-level, mocked DB
-- [x] Project CRUD. — route-level, mocked DB
-- [x] Task CRUD. — route-level, mocked DB
+- [x] API + database. — `apps/api/src/test/integration` against real Postgres, in CI (G.2)
+- [x] Authentication. — route-level and against real Postgres
+- [x] Tenant isolation. — real Postgres: every cross-org read/write/delete returns 404 and leaves the row unchanged
+- [x] RBAC. — route-level and against real Postgres
+- [x] Project CRUD. — route-level and against real Postgres
+- [x] Task CRUD. — route-level and against real Postgres
 - [ ] Comments.
 - [ ] Notifications.
 - [ ] Redis.
@@ -792,13 +792,13 @@ Explicitly test:
 
 - [x] IDOR/BOLA.
 - [x] Cross-tenant access.
-- [ ] Privilege escalation.
+- [x] Privilege escalation.
 - [x] Missing authentication.
 - [x] Invalid JWT.
 - [x] Expired JWT.
 - [x] Unauthorized WebSocket subscription.
 - [ ] Malicious payloads.
-- [ ] Rate limiting.
+- [x] Rate limiting. — login 10/min and forgot-password 5/min against the real app wiring
 
 ## E2E
 
@@ -850,7 +850,7 @@ Audit event
 - [x] Lint.
 - [x] Typecheck. — via `tsc`/`next build`
 - [x] Unit tests.
-- [ ] Integration tests.
+- [x] Integration tests. — Postgres service container
 - [x] Build.
 - [ ] Dependency audit.
 - [x] Secret scanning.
@@ -1083,7 +1083,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 ## Gate 2 — Tests
 
 - [x] Unit tests pass.
-- [ ] Integration tests pass.
+- [x] Integration tests pass.
 - [ ] Critical E2E path passes.
 - [x] Security tests pass. — unit/route level
 
@@ -1093,7 +1093,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] Trivy passes or exceptions are documented.
 - [x] Secret scanning passes.
 - [x] No unresolved critical vulnerabilities. — npm audit clean after the Nov 2026 upgrades
-- [ ] Tenant isolation verified.
+- [x] Tenant isolation verified. — against real Postgres in CI; not yet on a deployed cluster
 
 ## Gate 4 — Infrastructure
 
@@ -1305,7 +1305,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Architecture          | 🟡     | Central auth/role checks, request IDs and graceful shutdown are in place. SQL and business logic still sit in route handlers, error handling is ad hoc, and the API never closes its pg pool or Redis clients on shutdown. |
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Still missing: revocation/refresh (a reset does not end existing sessions), and register still reveals whether an email exists. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
-| Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`, with IDOR tests (mocked DB). Gaps: no shared data-access layer, and the worker does not filter by org. |
+| Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
 | Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications, memberships or project-member tables. No pagination anywhere. No backups. |
 | Organizations         | 🟡     | Create on register; invite by email, accept via link, revoke (F.1). No member list, role change, removal or org deletion. |
 | Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
@@ -1326,8 +1326,8 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Helm                  | 🟡     | Lint and render checked in CI for three value sets. No `values.schema.json`; `values.yaml` ships dev secrets; install/upgrade/rollback never tested. |
 | ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
 | Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Not loaded into a live Prometheus/Grafana; no log retention policy. |
-| Testing               | 🟡     | Broad unit and route tests (mocked DB/Redis/S3). No tests against real Postgres, no E2E beyond one Playwright login spec, no load tests (the k6 script mentioned in the README does not exist). |
-| CI/CD                 | 🟡     | PR/push pipeline: lint, build, test, Helm, gitleaks, image build + Trivy. No CodeQL, no integration tests, no release pipeline, no branch protection. First GitHub run not yet confirmed. |
+| Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec, no load tests (the k6 script mentioned in the README does not exist). |
+| CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + Trivy; actionlint clean. No CodeQL, no release pipeline, no branch protection. First GitHub run not yet confirmed. |
 | Performance           | ⬜     | Indexes and caching only; nothing measured. |
 | Reliability           | ⬜     | No failure testing. |
 | Backup/restore        | ⬜     | |

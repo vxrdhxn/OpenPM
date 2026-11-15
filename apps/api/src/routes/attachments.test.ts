@@ -65,7 +65,7 @@ describe('Attachment routes', () => {
     delete: vi.fn(),
   };
 
-  // Same Ajv options as production (src/index.ts): unknown keys are not stripped.
+  // Same Ajv options as production (src/app.ts): unknown keys are not stripped.
   beforeEach(async () => {
     vi.resetAllMocks();
     getStorage.mockReturnValue(storage);

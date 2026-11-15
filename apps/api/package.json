@@ -9,10 +9,11 @@
     "start": "node dist/index.js",
     "lint": "eslint src/",
     "migrate": "tsx src/db/migrate.ts",
-    "test": "vitest run --dir src",
+    "test": "vitest run",
     "migrate:down": "tsx src/db/migrate.ts down",
     "migrate:status": "tsx src/db/migrate.ts status",
-    "migrate:prod": "node dist/db/migrate.js"
+    "migrate:prod": "node dist/db/migrate.js",
+    "test:integration": "vitest run --config vitest.integration.config.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1167.0",

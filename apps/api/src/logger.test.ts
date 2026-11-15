@@ -116,9 +116,9 @@ describe('request context in logs', () => {
     app = Fastify({
       loggerInstance: pino(loggerOptions, out.stream), // Fastify 5: a ready-made pino instance goes in `loggerInstance`
       genReqId,
-      logController: new LogController({ requestIdLogLabel: 'request_id' }), // same wiring as src/index.ts
+      logController: new LogController({ requestIdLogLabel: 'request_id' }), // same wiring as src/app.ts
     });
-    await app.register(cookie); // as in src/index.ts: the JWT plugin reads the auth cookie via it
+    await app.register(cookie); // as in src/app.ts: the JWT plugin reads the auth cookie via it
     await app.register(requestIdPlugin);
     await app.register(authPlugin);
     app.get('/open', async (request: FastifyRequest) => {
