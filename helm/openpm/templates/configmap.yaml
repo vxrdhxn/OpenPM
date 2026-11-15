@@ -9,15 +9,12 @@ data:
   LOG_LEVEL: {{ .Values.global.logLevel | default "info" | quote }}
   CORS_ORIGIN: {{ .Values.api.corsOrigin | default (printf "http://%s" .Values.global.domain) | quote }}
   
-  # Frontend environment variables
   {{- $proto := "http" }}
-  {{- $wsProto := "ws" }}
   {{- if .Values.ingress.tls }}
     {{- $proto = "https" }}
-    {{- $wsProto = "wss" }}
   {{- end }}
   # Frontend base URL; the worker uses it to build links in emails (e.g. invites).
   APP_URL: {{ printf "%s://%s" $proto .Values.global.domain | quote }}
-  NEXT_PUBLIC_API_URL: {{ printf "%s://%s/api" $proto .Values.global.domain | quote }}
-  NEXT_PUBLIC_WS_URL: {{ printf "%s://%s/ws" $wsProto .Values.global.domain | quote }}
+  # No NEXT_PUBLIC_* here: Next.js inlines those at image build time, so runtime values have no effect.
+  # The frontend calls the API on its own origin (/api, /ws), which the Ingress routes to the API.
   PORT: {{ .Values.frontend.port | default 3001 | quote }}

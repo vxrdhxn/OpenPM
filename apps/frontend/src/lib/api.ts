@@ -1,8 +1,8 @@
-// Base API client
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+import { apiBaseUrl } from './endpoints';
 
+// Base API client
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
-  const url = `${API_URL}${endpoint}`;
+  const url = `${apiBaseUrl()}${endpoint}`;
   
   const headers = new Headers(options.headers || {});
   // Only requests with a body are JSON. The API (Fastify) rejects a request that declares
@@ -21,6 +21,11 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   // Handle 401 Unauthorized globally if possible (in client components)
   if (response.status === 401 && typeof window !== 'undefined') {
     if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+      // The session cookie was rejected (expired, or signed with a since-rotated secret). It is
+      // httpOnly, so only the API can clear it. Without that, the server-side proxy, which only checks
+      // that a cookie exists, sends /login straight back to the dashboard: an endless reload loop.
+      // Plain fetch, not fetchApi, so a failing logout cannot recurse.
+      await fetch(`${apiBaseUrl()}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => undefined);
       // Deliberate hard navigation: fetchApi runs outside React, and a full reload drops stale client state.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/login';

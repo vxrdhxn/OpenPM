@@ -13,6 +13,14 @@ COPY apps/frontend/ ./apps/frontend/
 # type-checks it, so that one file has to be present in the build stage.
 COPY apps/api/src/attachments/policy.ts ./apps/api/src/attachments/policy.ts
 
+# Browser-side URLs are inlined at build time (see src/lib/endpoints.ts). Leave them empty for an
+# image that works on any domain behind the Helm chart's Ingress (same-origin /api and /ws); set them
+# when the API lives on another origin, as Docker Compose does.
+ARG NEXT_PUBLIC_API_URL=""
+ARG NEXT_PUBLIC_WS_URL=""
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+
 # Build
 WORKDIR /app/apps/frontend
 RUN npm run build

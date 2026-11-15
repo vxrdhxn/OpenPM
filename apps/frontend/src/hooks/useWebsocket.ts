@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { websocketUrl } from '@/lib/endpoints';
 
 type WebSocketMessage = {
   type: string;
@@ -28,7 +29,7 @@ export function useWebsocket() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
 
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3000/ws';
+    const wsUrl = websocketUrl();
     let socket: WebSocket | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;

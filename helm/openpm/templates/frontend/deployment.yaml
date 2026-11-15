@@ -15,6 +15,10 @@ spec:
       app.kubernetes.io/component: frontend
   template:
     metadata:
+      annotations:
+        # Roll the pods when their config or secrets change; env vars are only read at start.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
       labels:
         {{- include "openpm.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
@@ -43,16 +47,6 @@ spec:
                   key: NODE_ENV
             - name: PORT
               value: {{ .Values.frontend.port | default 3001 | quote }}
-            - name: NEXT_PUBLIC_API_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "openpm.fullname" . }}-config
-                  key: NEXT_PUBLIC_API_URL
-            - name: NEXT_PUBLIC_WS_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "openpm.fullname" . }}-config
-                  key: NEXT_PUBLIC_WS_URL
           livenessProbe:
             httpGet:
               path: /

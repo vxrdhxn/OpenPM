@@ -38,6 +38,46 @@ describe('api client', () => {
     expect((fetchMock.mock.calls[0]![1] as RequestInit).body).toBe('{"a":1}');
   });
 
+  describe('on 401 (session cookie rejected)', () => {
+    const unauthorized = () =>
+      new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
+
+    it('clears the cookie through the API before going to /login, so the proxy cannot loop', async () => {
+      const location = { pathname: '/projects', href: 'http://app.test/projects' };
+      vi.stubGlobal('window', { location });
+      fetchMock.mockReset().mockResolvedValueOnce(unauthorized()).mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+      await expect(api.get('/auth/me')).rejects.toThrow('Unauthorized');
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const [logoutUrl, logoutInit] = fetchMock.mock.calls[1]!;
+      expect(String(logoutUrl)).toMatch(/\/auth\/logout$/);
+      expect(logoutInit).toMatchObject({ method: 'POST', credentials: 'include' });
+      expect(location.href).toBe('/login');
+    });
+
+    it('still goes to /login when the logout call itself fails', async () => {
+      const location = { pathname: '/projects', href: 'http://app.test/projects' };
+      vi.stubGlobal('window', { location });
+      fetchMock.mockReset().mockResolvedValueOnce(unauthorized()).mockRejectedValueOnce(new TypeError('network'));
+
+      await expect(api.get('/auth/me')).rejects.toThrow('Unauthorized');
+
+      expect(location.href).toBe('/login');
+    });
+
+    it('does nothing extra on the login page, where 401 just means wrong credentials', async () => {
+      const location = { pathname: '/login', href: 'http://app.test/login' };
+      vi.stubGlobal('window', { location });
+      fetchMock.mockReset().mockResolvedValueOnce(unauthorized());
+
+      await expect(api.post('/auth/login', { email: 'a', password: 'b' })).rejects.toThrow('Unauthorized');
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(location.href).toBe('http://app.test/login');
+    });
+  });
+
   it('sends cookies with every request', async () => {
     await api.delete('/x');
 
