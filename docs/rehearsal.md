@@ -51,4 +51,41 @@ The browser was Chrome, driven against the real frontend.
 
 - Real email delivery (no `RESEND_API_KEY` locally).
 - WebSocket reconnect after an API restart, and load: there is no load test yet.
-- Kubernetes: the Helm chart has not been installed on a cluster (G.4).
+- Kubernetes: covered separately below.
+
+## Kubernetes (kind): 2026-11-16
+
+The Helm chart was installed on a local kind cluster (kind v0.33, Kubernetes v1.37), using locally
+built images loaded with `kind load docker-image`, default values and generated secrets.
+
+```bash
+kind create cluster --name openpm
+for i in api worker frontend; do kind load docker-image openpm-$i:latest --name openpm; done
+helm install openpm helm/openpm -n openpm --create-namespace -f my-secrets.yaml
+```
+
+| Check | Result |
+| --- | --- |
+| Install | Succeeds after the fixes below. All pods ready, and migrations applied by the API init container (11 on the first pod; "up to date" on the second). |
+| App flow | Register, project and assigned task through the API Service. The worker processed the job via the in-cluster Redis and Postgres. |
+| NetworkPolicy (enforced by kindnet) | Allowed: API→Postgres, worker→Redis. Blocked: frontend→Postgres, frontend→Redis, worker→API. |
+| Upgrade | Several `helm upgrade`s (revisions 2–10). Rolling updates replaced pods one at a time, and a config-only change (`global.logLevel`) now restarts the pods with the new value. |
+| Bad upgrade + rollback | An upgrade to a missing image tag left the new pod in `ImagePullBackOff` while both old pods kept serving. `helm rollback openpm 3` removed it, and the data was intact. |
+| Frontend in the cluster | Through a same-origin proxy standing in for the Ingress (`/api` and `/ws` → API, `/` → frontend): register in Chrome, empty state, board, and a live update over the WebSocket from a cluster pod. |
+
+### Found and fixed
+
+- **`helm install` failed with the default values:** the Postgres and Redis NetworkPolicies rendered without `apiVersion` (template whitespace trimming).
+- **Postgres crash-looped:** its entrypoint needs root to `chown`, but the chart drops all capabilities. It now runs as its own uid.
+- **No migrations ran, so a fresh install returned 500 on first use.** The API now has a `migrate` init container.
+- **Config and secret changes didn't restart pods.** Pod templates now carry checksum annotations.
+- **The frontend called `localhost:3000` in every cluster.** `NEXT_PUBLIC_*` values are build-time, so the chart's runtime values were ignored. Production builds now default to same-origin URLs.
+- **A cookie the API rejects caused an endless reload between `/login` and `/projects`.** The client now clears it via `/api/auth/logout`.
+
+`tests/helm/rendered.test.ts` now guards the chart properties above in CI.
+
+### Not covered
+
+- **Ingress controller:** the Ingress object was created but not served. Applying the downloaded ingress-nginx manifest was declined by this session's permission policy, so a local proxy with the same routing stood in for it.
+- **HPA scaling:** kind has no metrics-server, so the HPAs show `cpu: <unknown>`.
+- **ArgoCD sync and drift detection.**

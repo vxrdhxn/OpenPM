@@ -16,7 +16,7 @@ All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lin
 
 What still stands between the project and production:
 
-1. **It has never been deployed.** The API is now tested against a real Postgres in CI (G.2), and the stack has run under Docker Compose. It has never been deployed to Kubernetes, synced by ArgoCD, or monitored by a live Prometheus/Grafana. Redis and S3 are still faked in tests.
+1. **Kubernetes is only proven on kind.** The chart now installs, upgrades and rolls back on a local cluster (G.4). ArgoCD, an Ingress controller and HPA scaling are still unverified, and there is no real cloud deployment yet.
 2. **Hardening (Phase H)** and the missing product features (Phase I). Phase F, the broken user flows, is complete.
 
 ---
@@ -160,7 +160,16 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
   - Every dashboard query was run against live data.
 
   **Found and fixed:** every DELETE from the UI returned 400 (the API client sent a JSON content type with no body), so deleting attachments and revoking invites in the browser never worked. Ratio panels showed "No data" instead of 0%. Details: `docs/rehearsal.md`.
-- [ ] **G.4** Install the Helm chart on a local cluster (kind/k3d), then upgrade and roll back; sync it with ArgoCD.
+- [x] **G.4 Kubernetes on kind (done, except ArgoCD):** installed with default values, upgraded (revisions 2–10) and rolled back from a broken image, with the app flow, worker jobs, NetworkPolicy enforcement and a browser session verified in the cluster. **The chart had never installed or worked.** Fixed:
+  - Postgres and Redis NetworkPolicies rendered without `apiVersion`.
+  - Postgres crash-looped; it now runs as non-root.
+  - No migrations ran; the API now has an init container for them.
+  - Config changes didn't roll pods; checksum annotations added.
+  - The frontend called `localhost:3000` in every cluster; production builds now default to same-origin URLs.
+  - A 401 caused an endless reload loop.
+
+  A new CI test (`tests/helm`) guards these. See `docs/rehearsal.md`.
+- [ ] **G.5 Remaining cluster checks:** ArgoCD sync and drift, a real Ingress controller, and HPA with metrics-server. Applying their upstream manifests needs your approval (see the G.4 notes).
 
 ### Phase H: Hardening
 - [ ] **H.1** Close the pg pool and Redis clients on API shutdown; add a shared error handler with a consistent error shape and no leaked messages; validate path params; set request timeouts.
@@ -183,9 +192,9 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | **Authentication** | 🟡 Partial | Enumeration fix and session revocation (H.3) |
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
-| **Kubernetes & DevOps** | 🟡 Untested live | Cluster install/upgrade/rollback and ArgoCD sync (G.4) |
+| **Kubernetes & DevOps** | 🟢 Works on kind | ArgoCD, Ingress and HPA (G.5) |
 | **Observability** | 🟢 Verified locally | Run on a cluster with the Prometheus Operator (G.4) |
 
 ### Recommended Immediate Action
 1. **G.1:** confirm CI is green on GitHub (the Vitest `dist/` fix in `8bf0492` was likely needed) and turn on blocking checks.
-2. **G.4:** install the Helm chart on a local cluster (kind/k3d), upgrade, roll back, and sync with ArgoCD.
+2. **G.5:** ArgoCD, Ingress controller and HPA on the kind cluster (needs approval to apply upstream manifests).

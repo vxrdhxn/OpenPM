@@ -681,13 +681,13 @@ Review:
 ## Helm
 
 - [x] Validate templates. — `helm lint` + `helm template` for three value sets in CI
-- [ ] Validate values.
+- [ ] Validate values. — *partial:* `tests/helm/rendered.test.ts` checks rendered objects; no `values.schema.json`
 - [x] Safe defaults.
 - [ ] No hardcoded secrets. — *partial:* `values.yaml` ships dev default secrets meant to be overridden
 - [x] Production values documented. — `values.prod.yaml`
-- [ ] Install tested.
-- [ ] Upgrade tested.
-- [ ] Rollback tested.
+- [x] Install tested. — kind, default values (`docs/rehearsal.md`)
+- [x] Upgrade tested. — kind; config-only changes roll pods
+- [x] Rollback tested. — kind; rollback from a broken image tag, data intact
 
 ---
 
@@ -1099,11 +1099,11 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] Docker builds.
 - [x] Helm validates.
-- [ ] Kubernetes deployment succeeds.
-- [ ] Probes work.
-- [ ] HPA works where applicable.
-- [ ] NetworkPolicy works.
-- [ ] PDB works.
+- [x] Kubernetes deployment succeeds. — kind (G.4); not yet a real cluster
+- [x] Probes work. — API not ready until the database works; observed on kind
+- [ ] HPA works where applicable. — *partial:* HPAs created; kind has no metrics-server, so scaling untested
+- [x] NetworkPolicy works. — enforced on kind: required paths open, others blocked
+- [ ] PDB works. — *partial:* PDBs report the right allowed disruptions; no drain test
 - [ ] ArgoCD sync works.
 
 ## Gate 5 — Reliability
@@ -1114,7 +1114,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [ ] API restart tested.
 - [ ] WebSocket reconnect tested.
 - [ ] Backup restore tested.
-- [ ] Rollback tested.
+- [x] Rollback tested. — `helm rollback` on kind
 
 ## Gate 6 — UX
 
@@ -1322,8 +1322,8 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Security              | 🟡     | gitleaks, Trivy (report-only), Dependabot, no secrets in images or bundles. No CodeQL, no threat model, no rotation procedure. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
 | Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`. Runtime stage uses `npm install`, not `npm ci`. No tag strategy. |
-| Kubernetes            | 🟢     | Hardened pod security context, probes, HPA, PDB, default-deny NetworkPolicy with explicit egress (including HTTPS for email/S3). **Never deployed to a cluster.** |
-| Helm                  | 🟡     | Lint and render checked in CI for three value sets. No `values.schema.json`; `values.yaml` ships dev secrets; install/upgrade/rollback never tested. |
+| Kubernetes            | 🟢     | Installed and exercised on kind (G.4): app flow, NetworkPolicy enforcement, upgrades, rollback. Fixed on the way: invalid NetworkPolicies, Postgres crash loop, missing migrations, config changes not rolling pods. Not yet tested: Ingress controller, HPA scaling, a real cloud cluster. |
+| Helm                  | 🟢     | Install, upgrade and rollback tested on kind; CI renders three value sets and checks the objects (`tests/helm`). No `values.schema.json`; `values.yaml` still ships dev secrets. |
 | ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
 | Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Run against live Prometheus/Grafana with real traffic in Compose (G.3): every target up, an alert fired and cleared, every dashboard query checked. No log retention policy. |
 | Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec, no load tests (the k6 script mentioned in the README does not exist). |
@@ -1333,7 +1333,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Backup/restore        | ⬜     | |
 | Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
 | UX polish             | ⬜     | |
-| Production readiness  | 🔴     | Blocked on a first live deployment (Phase G). |
+| Production readiness  | 🟡     | Runs on Kubernetes (kind). Remaining: ArgoCD sync, an Ingress controller and HPA on a real cluster, then Phases H and I. |
 
 ### Status legend
 
