@@ -8,7 +8,7 @@ const { query, sendEmailNotification } = vi.hoisted(() => ({ query: vi.fn(), sen
 vi.mock('../lib/db', () => ({ pool: { query } }));
 vi.mock('../lib/email', () => ({ sendEmailNotification }));
 
-import processInviteCreated, { appUrl } from './inviteCreated';
+import processInviteCreated from './inviteCreated';
 
 const TOKEN = 'b'.repeat(64);
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
@@ -106,19 +106,5 @@ describe('processInviteCreated', () => {
     await expect(
       processInviteCreated(job({ invite_id: 'i1', org_id: 'o1', token: TOKEN }), asLogger(log))
     ).rejects.toThrow('db down');
-  });
-});
-
-describe('appUrl', () => {
-  it('uses APP_URL without a trailing slash', () => {
-    expect(appUrl({ APP_URL: 'https://pm.example.com//' } as NodeJS.ProcessEnv)).toBe('https://pm.example.com');
-  });
-
-  it('falls back to localhost outside production', () => {
-    expect(appUrl({ NODE_ENV: 'development' } as NodeJS.ProcessEnv)).toBe('http://localhost:3001');
-  });
-
-  it('refuses to build links in production without APP_URL', () => {
-    expect(() => appUrl({ NODE_ENV: 'production' } as NodeJS.ProcessEnv)).toThrow('APP_URL');
   });
 });

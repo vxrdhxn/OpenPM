@@ -8,7 +8,7 @@ import { logger } from './lib/logger';
 
 // Job names this worker knows. Anything else is reported as "other" so a bad producer can't
 // create unbounded label values.
-const KNOWN_JOB_NAMES = new Set(['task_created', 'invite_created']);
+const KNOWN_JOB_NAMES = new Set(['task_created', 'invite_created', 'password_reset_requested']);
 export const jobNameLabel = (name: string) => (KNOWN_JOB_NAMES.has(name) ? name : 'other');
 
 export const jobsTotal = new client.Counter({

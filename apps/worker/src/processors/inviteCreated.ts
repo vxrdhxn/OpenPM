@@ -1,23 +1,9 @@
-import crypto from 'crypto';
 import { Job } from 'bullmq';
 import { pool } from '../lib/db';
 import { sendEmailNotification } from '../lib/email';
 import { logger, Logger } from '../lib/logger';
-
-/**
- * Base URL of the frontend, used to build the accept link. Required in production: silently emailing
- * a localhost link would look sent but be useless, so the job fails visibly instead.
- */
-export function appUrl(env: NodeJS.ProcessEnv = process.env): string {
-  const url = env.APP_URL?.trim();
-  if (url) return url.replace(/\/+$/, '');
-  if (env.NODE_ENV === 'production') {
-    throw new Error('APP_URL is not set; cannot build invite links');
-  }
-  return 'http://localhost:3001';
-}
-
-const sha256 = (value: string) => crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+import { appUrl } from '../lib/appUrl';
+import { hashToken } from '../lib/tokens';
 
 /** Text that ends up in an email subject must not contain line breaks. */
 const oneLine = (value: string) => value.replace(/[\r\n]+/g, ' ').trim();
@@ -53,7 +39,7 @@ export default async function processInviteCreated(job: Job, log: Logger = logge
   const invite = res.rows[0];
 
   // The admin re-sent the invite after this job was queued: that newer job sends the valid link.
-  if (invite.token_hash !== sha256(token)) {
+  if (invite.token_hash !== hashToken(token)) {
     log.info({ invite_id }, 'Invite was re-issued; skipping the outdated link');
     return;
   }

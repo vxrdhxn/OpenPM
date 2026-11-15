@@ -2,7 +2,7 @@
 
 **Date:** November 15, 2026 (audited against commit `c0c3cbc`)
 **Repository:** `OpenPM`
-**Status Overview:** Build, lint and test clean on Node 22 🟢 | Phases A–E + F.1 implemented 🟢 | Never deployed 🟡 | Password-reset email missing 🔴
+**Status Overview:** Build, lint and test clean on Node 22 🟢 | Phases A–E + F.1/F.2 implemented 🟢 | Never deployed 🟡
 
 The detailed checklist is in `OpenPM_MASTER_ROADMAP.md` (section 36 has the per-area summary). This document gives the overview and the next steps.
 
@@ -14,10 +14,10 @@ OpenPM is designed as an open-source, self-hostable, enterprise-grade, Kubernete
 
 All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lint and pass their tests (~315 test cases) on Node 22. Production-readiness Phases A–E (security, tests, migrations, scaling/attachments, observability/CI) are implemented. In November 2026 every dependency with an advisory was upgraded and npm audit is clean.
 
-Two things stand between the project and a usable multi-user product:
+What still stands between the project and production:
 
 1. **Most of the system has only been tested with fakes.** Route tests use a mocked database, Redis and S3. The stack has run under Docker Compose, but has never been deployed to Kubernetes, synced by ArgoCD, or monitored by a live Prometheus/Grafana.
-2. **Password reset never sends its email.** `/api/auth/forgot-password` stores a token, but nothing delivers it to the user.
+2. **Emails are not retried.** Invite and reset emails now work (F.1, F.2), but the email helper logs a provider failure instead of failing the job, so a lost email is only recovered by asking again (F.3).
 
 ---
 
@@ -82,7 +82,6 @@ Two things stand between the project and a usable multi-user product:
 
 | Gap | Detail |
 | :--- | :--- |
-| Password-reset delivery | `routes/auth.ts` stores the token with a "send an email here" comment; no job is queued. |
 | Member management | No member list, role change, removal, leave, ownership transfer or org deletion. |
 | Comments, labels, notifications, search, pagination | Not started. There are no tables for comments, labels or notifications. List endpoints return every row. |
 
@@ -148,7 +147,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 
 ### Phase F: Close the broken user flows
 - [x] **F.1 Invite acceptance (done):** an `invite_created` job emails the link (`APP_URL`); invite tokens are stored as SHA-256 hashes (migration 010); public `POST /api/invites/lookup` and `/accept` (rate-limited, token in the body, org/role/email from the invite, `FOR UPDATE` against double accepts); an `/invite` page; activity log entries for created/revoked/accepted. Helm now passes `RESEND_API_KEY`/`EMAIL_FROM_ADDRESS` to the worker (it never did, so no email could be sent in Kubernetes). The frontend proxy no longer redirects signed-out users away from `/invite`, `/forgot-password` and `/reset-password`. Verified on real Postgres via Docker Compose, including migration 010 down/up. Note: failed emails are still not retried (F.3).
-- [ ] **F.2 Password-reset email:** queue an email job from `forgot-password` (same pattern as `invite_created`), add a per-route rate limit on forgot/reset-password, and store a hash of the token instead of the raw value.
+- [x] **F.2 Password-reset email (done):** `forgot-password` replies first (uniform timing), then stores a hashed token (migration 011), invalidates older links and queues `password_reset_requested`; the worker emails `${APP_URL}/reset-password?token=…` only if that token is still valid. `reset-password` validates the token format, matches the hash with `FOR UPDATE`, consumes all of the user's links and records `password_reset` in `activity_log`. Rate limits: forgot 5/min, reset 10/min. Verified on real Postgres via Docker Compose. Also fixed: Vitest 5 collected compiled tests from `dist/`, which would fail CI (build runs before test). Still open: a reset does not end existing sessions (no token revocation, H.3).
 - [ ] **F.3 Worker job policy:** set `attempts` and exponential `backoff` on enqueue, validate payloads, and scope worker queries by `org_id`.
 
 ### Phase G: Verify for real
@@ -175,14 +174,13 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | **Foundation & Build** | 🟢 Complete | Confirm CI green on GitHub; make checks required |
 | **API Backend & RBAC** | 🟢 Solid | Shared error handling, path-param validation (H.1) |
 | **Organizations & Invites** | 🟡 Partial | Member list, role change, removal |
-| **Authentication** | 🟡 Partial | Password-reset email (F.2), enumeration fix (H.3) |
+| **Authentication** | 🟡 Partial | Enumeration fix and session revocation (H.3) |
 | **Background Worker** | 🟡 Functional | Retry/backoff and payload validation (F.3) |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
 | **Kubernetes & DevOps** | 🟡 Untested live | Cluster install/upgrade/rollback and ArgoCD sync (G.4) |
 | **Observability** | 🟢 Complete | Load into live Prometheus/Grafana (G.3) |
 
 ### Recommended Immediate Action
-1. **F.2:** users who forget their password are locked out.
+1. **F.3:** make email failures fail the job and turn on retries, now that invites and resets depend on email.
 2. **G.1:** confirm CI is green and turn on blocking checks.
-3. **F.3:** turn on job retries before relying on emails.
-4. **G.2–G.4:** real-database tests, then the full-stack and cluster rehearsal.
+3. **G.2–G.4:** real-database tests, then the full-stack and cluster rehearsal.

@@ -17,7 +17,11 @@ vi.mock('../db/client', () => ({
   db: { query: vi.fn(), getClient: vi.fn() },
 }));
 
+const { queueAdd } = vi.hoisted(() => ({ queueAdd: vi.fn() }));
+vi.mock('../queue', () => ({ getJobQueue: () => ({ add: queueAdd }) }));
+
 import { db } from '../db/client';
+import { hashToken } from '../security/tokens';
 import authPlugin from '../plugins/auth';
 import { authFailuresTotal } from '../metrics';
 import authRoutes from './auth';
@@ -222,78 +226,104 @@ describe('Auth routes', () => {
   });
 
   describe('password reset', () => {
-    it('forgot-password responds identically for known and unknown emails', async () => {
-      vi.mocked(db.query).mockResolvedValueOnce([{ id: 'u1' }]).mockResolvedValueOnce([]);
-      const known = await app.inject({
-        method: 'POST',
-        url: '/auth/forgot-password',
-        payload: { email: 'a@b.com' },
-      });
-      expect(sqlOf(vi.mocked(db.query).mock.calls[1])).toMatch(/INSERT INTO password_reset_tokens/);
+    const TOKEN = 'c'.repeat(64);
+    const forgot = (email: string) =>
+      app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email } });
+    const reset = (payload: object) => app.inject({ method: 'POST', url: '/auth/reset-password', payload });
 
-      vi.mocked(db.query).mockResolvedValueOnce([]);
-      const unknown = await app.inject({
-        method: 'POST',
-        url: '/auth/forgot-password',
-        payload: { email: 'z@b.com' },
-      });
+    it('forgot-password stores a token hash, invalidates older links and emails the raw token via a job', async () => {
+      mockClient.query.mockImplementation(async (sql: string) =>
+        sql.startsWith('SELECT id FROM users') ? rows([{ id: 'u1' }]) : rows()
+      );
+
+      const res = await forgot('Ada@Example.com');
+      expect(res.statusCode).toBe(200);
+      await vi.waitFor(() => expect(queueAdd).toHaveBeenCalledTimes(1));
+
+      const calls = mockClient.query.mock.calls;
+      expect(calls.find((c) => sqlOf(c).startsWith('SELECT id FROM users'))![1]).toEqual(['ada@example.com']);
+      expect(calls.map(sqlOf)).toContain('DELETE FROM password_reset_tokens WHERE user_id = $1');
+      const insert = calls.find((c) => sqlOf(c).startsWith('INSERT INTO password_reset_tokens'))!;
+      expect(sqlOf(insert)).toContain('token_hash');
+
+      const [jobName, data, opts] = queueAdd.mock.calls[0]!;
+      expect(jobName).toBe('password_reset_requested');
+      expect(data).toMatchObject({ user_id: 'u1' });
+      expect(data.token).toMatch(/^[0-9a-f]{64}$/);
+      // The database gets the hash of exactly the token that is emailed, never the token itself.
+      expect((insert[1] as unknown[])[1]).toBe(hashToken(data.token));
+      expect(insert[1]).not.toContain(data.token);
+      expect(opts).toMatchObject({ removeOnComplete: true });
+    });
+
+    it('forgot-password answers identically for unknown emails and queues nothing', async () => {
+      mockClient.query.mockImplementation(async (sql: string) =>
+        sql.startsWith('SELECT id FROM users') ? rows([{ id: 'u1' }]) : rows()
+      );
+      const known = await forgot('a@b.com');
+      await vi.waitFor(() => expect(queueAdd).toHaveBeenCalledTimes(1));
+
+      mockClient.query.mockImplementation(async () => rows());
+      const unknown = await forgot('z@b.com');
+      await vi.waitFor(() => expect(mockClient.query.mock.calls.map(sqlOf).filter((s) => s === 'COMMIT')).toHaveLength(2));
 
       expect(known.statusCode).toBe(200);
-      expect(known.json()).toEqual(unknown.json());
-      const inserts = vi.mocked(db.query).mock.calls.filter((c) => /INSERT/.test(sqlOf(c)));
-      expect(inserts).toHaveLength(1); // none for the unknown email
+      expect(unknown.json()).toEqual(known.json());
+      expect(queueAdd).toHaveBeenCalledTimes(1);
     });
 
-    it('reset-password updates the hash and deletes tokens for a valid token', async () => {
-      mockClient.query.mockImplementation(async (sql: string) =>
-        sql.includes('FROM password_reset_tokens')
-          ? rows([{ user_id: 'u1', expires_at: new Date(Date.now() + 60_000) }])
-          : rows()
-      );
+    it('forgot-password replies before doing any work, so timing does not reveal registered emails', async () => {
+      let release!: () => void;
+      vi.mocked(db.getClient).mockReturnValue(new Promise((r) => (release = () => r(mockClient as never))) as never);
+      mockClient.query.mockImplementation(async () => rows());
 
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/reset-password',
-        payload: { token: 't', password: 'newpassword1' },
-      });
+      const res = await forgot('slow@b.com');
+
+      expect(res.statusCode).toBe(200); // answered while the lookup is still pending
+      release();
+    });
+
+    it('forgot-password still answers 200 when issuing the link fails', async () => {
+      vi.mocked(db.getClient).mockRejectedValue(new Error('db down'));
+
+      const res = await forgot('a@b.com');
 
       expect(res.statusCode).toBe(200);
-      const sqls = mockClient.query.mock.calls.map(sqlOf);
-      expect(sqls.some((s) => s.startsWith('UPDATE users SET password_hash'))).toBe(true);
-      expect(sqls.some((s) => s.startsWith('DELETE FROM password_reset_tokens'))).toBe(true);
-      expect(sqls).toContain('COMMIT');
     });
 
-    it('rejects unknown and expired tokens with 400', async () => {
-      mockClient.query.mockImplementation(async () => rows());
-      const unknown = await app.inject({
-        method: 'POST',
-        url: '/auth/reset-password',
-        payload: { token: 'bad', password: 'newpassword1' },
-      });
-      expect(unknown.statusCode).toBe(400);
-
+    it('reset-password looks up the token hash, updates the password, consumes tokens and records it', async () => {
       mockClient.query.mockImplementation(async (sql: string) =>
-        sql.includes('FROM password_reset_tokens')
-          ? rows([{ user_id: 'u1', expires_at: new Date(Date.now() - 1000) }])
-          : rows()
+        sql.includes('FROM password_reset_tokens t') ? rows([{ user_id: 'u1', org_id: 'o1' }]) : rows()
       );
-      const expired = await app.inject({
-        method: 'POST',
-        url: '/auth/reset-password',
-        payload: { token: 'old', password: 'newpassword1' },
-      });
-      expect(expired.statusCode).toBe(400);
-      expect(mockClient.query.mock.calls.map(sqlOf)).toContain('ROLLBACK');
+
+      const res = await reset({ token: TOKEN, password: 'newpassword1' });
+
+      expect(res.statusCode).toBe(200);
+      const calls = mockClient.query.mock.calls;
+      const lookup = calls.find((c) => sqlOf(c).includes('FROM password_reset_tokens t'))!;
+      expect(sqlOf(lookup)).toContain('expires_at > NOW()');
+      expect(sqlOf(lookup)).toContain('FOR UPDATE');
+      expect(lookup[1]).toEqual([hashToken(TOKEN)]);
+      expect(calls.find((c) => sqlOf(c).startsWith('UPDATE users SET password_hash'))![1]).toEqual(['hashed:newpassword1', 'u1']);
+      expect(calls.map(sqlOf)).toContain('DELETE FROM password_reset_tokens WHERE user_id = $1');
+      expect(calls.find((c) => sqlOf(c).startsWith('INSERT INTO activity_log'))![1]).toEqual(['o1', 'u1', 'user', 'u1', 'password_reset', '{}']);
+      expect(calls.map(sqlOf)).toContain('COMMIT');
     });
 
-    it('rejects short new passwords before touching the database', async () => {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/reset-password',
-        payload: { token: 't', password: 'short' },
-      });
+    it('rejects unknown, used or expired tokens with 400 and rolls back', async () => {
+      mockClient.query.mockImplementation(async () => rows());
+
+      const res = await reset({ token: TOKEN, password: 'newpassword1' });
+
       expect(res.statusCode).toBe(400);
+      const sqls = mockClient.query.mock.calls.map(sqlOf);
+      expect(sqls).toContain('ROLLBACK');
+      expect(sqls.some((s) => s.startsWith('UPDATE users'))).toBe(false);
+    });
+
+    it('rejects malformed tokens and short passwords before touching the database', async () => {
+      expect((await reset({ token: "' OR 1=1 --", password: 'newpassword1' })).statusCode).toBe(400);
+      expect((await reset({ token: TOKEN, password: 'short' })).statusCode).toBe(400);
       expect(db.getClient).not.toHaveBeenCalled();
     });
   });

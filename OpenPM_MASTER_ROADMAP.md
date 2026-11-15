@@ -122,9 +122,9 @@ npm test
 - [ ] Define refresh-token strategy if applicable.
 - [ ] Define token rotation/revocation.
 - [x] Define logout behavior. — clears the cookie; the JWT itself stays valid until expiry (no revocation)
-- [ ] Rate-limit authentication endpoints. — *partial:* login/register 10/min; forgot/reset-password only have the global 100/min
-- [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform; register still returns "Email is already registered"
-- [ ] Audit security-sensitive authentication events. — *partial:* auth failures are logged and counted (`auth_failures_total`), not written to an audit table
+- [x] Rate-limit authentication endpoints. — login/register 10/min, forgot-password 5/min, reset-password 10/min, invite lookup/accept 20/10 per min
+- [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform (forgot-password replies before doing any work, so timing is uniform too); register still returns "Email is already registered"
+- [ ] Audit security-sensitive authentication events. — *partial:* password resets go to `activity_log`; login failures are only logged and counted (`auth_failures_total`)
 - [x] Add authentication bypass tests. — `security_rbac.test.ts`, `websocket.test.ts`
 
 ---
@@ -1303,7 +1303,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | --------------------- | ------ | ----- |
 | Repository foundation | 🟢     | Install/lint/build/test clean on Node 22. Dependencies upgraded (Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6) with npm audit clean. |
 | Architecture          | 🟡     | Central auth/role checks, request IDs and graceful shutdown are in place. SQL and business logic still sit in route handlers, error handling is ad hoc, and the API never closes its pg pool or Redis clients on shutdown. |
-| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Still missing: revocation/refresh, rate limits on forgot/reset-password, and register still reveals whether an email exists. **The password-reset email is never sent**: a token is stored but not delivered. The reset page was unreachable when signed out until F.1 fixed the frontend proxy. |
+| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Still missing: revocation/refresh (a reset does not end existing sessions), and register still reveals whether an email exists. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`, with IDOR tests (mocked DB). Gaps: no shared data-access layer, and the worker does not filter by org. |
 | Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications, memberships or project-member tables. No pagination anywhere. No backups. |
@@ -1333,7 +1333,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Backup/restore        | ⬜     | |
 | Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
 | UX polish             | ⬜     | |
-| Production readiness  | 🔴     | Blocked on the password-reset email gap (F.2) and a first live deployment. |
+| Production readiness  | 🔴     | Blocked on a first live deployment; failed emails are not retried yet (F.3). |
 
 ### Status legend
 

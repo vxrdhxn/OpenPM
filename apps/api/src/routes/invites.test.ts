@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import authPlugin from '../plugins/auth';
-import { hashInviteToken } from '../invites/token';
+import { hashToken } from '../security/tokens';
 
 vi.mock('../db/client', () => ({
   db: { query: vi.fn(), getClient: vi.fn() },
@@ -78,7 +78,7 @@ describe('Invite routes', () => {
       expect(data).toMatchObject({ invite_id: INVITE_ID, org_id: 'org-1' });
       expect(data.token).toMatch(/^[0-9a-f]{64}$/);
       // The database gets the hash of exactly the token that is emailed.
-      expect(upsertParams[2]).toBe(hashInviteToken(data.token));
+      expect(upsertParams[2]).toBe(hashToken(data.token));
       expect(upsertParams[2]).not.toBe(data.token);
       expect(opts).toMatchObject({ removeOnComplete: true });
 
@@ -171,7 +171,7 @@ describe('Invite routes', () => {
       expect(res.json()).toEqual(details);
       const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
       expect(sql).toContain('expires_at > NOW()');
-      expect(params).toEqual([hashInviteToken(TOKEN)]);
+      expect(params).toEqual([hashToken(TOKEN)]);
     });
 
     it('returns 404 for an unknown or expired token', async () => {
@@ -211,7 +211,7 @@ describe('Invite routes', () => {
       const [lookupSql, lookupParams] = mockClient.query.mock.calls[1]!;
       expect(lookupSql).toContain('FOR UPDATE');
       expect(lookupSql).toContain('expires_at > NOW()');
-      expect(lookupParams).toEqual([hashInviteToken(TOKEN)]);
+      expect(lookupParams).toEqual([hashToken(TOKEN)]);
 
       // Org, email and role come from the invite; the password is stored hashed.
       expect(mockClient.query.mock.calls[3]![1]).toEqual(['org-1', 'new@example.com', 'hashed-password', 'New Person', 'admin']);

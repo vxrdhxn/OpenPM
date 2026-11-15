@@ -4,6 +4,8 @@ import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { authFailuresTotal } from '../metrics';
 import { issueSession } from '../plugins/session';
+import { generateToken, hashToken, TOKEN_PATTERN } from '../security/tokens';
+import { getJobQueue } from '../queue';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Register: Create Org + User
@@ -140,81 +142,128 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ success: true });
   });
 
-  // Forgot Password
+  // Forgot Password: email a single-use reset link if the address is registered.
   fastify.post('/forgot-password', {
+    config: {
+      rateLimit: {
+        max: 5,
+        timeWindow: '1 minute'
+      }
+    },
     schema: {
       body: {
         type: 'object',
         required: ['email'],
         properties: {
           email: { type: 'string', format: 'email' }
-        }
+        },
+        additionalProperties: false
       }
     }
   }, async (request, reply) => {
-    const { email } = request.body as any;
+    const { email } = request.body as { email: string };
     const normalizedEmail = email.toLowerCase().trim();
 
-    const users = await db.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
-    if (users.length > 0) {
-      const userId = users[0].id;
-      const { randomBytes } = await import('crypto');
-      const token = randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+    // Reply first, then do the work. If the lookup, insert and enqueue ran before replying, a
+    // registered address would answer measurably slower than an unknown one (account enumeration).
+    // Failures are logged; the caller can't be told anyway without revealing whether the address exists.
+    void issuePasswordResetLink(normalizedEmail, request.id).catch((err) => {
+      request.log.error({ err }, 'Could not issue password reset link');
+    });
 
-      await db.query(
-        'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-        [userId, token, expiresAt]
-      );
-      
-      // In a real app, send an email with the token here using BullMQ job
-    }
-
-    // Always return success to prevent email enumeration
     return reply.send({ success: true, message: 'If that email is registered, a reset link was sent.' });
   });
 
-  // Reset Password
+  // Reset Password: consume a reset token and set a new password.
   fastify.post('/reset-password', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute'
+      }
+    },
     schema: {
       body: {
         type: 'object',
         required: ['token', 'password'],
         properties: {
-          token: { type: 'string' },
+          token: { type: 'string', pattern: TOKEN_PATTERN },
           password: { type: 'string', minLength: 8 }
-        }
+        },
+        additionalProperties: false
       }
     }
   }, async (request, reply) => {
-    const { token, password } = request.body as any;
+    const { token, password } = request.body as { token: string; password: string };
 
     try {
       await withTransaction(async (client) => {
+        // FOR UPDATE: the same link can't be used twice concurrently.
         const tokenRes = await client.query(
-          'SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1',
-          [token]
+          `SELECT t.user_id, u.org_id
+             FROM password_reset_tokens t
+             JOIN users u ON u.id = t.user_id
+            WHERE t.token_hash = $1 AND t.expires_at > NOW()
+            FOR UPDATE OF t`,
+          [hashToken(token)]
         );
 
-        if (tokenRes.rows.length === 0 || tokenRes.rows[0].expires_at < new Date()) {
+        if (tokenRes.rows.length === 0) {
           throw new Error('INVALID_TOKEN');
         }
 
-        const userId = tokenRes.rows[0].user_id;
+        const { user_id: userId, org_id: orgId } = tokenRes.rows[0];
         const passwordHash = await bcrypt.hash(password, 12);
 
         await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+        // Consumes this link and any other outstanding ones for the user.
         await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+        await client.query(
+          'INSERT INTO activity_log (org_id, user_id, entity_type, entity_id, action, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
+          [orgId, userId, 'user', userId, 'password_reset', '{}']
+        );
       });
 
       return reply.send({ success: true });
-    } catch (err: any) {
-      if (err.message === 'INVALID_TOKEN') {
+    } catch (err) {
+      if (err instanceof Error && err.message === 'INVALID_TOKEN') {
         return reply.code(400).send({ error: 'Invalid or expired reset token' });
       }
       throw err;
     }
   });
 };
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Create a reset token for the user with this email (if any) and queue the email that delivers it.
+ * Earlier links for the user are invalidated, so only the newest one works. The database keeps only
+ * the token's hash; the raw token goes into the job, which is removed from Redis once it completes.
+ */
+export async function issuePasswordResetLink(email: string, requestId: string): Promise<void> {
+  const { token, tokenHash } = generateToken();
+
+  const userId = await withTransaction(async (client) => {
+    const users = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (users.rows.length === 0) return null;
+
+    const id: string = users.rows[0].id;
+    await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [id]);
+    await client.query(
+      'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+      [id, tokenHash, new Date(Date.now() + RESET_TOKEN_TTL_MS)]
+    );
+    return id;
+  });
+
+  if (!userId) return;
+
+  await getJobQueue().add(
+    'password_reset_requested',
+    { user_id: userId, token, request_id: requestId },
+    { removeOnComplete: true, removeOnFail: { age: RESET_TOKEN_TTL_MS / 1000 } }
+  );
+}
 
 export default authRoutes;

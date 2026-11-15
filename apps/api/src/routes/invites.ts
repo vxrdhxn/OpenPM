@@ -3,7 +3,7 @@ import type { PoolClient } from 'pg';
 import bcrypt from 'bcrypt';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
-import { generateInviteToken, hashInviteToken } from '../invites/token';
+import { generateToken, hashToken, TOKEN_PATTERN } from '../security/tokens';
 import { issueSession } from '../plugins/session';
 import { getJobQueue } from '../queue';
 
@@ -12,7 +12,7 @@ const INVITE_TTL_DAYS = 7;
 // Shape of an invite in every response. Never includes the token or its hash.
 const INVITE_COLUMNS = 'id, email, role, expires_at, created_at';
 
-const tokenProperty = { type: 'string', pattern: '^[0-9a-f]{64}$' } as const;
+const tokenProperty = { type: 'string', pattern: TOKEN_PATTERN } as const;
 
 async function logInviteActivity(
   client: PoolClient,
@@ -52,7 +52,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
       const { role = 'member' } = request.body as { email: string; role?: string };
       const email = (request.body as { email: string }).email.toLowerCase().trim();
 
-      const { token, tokenHash } = generateInviteToken();
+      const { token, tokenHash } = generateToken();
       const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
       try {
@@ -165,7 +165,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
          FROM organization_invites i
          JOIN organizations o ON o.id = i.org_id
         WHERE i.token_hash = $1 AND i.expires_at > NOW()`,
-      [hashInviteToken(token)]
+      [hashToken(token)]
     );
 
     if (res.length === 0) {
@@ -202,7 +202,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
              FROM organization_invites
             WHERE token_hash = $1 AND expires_at > NOW()
             FOR UPDATE`,
-          [hashInviteToken(token)]
+          [hashToken(token)]
         );
         if (inviteRes.rows.length === 0) {
           throw new Error('INVALID_INVITE');
