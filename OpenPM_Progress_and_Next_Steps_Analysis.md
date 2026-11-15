@@ -152,7 +152,14 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 ### Phase G: Verify for real
 - [ ] **G.1** Confirm CI is green on GitHub, then make its jobs required in branch protection. Switch Trivy to blocking (`TRIVY_EXIT_CODE: "1"`) now that advisories are cleared.
 - [x] **G.2 Real-database tests (done):** `npm run test:integration` drives the real app (`buildApp()`, split out of `index.ts`) against a throwaway Postgres database, in CI via a Postgres service container. Each run applies every migration, rolls all of them back to an empty schema and applies them again. 29 tests cover tenant isolation (each cross-org read/write/delete returns 404 and the row is unchanged), roles, privilege escalation, register/login, password reset, invites and rate limits. **Found and fixed a cross-tenant bug:** tasks could be assigned to a user from another organization (only the foreign key was checked), which put that user's name on the other org's board. Redis and the queue are in-memory fakes. actionlint now runs clean on the workflow.
-- [ ] **G.3** Full-stack rehearsal: two API replicas with live updates across two browsers, attachment upload/download/delete against MinIO (exercises bucket CORS), `migrate` / `migrate:down` / `migrate`, and the dashboards and alerts against real traffic.
+- [x] **G.3 Full-stack rehearsal (done):** new opt-in overlays `docker-compose.scale.yml` (second API on :3002) and `docker-compose.monitoring.yml` (Prometheus + Grafana with the chart's own rules and dashboards). Verified with a real browser:
+  - Live updates cross API instances in both directions.
+  - Attachments upload, download (cross-origin from MinIO) and delete.
+  - Both API instances and the worker are scraped; all 18 rules evaluate.
+  - `OpenPMWorkerDown` fired after 2 min and cleared on restart, and a job queued during the outage ran afterwards.
+  - Every dashboard query was run against live data.
+
+  **Found and fixed:** every DELETE from the UI returned 400 (the API client sent a JSON content type with no body), so deleting attachments and revoking invites in the browser never worked. Ratio panels showed "No data" instead of 0%. Details: `docs/rehearsal.md`.
 - [ ] **G.4** Install the Helm chart on a local cluster (kind/k3d), then upgrade and roll back; sync it with ArgoCD.
 
 ### Phase H: Hardening
@@ -177,8 +184,8 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
 | **Kubernetes & DevOps** | 🟡 Untested live | Cluster install/upgrade/rollback and ArgoCD sync (G.4) |
-| **Observability** | 🟢 Complete | Load into live Prometheus/Grafana (G.3) |
+| **Observability** | 🟢 Verified locally | Run on a cluster with the Prometheus Operator (G.4) |
 
 ### Recommended Immediate Action
 1. **G.1:** confirm CI is green on GitHub (the Vitest `dist/` fix in `8bf0492` was likely needed) and turn on blocking checks.
-2. **G.3–G.4:** full-stack and cluster rehearsal.
+2. **G.4:** install the Helm chart on a local cluster (kind/k3d), upgrade, roll back, and sync with ArgoCD.

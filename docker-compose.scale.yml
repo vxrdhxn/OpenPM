@@ -1,0 +1,33 @@
+# Optional: a second API instance, to exercise multi-instance behaviour locally (realtime updates fanned
+# out through Redis pub/sub, shared rate-limit-free state, Prometheus discovering several targets).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d
+#
+# The frontend still talks to the first API (localhost:3000); the second listens on localhost:3002. A
+# change made through one instance must reach WebSocket clients connected to the other.
+
+services:
+  api:
+    networks:
+      default:
+        # Shared DNS name for every API instance (Prometheus discovers them through it, see
+        # monitoring/prometheus.yml).
+        aliases: [openpm-api-instances]
+
+  api2:
+    extends:
+      file: docker-compose.yml
+      service: api
+    container_name: openpm-api-2
+    ports: !override
+      - "3002:3000"
+    networks:
+      default:
+        aliases: [openpm-api-instances]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully

@@ -47,7 +47,7 @@ uses Chainguard's maintained build (`cgr.dev/chainguard/minio`), which also prov
 step. The image is overridable with `MINIO_IMAGE` (any image with `minio`, `mc` and `sh`); Chainguard's free
 tier only publishes `latest`, so pin a digest for reproducible runs (see the comment in the file).
 
-Verified against a live stack: browser-style CORS preflight, presigned upload, completion, download with
+Verified in a real browser (Chrome) against MinIO during the full-stack rehearsal ([rehearsal.md](rehearsal.md)): upload from the task dialog, download from the page, delete from the UI. Earlier, with scripted requests: browser-style CORS preflight, presigned upload, completion, download with
 forced-download headers, and object removal on delete.
 
 ## API

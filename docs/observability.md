@@ -81,6 +81,10 @@ Label values come from small fixed sets, so cardinality is bounded (no ids, emai
 The two `worker_queue_*` metrics describe the queue, not a pod, so every worker replica reports the
 same numbers. Query them with `max()`, never `sum()`.
 
+## Trying it locally
+
+`docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d` starts Prometheus (`:9090`) and Grafana (`:3003`) with these exact rules and dashboards. Scrape labels match the chart's ServiceMonitors. See [rehearsal.md](rehearsal.md) for the last run against real traffic, including an alert firing and clearing.
+
 ## Enabling it in Kubernetes (Helm)
 
 ```yaml

@@ -420,7 +420,7 @@ For every event:
 - [ ] Backpressure strategy.
 - [ ] Duplicate-event handling.
 - [ ] Ordering strategy where needed.
-- [ ] Multi-instance Redis/pub-sub testing. — *partial:* `RealtimeHub` design supports it; never run across two live pods
+- [x] Multi-instance Redis/pub-sub testing. — two API instances under Compose, both directions, in a browser (`docs/rehearsal.md`)
 
 ---
 
@@ -441,7 +441,7 @@ For every event:
 - [x] Prevent cross-tenant event leakage.
 - [x] Handle reconnects. — ioredis auto-resubscribe
 - [x] Handle subscriber failures. — socket closed with 1011; tested
-- [ ] Test multiple API replicas. — *partial:* not run against live replicas
+- [x] Test multiple API replicas. — Compose rehearsal with `docker-compose.scale.yml`
 
 ## Security
 
@@ -753,12 +753,12 @@ Track:
 
 ## Prometheus/Grafana
 
-- [x] Prometheus scraping. — ServiceMonitors for API and worker
+- [x] Prometheus scraping. — ServiceMonitors for API and worker; verified live with Compose (`docker-compose.monitoring.yml`)
 - [x] API dashboard.
 - [x] Worker dashboard.
 - [ ] Infrastructure dashboard.
 - [ ] Redis/PostgreSQL dashboards where appropriate.
-- [x] Alerts for critical failures. — 18 rules, promtool-tested
+- [x] Alerts for critical failures. — 18 rules, promtool-tested; `OpenPMWorkerDown` fired and cleared in a live rehearsal
 
 ---
 
@@ -1313,19 +1313,19 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Comments              | ⬜     | No table, routes or UI. |
 | Search/filtering      | ⬜     | No search, filters or pagination. |
 | Dashboard             | ⬜     | |
-| WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Not yet run across two live pods. |
+| WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
 | Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. A Redis outage still fails cached reads. No eviction policy. |
 | BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
 | Notifications         | ⬜     | Only the assignment email on task creation. |
 | Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
 | API hardening         | 🟡     | Body schemas, 1 MB limit, rate limits, helmet, strict CORS. Path params are not validated, there are no request timeouts, Swagger is dev-only, and 500 responses can echo error messages. |
 | Security              | 🟡     | gitleaks, Trivy (report-only), Dependabot, no secrets in images or bundles. No CodeQL, no threat model, no rotation procedure. |
-| File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Not yet run against real S3/MinIO in a browser. |
+| File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
 | Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`. Runtime stage uses `npm install`, not `npm ci`. No tag strategy. |
 | Kubernetes            | 🟢     | Hardened pod security context, probes, HPA, PDB, default-deny NetworkPolicy with explicit egress (including HTTPS for email/S3). **Never deployed to a cluster.** |
 | Helm                  | 🟡     | Lint and render checked in CI for three value sets. No `values.schema.json`; `values.yaml` ships dev secrets; install/upgrade/rollback never tested. |
 | ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
-| Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Not loaded into a live Prometheus/Grafana; no log retention policy. |
+| Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Run against live Prometheus/Grafana with real traffic in Compose (G.3): every target up, an alert fired and cleared, every dashboard query checked. No log retention policy. |
 | Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec, no load tests (the k6 script mentioned in the README does not exist). |
 | CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + Trivy; actionlint clean. No CodeQL, no release pipeline, no branch protection. First GitHub run not yet confirmed. |
 | Performance           | ⬜     | Indexes and caching only; nothing measured. |
