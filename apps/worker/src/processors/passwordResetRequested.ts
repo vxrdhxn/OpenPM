@@ -4,19 +4,14 @@ import { sendEmailNotification } from '../lib/email';
 import { logger, Logger } from '../lib/logger';
 import { appUrl } from '../lib/appUrl';
 import { hashToken } from '../lib/tokens';
+import { jobIdempotencyKey, requireFields } from '../lib/jobs';
 
 /**
  * Email a password-reset link. The job carries the raw token (the database only has its hash). The job
  * data is never logged, so the token never reaches the log pipeline; only the email body contains it.
  */
 export default async function processPasswordResetRequested(job: Job, log: Logger = logger) {
-  const { user_id, token } = (job.data ?? {}) as Record<string, unknown>;
-
-  // Retrying a malformed job can't fix it, so complete it with an error log instead of throwing.
-  if (typeof user_id !== 'string' || typeof token !== 'string') {
-    log.error('Malformed password_reset_requested job; skipping');
-    return;
-  }
+  const { user_id, token } = requireFields(job, ['user_id', 'token']);
 
   const link = `${appUrl()}/reset-password?token=${encodeURIComponent(token)}`;
 
@@ -44,7 +39,8 @@ export default async function processPasswordResetRequested(job: Job, log: Logge
       `Choose a new password here:\n${link}\n\n` +
       `This link works once and expires in 1 hour. If you didn't ask for this, you can ignore this email; ` +
       `your password has not been changed.`,
-    log
+    log,
+    { idempotencyKey: jobIdempotencyKey(job) }
   );
 
   log.info({ user_id }, 'Processed password_reset_requested');

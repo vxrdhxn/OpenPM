@@ -143,7 +143,7 @@ OpenPM must never allow one organization to access another organization's data.
 - [x] Verify ownership before delete.
 - [x] Verify nested-resource ownership. — task -> project -> org, attachment -> task -> org
 - [x] Verify WebSocket authorization. — JWT + Origin check; channel derived from the token
-- [ ] Verify worker/job authorization context. — *partial:* jobs carry `org_id`, but the worker looks up tasks/users by id without an org filter
+- [x] Verify worker/job authorization context. — worker lookups are scoped to the job's `org_id` (reset jobs: user + token hash); tested
 
 ## RBAC
 
@@ -458,21 +458,21 @@ For every event:
 
 For every queue:
 
-- [ ] Define payload.
-- [ ] Define retry policy. — *partial:* jobs are enqueued without `attempts`/`backoff`, so a failed email is not retried
-- [ ] Define backoff.
-- [ ] Define timeout.
-- [ ] Define concurrency.
-- [ ] Define idempotency.
-- [ ] Define failure behavior.
+- [x] Define payload. — `docs/jobs.md`; validated in the worker (`lib/jobs.ts`)
+- [x] Define retry policy. — 5 attempts (`DEFAULT_JOB_OPTIONS` in `apps/api/src/queue.ts`)
+- [x] Define backoff. — exponential from 30s (30s, 1m, 2m, 4m)
+- [x] Define timeout. — 15s per email provider call
+- [x] Define concurrency. — 5 per worker (`WORKER_CONCURRENCY`)
+- [x] Define idempotency. — email idempotency key per job (`openpm/<name>/<id>/<timestamp>`); jobs re-check staleness before sending
+- [x] Define failure behavior. — retryable vs `UnrecoverableError` table in `docs/jobs.md`
 
 Worker reliability:
 
 - [x] Graceful shutdown.
-- [ ] Retry handling.
+- [x] Retry handling. — verified live: Postgres cut off, attempt 1 failed, attempt 2 succeeded 30s later
 - [x] Failed/dead-letter visibility. — failure logs and `jobs_total{status="failed"}`; BullMQ failed set
-- [ ] Duplicate side-effect protection.
-- [ ] Malformed-job handling. — *partial:* unknown job names are logged and skipped; payload fields are not validated
+- [x] Duplicate side-effect protection. — provider idempotency key, stable across retries
+- [x] Malformed-job handling. — fails once with `UnrecoverableError` (verified live); unknown job names fail retryably so an updated worker can run them
 - [x] Job ID logging.
 - [x] Processing-duration metrics.
 - [x] Failure metrics.
@@ -483,7 +483,7 @@ Operational controls:
 - [x] Queue health metric. — queue lag + alerts
 - [x] Queue depth metric.
 - [x] Failed-job metric.
-- [ ] Stuck-job recovery procedure.
+- [x] Stuck-job recovery procedure. — `docs/jobs.md` (retrying the failed set, stalled jobs)
 
 ---
 
@@ -920,13 +920,13 @@ Test:
 - [ ] WebSocket disconnect.
 - [ ] DB connection exhaustion.
 - [ ] Queue backlog.
-- [ ] Invalid job.
+- [x] Invalid job. — malformed payload fails without retries (live test)
 - [ ] Partial deployment failure.
 - [ ] Kubernetes pod restart.
 
 Define:
 
-- [ ] Retry behavior.
+- [x] Retry behavior. — background jobs: `docs/jobs.md`
 - [ ] Timeout behavior.
 - [ ] Fallback behavior.
 - [ ] User-visible failure behavior.
@@ -1015,7 +1015,7 @@ For every threat:
 - [ ] Database migrations. — *partial:* how to run them is documented; rollback is not
 - [ ] Testing.
 - [ ] API development.
-- [ ] Worker development.
+- [ ] Worker development. — *partial:* `docs/jobs.md` covers jobs, retries and recovery
 - [ ] WebSocket architecture.
 - [ ] Redis architecture.
 
@@ -1163,8 +1163,8 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] BullMQ.
 - [x] Worker jobs.
-- [ ] Retry policies.
-- [ ] Failure handling.
+- [x] Retry policies.
+- [x] Failure handling.
 - [x] Queue metrics.
 
 ## Phase 5 — Security
@@ -1315,7 +1315,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Dashboard             | ⬜     | |
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Not yet run across two live pods. |
 | Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. A Redis outage still fails cached reads. No eviction policy. |
-| BullMQ/Workers        | 🟡     | One job (`task_created` -> assignee email), logs carry job/request ids, metrics and alerts. **No retry/backoff** (`attempts` is not set) and no payload validation. |
+| BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
 | Notifications         | ⬜     | Only the assignment email on task creation. |
 | Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
 | API hardening         | 🟡     | Body schemas, 1 MB limit, rate limits, helmet, strict CORS. Path params are not validated, there are no request timeouts, Swagger is dev-only, and 500 responses can echo error messages. |
@@ -1333,7 +1333,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Backup/restore        | ⬜     | |
 | Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
 | UX polish             | ⬜     | |
-| Production readiness  | 🔴     | Blocked on a first live deployment; failed emails are not retried yet (F.3). |
+| Production readiness  | 🔴     | Blocked on a first live deployment (Phase G). |
 
 ### Status legend
 

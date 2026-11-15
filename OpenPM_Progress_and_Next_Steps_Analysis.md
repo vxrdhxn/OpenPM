@@ -17,7 +17,7 @@ All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lin
 What still stands between the project and production:
 
 1. **Most of the system has only been tested with fakes.** Route tests use a mocked database, Redis and S3. The stack has run under Docker Compose, but has never been deployed to Kubernetes, synced by ArgoCD, or monitored by a live Prometheus/Grafana.
-2. **Emails are not retried.** Invite and reset emails now work (F.1, F.2), but the email helper logs a provider failure instead of failing the job, so a lost email is only recovered by asking again (F.3).
+2. **Hardening (Phase H)** and the missing product features (Phase I). Phase F, the broken user flows, is complete.
 
 ---
 
@@ -89,7 +89,6 @@ What still stands between the project and production:
 
 | Area | Current state | Gap |
 | :--- | :--- | :--- |
-| Worker retries | `taskQueue.add` sets no `attempts`/`backoff` | A failed email is never retried. The payload is not validated, and the worker looks up rows without an org filter. |
 | API shutdown | `fastify.close()` only | The pg pool and Redis clients are not closed. |
 | Error responses | Ad-hoc string errors | No shared error handler. Unhandled 500s can echo error messages, and validation errors use a different shape. |
 | Auth | Fixed 24h JWT | No revocation or refresh. Forgot/reset-password only have the global rate limit. Register reveals whether an email is already registered. |
@@ -148,7 +147,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 ### Phase F: Close the broken user flows
 - [x] **F.1 Invite acceptance (done):** an `invite_created` job emails the link (`APP_URL`); invite tokens are stored as SHA-256 hashes (migration 010); public `POST /api/invites/lookup` and `/accept` (rate-limited, token in the body, org/role/email from the invite, `FOR UPDATE` against double accepts); an `/invite` page; activity log entries for created/revoked/accepted. Helm now passes `RESEND_API_KEY`/`EMAIL_FROM_ADDRESS` to the worker (it never did, so no email could be sent in Kubernetes). The frontend proxy no longer redirects signed-out users away from `/invite`, `/forgot-password` and `/reset-password`. Verified on real Postgres via Docker Compose, including migration 010 down/up. Note: failed emails are still not retried (F.3).
 - [x] **F.2 Password-reset email (done):** `forgot-password` replies first (uniform timing), then stores a hashed token (migration 011), invalidates older links and queues `password_reset_requested`; the worker emails `${APP_URL}/reset-password?token=…` only if that token is still valid. `reset-password` validates the token format, matches the hash with `FOR UPDATE`, consumes all of the user's links and records `password_reset` in `activity_log`. Rate limits: forgot 5/min, reset 10/min. Verified on real Postgres via Docker Compose. Also fixed: Vitest 5 collected compiled tests from `dist/`, which would fail CI (build runs before test). Still open: a reset does not end existing sessions (no token revocation, H.3).
-- [ ] **F.3 Worker job policy:** set `attempts` and exponential `backoff` on enqueue, validate payloads, and scope worker queries by `org_id`.
+- [x] **F.3 Worker job policy (done):** every job gets 5 attempts with exponential backoff (30s → 4m) and is trimmed from Redis afterwards. Email failures now fail the job: temporary ones (network, 15s timeout, rate limit, 5xx) are retried; permanent ones (invalid recipient or API key) and malformed payloads fail at once (`UnrecoverableError`). Sends carry a per-job idempotency key, so retries cannot deliver duplicates. Worker lookups are scoped to the job's `org_id`. Unknown job names fail retryably instead of being dropped. Concurrency is 5. `worker_jobs_total` gains `status="retrying"`, so `OpenPMJobsFailing` only fires when a job gives up, and `OpenPMEmailsFailing` needs 5 failures in 15m. See `docs/jobs.md`. Verified live: with Postgres cut off, attempt 1 failed and attempt 2 succeeded 30s later; a malformed job failed after one attempt.
 
 ### Phase G: Verify for real
 - [ ] **G.1** Confirm CI is green on GitHub, then make its jobs required in branch protection. Switch Trivy to blocking (`TRIVY_EXIT_CODE: "1"`) now that advisories are cleared.
@@ -175,12 +174,12 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | **API Backend & RBAC** | 🟢 Solid | Shared error handling, path-param validation (H.1) |
 | **Organizations & Invites** | 🟡 Partial | Member list, role change, removal |
 | **Authentication** | 🟡 Partial | Enumeration fix and session revocation (H.3) |
-| **Background Worker** | 🟡 Functional | Retry/backoff and payload validation (F.3) |
+| **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
 | **Kubernetes & DevOps** | 🟡 Untested live | Cluster install/upgrade/rollback and ArgoCD sync (G.4) |
 | **Observability** | 🟢 Complete | Load into live Prometheus/Grafana (G.3) |
 
 ### Recommended Immediate Action
-1. **F.3:** make email failures fail the job and turn on retries, now that invites and resets depend on email.
-2. **G.1:** confirm CI is green and turn on blocking checks.
-3. **G.2–G.4:** real-database tests, then the full-stack and cluster rehearsal.
+1. **G.1:** confirm CI is green on GitHub (the Vitest `dist/` fix in `8bf0492` was likely needed) and turn on blocking checks.
+2. **G.2:** integration tests against a real Postgres in CI.
+3. **G.3–G.4:** full-stack and cluster rehearsal.

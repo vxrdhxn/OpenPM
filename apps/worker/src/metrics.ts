@@ -13,7 +13,7 @@ export const jobNameLabel = (name: string) => (KNOWN_JOB_NAMES.has(name) ? name 
 
 export const jobsTotal = new client.Counter({
   name: 'worker_jobs_total',
-  help: 'Jobs processed, by outcome (completed or failed)',
+  help: 'Job attempts by outcome: completed, retrying (failed, another attempt scheduled) or failed (gave up)',
   labelNames: ['job_name', 'status'],
 });
 

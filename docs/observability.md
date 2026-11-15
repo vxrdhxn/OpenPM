@@ -145,8 +145,8 @@ file directly. Route notifications with Alertmanager on the `severity` label: `c
 | `OpenPMQueueLagHigh` | warning | The oldest waiting job is over 1 minute old for 5 minutes |
 | `OpenPMQueueStalled` | critical | The oldest waiting job is over 10 minutes old for 5 minutes |
 | `OpenPMWorkerNotProcessing` | critical | Jobs are waiting but none has completed or failed in 10 minutes |
-| `OpenPMJobsFailing` | warning | Any job failed in the last 15 minutes. Jobs are enqueued without retries, so a failure is a lost notification. |
-| `OpenPMEmailsFailing` | warning | Any email failed to send in the last 15 minutes |
+| `OpenPMJobsFailing` | warning | A job gave up in the last 15 minutes (retries exhausted, or a permanent error): a lost notification. Attempts that will be retried don't count; see [jobs.md](jobs.md). |
+| `OpenPMEmailsFailing` | warning | 5 or more failed send attempts in 15 minutes: the provider or `RESEND_API_KEY` is broken |
 
 Three tests keep them honest, all run by CI:
 

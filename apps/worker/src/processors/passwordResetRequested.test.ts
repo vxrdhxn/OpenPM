@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Job } from 'bullmq';
+import { UnrecoverableError, type Job } from 'bullmq';
 import type { Logger } from '../lib/logger';
 
 const { query, sendEmailNotification } = vi.hoisted(() => ({ query: vi.fn(), sendEmailNotification: vi.fn() }));
@@ -58,11 +58,10 @@ describe('processPasswordResetRequested', () => {
     expect(sendEmailNotification).not.toHaveBeenCalled();
   });
 
-  it('completes a malformed job without retrying or querying', async () => {
-    await processPasswordResetRequested(job({ token: TOKEN }), asLogger(log));
+  it('fails a malformed job without retrying or querying', async () => {
+    await expect(processPasswordResetRequested(job({ token: TOKEN }), asLogger(log))).rejects.toBeInstanceOf(UnrecoverableError);
 
     expect(query).not.toHaveBeenCalled();
-    expect(log.error).toHaveBeenCalled();
   });
 
   it('lets database errors propagate so BullMQ records the failure', async () => {

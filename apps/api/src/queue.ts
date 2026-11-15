@@ -1,5 +1,21 @@
-import { Queue } from 'bullmq';
+import { Queue, type JobsOptions } from 'bullmq';
 import { config } from './config';
+
+/**
+ * Retry policy for every background job (see docs/jobs.md). A failed attempt is retried after 30s,
+ * 1m, 2m and 4m: five attempts over about 7.5 minutes, which rides out a provider blip or a short
+ * Redis/Postgres outage while staying well inside the shortest link lifetime (password reset, 1h).
+ * Jobs whose payload can never succeed fail at once (the worker throws UnrecoverableError).
+ *
+ * Finished jobs are trimmed so Redis doesn't grow forever. Jobs that carry a token override these
+ * and are removed as soon as they complete.
+ */
+export const DEFAULT_JOB_OPTIONS: JobsOptions = {
+  attempts: 5,
+  backoff: { type: 'exponential', delay: 30_000 },
+  removeOnComplete: { age: 24 * 60 * 60, count: 1000 },
+  removeOnFail: { age: 7 * 24 * 60 * 60 },
+};
 
 /**
  * The background-job queue the worker consumes (`apps/worker`). One shared, lazily created handle per
@@ -8,6 +24,9 @@ import { config } from './config';
 let queue: Queue | null = null;
 
 export function getJobQueue(): Queue {
-  queue ??= new Queue('tasks', { connection: { url: config.REDIS_URL } });
+  queue ??= new Queue('tasks', {
+    connection: { url: config.REDIS_URL },
+    defaultJobOptions: DEFAULT_JOB_OPTIONS,
+  });
   return queue;
 }

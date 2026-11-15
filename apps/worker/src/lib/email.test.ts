@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { UnrecoverableError } from 'bullmq';
 import type { Logger } from './logger';
 
 const { send, emailInc } = vi.hoisted(() => ({ send: vi.fn(), emailInc: vi.fn() }));
@@ -46,7 +47,17 @@ describe('sendEmailNotification', () => {
       const { sendEmailNotification } = await loadEmail();
       await sendEmailNotification('a@b.com', 'Hi', 'Body', log);
 
-      expect(send).toHaveBeenCalledWith({ from: 'no-reply@openpm.test', to: ['a@b.com'], subject: 'Hi', text: 'Body' });
+      expect(send).toHaveBeenCalledWith({ from: 'no-reply@openpm.test', to: ['a@b.com'], subject: 'Hi', text: 'Body' }, undefined);
+    });
+
+    it('passes the idempotency key so a retried job cannot send a duplicate', async () => {
+      vi.stubEnv('RESEND_API_KEY', 'test-key');
+      send.mockResolvedValue({ data: { id: 'msg-1' }, error: null });
+
+      const { sendEmailNotification } = await loadEmail();
+      await sendEmailNotification('a@b.com', 'Hi', 'Body', fakeLog().log, { idempotencyKey: 'openpm/task_created/7/123' });
+
+      expect(send.mock.calls[0]![1]).toEqual({ idempotencyKey: 'openpm/task_created/7/123' });
     });
 
     it('logs only the recipient domain and the message id on success', async () => {
@@ -63,30 +74,61 @@ describe('sendEmailNotification', () => {
       expect(all()).not.toContain('secret body');
     });
 
-    it('logs a provider error (with domain only) without throwing', async () => {
+    it('fails permanently (no retry) when the provider rejects the message, logging the domain only', async () => {
       vi.stubEnv('RESEND_API_KEY', 'test-key');
-      send.mockResolvedValueOnce({ data: null, error: { message: 'invalid recipient' } });
+      send.mockResolvedValueOnce({ data: null, error: { message: 'invalid recipient', name: 'validation_error', statusCode: 422 } });
       const { log, calls, all } = fakeLog();
 
       const { sendEmailNotification } = await loadEmail();
-      await expect(sendEmailNotification(ADDRESS, SUBJECT, BODY, log)).resolves.toBeUndefined();
+      await expect(sendEmailNotification(ADDRESS, SUBJECT, BODY, log)).rejects.toBeInstanceOf(UnrecoverableError);
 
       expect(calls).toHaveLength(1);
       expect(calls[0]).toMatchObject({ level: 'error', msg: 'Email provider rejected the message' });
-      expect(calls[0]!.fields).toMatchObject({ to_domain: 'example.org', err: { message: 'invalid recipient' } });
+      expect(calls[0]!.fields).toMatchObject({ to_domain: 'example.org', retryable: false, err: { message: 'invalid recipient' } });
       expect(all()).not.toContain('someone.private');
     });
 
-    it('logs a network failure (with domain only) without throwing', async () => {
+    it.each([
+      ['rate_limit_exceeded', 429],
+      ['internal_server_error', 500],
+      ['application_error', null],
+    ])('throws a retryable error for a temporary provider error (%s)', async (name, statusCode) => {
+      vi.stubEnv('RESEND_API_KEY', 'test-key');
+      send.mockResolvedValueOnce({ data: null, error: { message: 'try later', name, statusCode } });
+
+      const { sendEmailNotification } = await loadEmail();
+      const err = await sendEmailNotification(ADDRESS, SUBJECT, BODY, fakeLog().log).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(Error);
+      expect(err).not.toBeInstanceOf(UnrecoverableError);
+    });
+
+    it('throws a retryable error on a network failure, logging the domain only', async () => {
       vi.stubEnv('RESEND_API_KEY', 'test-key');
       send.mockRejectedValueOnce(new Error('network'));
       const { log, calls, all } = fakeLog();
 
       const { sendEmailNotification } = await loadEmail();
-      await expect(sendEmailNotification(ADDRESS, SUBJECT, BODY, log)).resolves.toBeUndefined();
+      const err = await sendEmailNotification(ADDRESS, SUBJECT, BODY, log).catch((e: unknown) => e);
 
+      expect(err).toBeInstanceOf(Error);
+      expect(err).not.toBeInstanceOf(UnrecoverableError);
       expect(calls[0]).toMatchObject({ level: 'error', msg: 'Failed to send email via Resend' });
       expect(all()).not.toContain('someone.private');
+    });
+
+    it('gives up on a provider call that hangs, with a retryable error', async () => {
+      vi.stubEnv('RESEND_API_KEY', 'test-key');
+      vi.useFakeTimers();
+      send.mockReturnValueOnce(new Promise(() => {}));
+
+      const { sendEmailNotification, EMAIL_SEND_TIMEOUT_MS } = await loadEmail();
+      const pending = sendEmailNotification(ADDRESS, SUBJECT, BODY, fakeLog().log).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(EMAIL_SEND_TIMEOUT_MS);
+      const err = await pending;
+
+      expect(err).toBeInstanceOf(Error);
+      expect(err).not.toBeInstanceOf(UnrecoverableError);
     });
   });
 
@@ -160,10 +202,10 @@ describe('email result metrics', () => {
     vi.stubEnv('RESEND_API_KEY', 'test-key');
     const { sendEmailNotification } = await loadEmail();
 
-    send.mockResolvedValueOnce({ data: null, error: { message: 'invalid' } });
-    await sendEmailNotification('a@b.com', 's', 'b', fakeLog().log);
+    send.mockResolvedValueOnce({ data: null, error: { message: 'invalid', name: 'validation_error', statusCode: 422 } });
+    await sendEmailNotification('a@b.com', 's', 'b', fakeLog().log).catch(() => undefined);
     send.mockRejectedValueOnce(new Error('network'));
-    await sendEmailNotification('a@b.com', 's', 'b', fakeLog().log);
+    await sendEmailNotification('a@b.com', 's', 'b', fakeLog().log).catch(() => undefined);
 
     expect(resultsRecorded()).toEqual(['failed', 'failed']);
   });

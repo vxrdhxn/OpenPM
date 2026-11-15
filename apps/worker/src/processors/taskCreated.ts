@@ -2,10 +2,18 @@ import { Job } from 'bullmq';
 import { pool } from '../lib/db';
 import { sendEmailNotification } from '../lib/email';
 import { logger, Logger } from '../lib/logger';
+import { jobIdempotencyKey, optionalField, requireFields } from '../lib/jobs';
 
-/** `log` is the per-job logger from handleJob (it already carries job_id and request_id). */
+/**
+ * Email the assignee of a newly created task. `log` is the per-job logger from handleJob (it already
+ * carries job_id and request_id).
+ *
+ * Every lookup is scoped to the job's org_id: a job naming a task or user from another organization
+ * finds nothing and sends nothing.
+ */
 export default async function processTaskCreated(job: Job, log: Logger = logger) {
-  const { task_id, assignee_id } = job.data;
+  const { task_id, org_id } = requireFields(job, ['task_id', 'org_id']);
+  const assignee_id = optionalField(job, 'assignee_id');
 
   // If no assignee, nothing to notify
   if (!assignee_id) {
@@ -15,32 +23,32 @@ export default async function processTaskCreated(job: Job, log: Logger = logger)
 
   const client = await pool.connect();
   try {
-    // Get task details
-    const taskRes = await client.query('SELECT title, project_id FROM tasks WHERE id = $1', [task_id]);
+    const taskRes = await client.query(
+      `SELECT t.title, p.name AS project_name
+         FROM tasks t
+         JOIN projects p ON p.id = t.project_id AND p.org_id = t.org_id
+        WHERE t.id = $1 AND t.org_id = $2`,
+      [task_id, org_id]
+    );
     if (taskRes.rows.length === 0) {
       log.warn({ task_id }, 'Task no longer exists; skipping notification');
       return;
     }
-    const taskTitle = taskRes.rows[0].title;
-    const projectId = taskRes.rows[0].project_id;
+    const { title: taskTitle, project_name: projName } = taskRes.rows[0];
 
-    // Get assignee email
-    const userRes = await client.query('SELECT name, email FROM users WHERE id = $1', [assignee_id]);
+    const userRes = await client.query('SELECT name, email FROM users WHERE id = $1 AND org_id = $2', [assignee_id, org_id]);
     if (userRes.rows.length === 0) {
-      log.warn({ task_id, assignee_id }, 'Assignee no longer exists; skipping notification');
+      log.warn({ task_id, assignee_id }, 'Assignee no longer exists in this organization; skipping notification');
       return;
     }
     const { name, email } = userRes.rows[0];
 
-    // Get project name
-    const projRes = await client.query('SELECT name FROM projects WHERE id = $1', [projectId]);
-    const projName = projRes.rows.length > 0 ? projRes.rows[0].name : 'Unknown Project';
-
     await sendEmailNotification(
       email,
-      `You've been assigned a new task: ${taskTitle}`,
+      `You've been assigned a new task: ${String(taskTitle).replace(/[\r\n]+/g, ' ')}`,
       `Hi ${name},\n\nYou have been assigned to "${taskTitle}" in the project "${projName}".\nLog in to OpenPM to view it.`,
-      log
+      log,
+      { idempotencyKey: jobIdempotencyKey(job) }
     );
 
     log.info({ task_id, assignee_id }, 'Processed task_created');

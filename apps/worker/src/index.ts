@@ -16,7 +16,10 @@ const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://localhost:
 });
 redisConnection.on('error', (err) => logger.error({ err }, 'Redis connection error'));
 
-const worker = new Worker('tasks', (job) => handleJob(job), { connection: redisConnection });
+// Jobs are I/O-bound (Postgres, email API), so several run at once per worker. Retries, backoff and
+// payload rules are described in docs/jobs.md.
+const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY) || 5);
+const worker = new Worker('tasks', (job) => handleJob(job), { connection: redisConnection, concurrency });
 
 // Metrics: process-level defaults, queue depth/lag (read from Redis at scrape time), and an HTTP
 // endpoint for Prometheus. A second Queue handle is used only for reading counts.
@@ -38,15 +41,20 @@ worker.on('completed', (job) => {
 
 worker.on('failed', (job, err) => {
   const log = job ? jobLogger(job) : logger;
-  log.error(
-    { err, attempts_made: job?.attemptsMade, max_attempts: job?.opts?.attempts ?? 1 },
-    'Job failed'
-  );
+  // Emitted after BullMQ has counted the attempt, so attemptsMade includes this one.
+  const maxAttempts = job?.opts?.attempts ?? 1;
+  const willRetry = !!job && err?.name !== 'UnrecoverableError' && job.attemptsMade < maxAttempts;
+  const fields = { err, attempts_made: job?.attemptsMade, max_attempts: maxAttempts, will_retry: willRetry };
+  if (willRetry) {
+    log.warn(fields, 'Job attempt failed; will retry');
+  } else {
+    log.error(fields, 'Job failed permanently');
+  }
 });
 
 worker.on('error', (err) => logger.error({ err }, 'Worker error'));
 
-logger.info({ queue: 'tasks' }, 'Worker is running and listening for jobs');
+logger.info({ queue: 'tasks', concurrency }, 'Worker is running and listening for jobs');
 
 // Graceful shutdown
 const gracefulShutdown = async () => {

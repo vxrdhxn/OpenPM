@@ -210,7 +210,46 @@ tests:
               job_name: task_created
             exp_annotations:
               summary: "OpenPM task_created jobs are failing"
-              description: "1 task_created job(s) failed in the last 15 minutes in ns. Search the worker logs for the job_name."
+              description: "1 task_created job(s) gave up in the last 15 minutes in ns. Search the worker logs for \"Job failed permanently\" (docs/jobs.md)."
       - eval_time: 30m
         alertname: OpenPMJobsFailing
         exp_alerts: []
+
+  - name: attempts that will be retried do not raise the jobs alert
+    interval: 1m
+    input_series:
+      - series: 'worker_jobs_total{namespace="ns",job_name="task_created",status="retrying"}'
+        values: '0 0 0 3+0x40'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OpenPMJobsFailing
+        exp_alerts: []
+
+  - name: a single failed email attempt does not alert
+    interval: 1m
+    input_series:
+      - series: 'emails_total{namespace="ns",result="failed"}'
+        values: '0 1+0x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: OpenPMEmailsFailing
+        exp_alerts: []
+
+  - name: sustained email failures alert
+    interval: 1m
+    input_series:
+      - series: 'emails_total{namespace="ns",result="failed"}'
+        values: '0 1 2 3 4 5+0x40'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: OpenPMEmailsFailing
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: OpenPMEmailsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: ns
+            exp_annotations:
+              summary: "OpenPM is failing to send email"
+              description: "5 email(s) failed to send in the last 15 minutes in ns. Check the email provider and RESEND_API_KEY."

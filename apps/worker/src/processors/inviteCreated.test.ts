@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Job } from 'bullmq';
+import { UnrecoverableError, type Job } from 'bullmq';
 import type { Logger } from '../lib/logger';
 
 const { query, sendEmailNotification } = vi.hoisted(() => ({ query: vi.fn(), sendEmailNotification: vi.fn() }));
@@ -85,11 +85,21 @@ describe('processInviteCreated', () => {
     expect(sendEmailNotification).not.toHaveBeenCalled();
   });
 
-  it('completes a malformed job without retrying or querying', async () => {
-    await processInviteCreated(job({ invite_id: 'i1' }), asLogger(log));
+  it('fails a malformed job without retrying or querying', async () => {
+    await expect(processInviteCreated(job({ invite_id: 'i1' }), asLogger(log))).rejects.toBeInstanceOf(UnrecoverableError);
 
     expect(query).not.toHaveBeenCalled();
-    expect(log.error).toHaveBeenCalled();
+  });
+
+  it('passes an idempotency key so a retry cannot send the invite twice', async () => {
+    query.mockResolvedValueOnce(rows([invite()]));
+
+    await processInviteCreated(
+      { ...job({ invite_id: 'i1', org_id: 'o1', token: TOKEN }), timestamp: 99 } as unknown as Job,
+      asLogger(log)
+    );
+
+    expect(sendEmailNotification.mock.calls[0]![4]).toEqual({ idempotencyKey: 'openpm/invite_created/j1/99' });
   });
 
   it('keeps line breaks in the organization name out of the subject', async () => {

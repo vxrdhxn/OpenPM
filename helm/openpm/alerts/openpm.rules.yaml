@@ -186,16 +186,19 @@ groups:
           description: "{{ $labels.namespace }} has waiting jobs and no job has completed or failed in 10 minutes."
 
       - alert: OpenPMJobsFailing
-        # Jobs are enqueued without retries today, so every failure is a lost notification.
+        # status="failed" counts jobs that gave up (retries exhausted or unrecoverable), i.e. lost
+        # notifications. Attempts that will be retried are status="retrying" and do not alert.
         expr: sum by (namespace, job_name) (increase(worker_jobs_total{status="failed"}[15m])) > 0
         labels:
           severity: warning
         annotations:
           summary: "OpenPM {{ $labels.job_name }} jobs are failing"
-          description: "{{ $value | humanize }} {{ $labels.job_name }} job(s) failed in the last 15 minutes in {{ $labels.namespace }}. Search the worker logs for the job_name."
+          description: "{{ $value | humanize }} {{ $labels.job_name }} job(s) gave up in the last 15 minutes in {{ $labels.namespace }}. Search the worker logs for \"Job failed permanently\" (docs/jobs.md)."
 
       - alert: OpenPMEmailsFailing
-        expr: sum by (namespace) (increase(emails_total{result="failed"}[15m])) > 0
+        # Every failed attempt counts, and attempts are retried, so one blip is not worth an alert.
+        # Sustained failures are: the provider or RESEND_API_KEY is broken.
+        expr: sum by (namespace) (increase(emails_total{result="failed"}[15m])) >= 5
         labels:
           severity: warning
         annotations:

@@ -4,6 +4,7 @@ import { sendEmailNotification } from '../lib/email';
 import { logger, Logger } from '../lib/logger';
 import { appUrl } from '../lib/appUrl';
 import { hashToken } from '../lib/tokens';
+import { jobIdempotencyKey, requireFields } from '../lib/jobs';
 
 /** Text that ends up in an email subject must not contain line breaks. */
 const oneLine = (value: string) => value.replace(/[\r\n]+/g, ' ').trim();
@@ -13,13 +14,7 @@ const oneLine = (value: string) => value.replace(/[\r\n]+/g, ' ').trim();
  * is never logged, so the token never reaches the log pipeline; only the email body contains it.
  */
 export default async function processInviteCreated(job: Job, log: Logger = logger) {
-  const { invite_id, org_id, token } = (job.data ?? {}) as Record<string, unknown>;
-
-  // Retrying a malformed job can't fix it, so complete it with an error log instead of throwing.
-  if (typeof invite_id !== 'string' || typeof org_id !== 'string' || typeof token !== 'string') {
-    log.error('Malformed invite_created job; skipping');
-    return;
-  }
+  const { invite_id, org_id, token } = requireFields(job, ['invite_id', 'org_id', 'token']);
 
   const link = `${appUrl()}/invite?token=${encodeURIComponent(token)}`;
 
@@ -58,7 +53,8 @@ export default async function processInviteCreated(job: Job, log: Logger = logge
     `Hi,\n\nYou've been invited to join "${orgName}" on OpenPM as ${invite.role === 'admin' ? 'an admin' : 'a member'}.\n\n` +
       `Accept the invitation and create your account here:\n${link}\n\n` +
       `This link expires on ${expires}. If you weren't expecting this invitation, you can ignore this email.`,
-    log
+    log,
+    { idempotencyKey: jobIdempotencyKey(job) }
   );
 
   log.info({ invite_id }, 'Processed invite_created');

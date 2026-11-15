@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import pino from 'pino';
-import type { Job } from 'bullmq';
+import { UnrecoverableError, type Job } from 'bullmq';
 
 const { processTaskCreated } = vi.hoisted(() => ({ processTaskCreated: vi.fn() }));
 vi.mock('./processors/taskCreated', () => ({ default: processTaskCreated }));
@@ -69,16 +69,15 @@ describe('handleJob', () => {
     expect(lines.find((l) => l.msg === 'Processing job')).toMatchObject({ level: 'info', job_name: 'task_created' });
   });
 
-  it('warns and ignores a job name it has no processor for', async () => {
-    const { lines, base } = capture();
+  it('fails (retryably) a job name it has no processor for, so a newer worker can still run it', async () => {
+    const { base } = capture();
 
-    await expect(handleJob(job('mystery_job'), base)).resolves.toBeUndefined();
+    const err = await handleJob(job('mystery_job'), base).catch((e: unknown) => e);
 
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(UnrecoverableError);
+    expect((err as Error).message).toContain('mystery_job');
     expect(processTaskCreated).not.toHaveBeenCalled();
-    expect(lines.find((l) => l.level === 'warn')).toMatchObject({
-      msg: 'No processor for job name; ignoring',
-      job_name: 'mystery_job',
-    });
   });
 
   it('lets processor errors propagate so BullMQ records the failure', async () => {
@@ -111,7 +110,7 @@ describe('job metrics', () => {
     expect(await observations('task_created')).toBe(1);
   });
 
-  it('counts a failed job, still observes its duration, and rethrows for BullMQ', async () => {
+  it('counts a job that gives up as failed, still observes its duration, and rethrows for BullMQ', async () => {
     processTaskCreated.mockRejectedValue(new Error('db down'));
 
     await expect(handleJob(job('task_created'), capture().base)).rejects.toThrow('db down');
@@ -121,10 +120,33 @@ describe('job metrics', () => {
     expect(await observations('task_created')).toBe(1);
   });
 
-  it('reports an unrecognized job name as "other", never as an arbitrary label value', async () => {
-    await handleJob(job('totally_unknown_job'), capture().base);
+  it('counts a failed attempt that will be retried as retrying, not failed', async () => {
+    processTaskCreated.mockRejectedValue(new Error('provider blip'));
+    const retryable = { ...job('task_created'), attemptsMade: 1, opts: { attempts: 5 } } as unknown as Job;
 
-    expect(await count('other', 'completed')).toBe(1);
+    await expect(handleJob(retryable, capture().base)).rejects.toThrow('provider blip');
+
+    expect(await count('task_created', 'retrying')).toBe(1);
+    expect(await count('task_created', 'failed')).toBe(0);
+  });
+
+  it('counts the last attempt and unrecoverable errors as failed', async () => {
+    processTaskCreated.mockRejectedValueOnce(new Error('still down'));
+    const last = { ...job('task_created'), attemptsMade: 4, opts: { attempts: 5 } } as unknown as Job;
+    await handleJob(last, capture().base).catch(() => undefined);
+
+    processTaskCreated.mockRejectedValueOnce(new UnrecoverableError('malformed'));
+    const first = { ...job('task_created'), attemptsMade: 0, opts: { attempts: 5 } } as unknown as Job;
+    await handleJob(first, capture().base).catch(() => undefined);
+
+    expect(await count('task_created', 'failed')).toBe(2);
+    expect(await count('task_created', 'retrying')).toBe(0);
+  });
+
+  it('reports an unrecognized job name as "other", never as an arbitrary label value', async () => {
+    await handleJob(job('totally_unknown_job'), capture().base).catch(() => undefined);
+
+    expect(await count('other', 'failed')).toBe(1);
     expect(JSON.stringify((await jobsTotal.get()).values)).not.toContain('totally_unknown_job');
   });
 
