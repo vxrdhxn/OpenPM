@@ -41,11 +41,31 @@ gate merges, in **Settings → Branches → Add branch protection rule** (or a r
 - Require a pull request before merging (1 approval if there is more than one maintainer).
 - Require status checks to pass, and require branches to be up to date. Select these checks:
   `Lint, build, test`, `Integration tests (Postgres)`, `Helm chart`, `Secret scan (gitleaks)`,
-  `Image (api)`, `Image (worker)`, `Image (frontend)`.
+  `Image (api)`, `Image (worker)`, `Image (frontend)`, `CodeQL (javascript-typescript)`,
+  `CodeQL (actions)`.
 - Require conversation resolution before merging.
 - Block force pushes and deletions.
 
 A check name only appears in the picker after it has run once on the repository.
+
+## CodeQL (static analysis)
+
+`.github/workflows/codeql.yml` runs on every pull request, on pushes to `main` and weekly (new queries
+also reach unchanged code). It is a separate workflow because uploading results needs
+`security-events: write`, which the main CI does not get.
+
+- **Languages:** `javascript-typescript` (API, worker, frontend; no build needed) and `actions` (the
+  workflows themselves: script injection through untrusted inputs, over-broad permissions, ...).
+- **Queries:** `security-extended` (the default suite plus lower-precision security queries).
+  Build output (`dist/`, `.next/`) is excluded.
+- **Results** appear under **Security → Code scanning**, and on pull requests as annotations.
+
+The CodeQL job fails only if the analysis itself fails, not when it finds something. To block merges
+on findings, add a **code scanning** rule to the `main` ruleset (**Settings → Rules → Rulesets →
+Require code scanning results**, tool CodeQL, e.g. block on *High or higher* security alerts).
+
+To triage a finding: fix it, or dismiss it in the Code scanning UI with a reason (false positive,
+used in tests, won't fix). Do not delete queries or add `paths-ignore` entries to hide one.
 
 ## Secret scanning
 
@@ -84,4 +104,3 @@ On GitHub, every job has passed on every push to `main` since 2026-11-15, includ
   loaded runner could make one flaky.
 - `dist/` currently also contains compiled `*.test.js` files, so images ship them. Excluding tests
   from the build `tsconfig` would slim the images but would stop `tsc` type-checking the tests.
-- CodeQL is not configured.

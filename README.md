@@ -194,10 +194,8 @@ openpm/
 │       │   ├── processors/ # Job handlers
 │       │   └── index.ts    # Worker entrypoint
 │       └── Dockerfile
-├── helm/openpm/            # Kubernetes Helm chart
+├── helm/openpm/            # Kubernetes Helm chart (also the Grafana dashboards and alert rules)
 ├── argocd/                 # ArgoCD GitOps manifests
-├── grafana/                # Grafana dashboard JSON
-├── k6/                     # Load test scripts
 ├── .github/                # CI/CD + Dependabot + Security
 ├── docker-compose.yml      # Local development stack
 ├── .env.example            # Environment variable template
@@ -291,25 +289,24 @@ The API exposes `/metrics` in Prometheus text format:
 - `http_request_duration_seconds` (histogram) - latency by route
 - `http_requests_total` (counter) - request count by method, route, status
 - `active_websocket_connections` (gauge) - current WebSocket connections
-- `bullmq_jobs_queued_total` (counter) - background job queue depth
+- `db_query_duration_seconds`, `cache_bypassed_total`, `auth_failures_total`, ...
 
-### Grafana Dashboard
+The worker exposes job outcomes, durations and queue depth (`worker_jobs_total`, `worker_queue_jobs`, ...).
+The full list, with what each alert means, is in [`docs/observability.md`](docs/observability.md).
 
-Import `grafana/dashboards/openpm.json` for a pre-built dashboard with:
-- Request rate & error rate
-- p50 / p95 / p99 latency
-- Pod count & HPA status
-- WebSocket connections
-- BullMQ queue depth
-- CPU & memory per pod
+### Grafana Dashboards
+
+Two dashboards ship with the Helm chart, in `helm/openpm/dashboards/` (`openpm-api.json`,
+`openpm-worker.json`): request and error rates, latency percentiles, WebSocket connections, database
+latency and pool usage, and job throughput and queue depth. Set `grafana.dashboards.enabled=true` to
+load them through the Grafana sidecar, or import the JSON directly. To try them locally against real
+traffic, use `docker-compose.monitoring.yml` (see `docs/observability.md`).
 
 ### Load Testing
 
-```bash
-k6 run k6/load-test.js
-```
-
-Ramps from 0 → 500 virtual users. Thresholds: p99 < 500ms, error rate < 1%.
+Not implemented yet: there are no load tests or performance baselines. They are planned in Phase 9
+of [`OpenPM_MASTER_ROADMAP.md`](OpenPM_MASTER_ROADMAP.md) (authentication, task-list and
+task-creation load, concurrent WebSockets, worker throughput).
 
 ---
 

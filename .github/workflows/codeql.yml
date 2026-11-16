@@ -1,0 +1,57 @@
+name: CodeQL
+
+# Static analysis for security bugs (injection, XSS, path traversal, SSRF, unsafe workflow patterns,
+# ...). Results appear under Security -> Code scanning; see docs/ci.md for how they gate merges.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1" # weekly, so new queries also run against unchanged code
+
+# Read-only by default; the analyze job may additionally upload results.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # upload SARIF results
+      actions: read # required by CodeQL on private repositories
+    strategy:
+      fail-fast: false
+      matrix:
+        # javascript-typescript: the API, worker and frontend. actions: the workflows themselves
+        # (script injection through untrusted inputs, over-broad permissions, ...).
+        language: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          # Interpreted languages: CodeQL reads the source directly, no build needed.
+          build-mode: none
+          # The default suite plus lower-precision security queries.
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - "**/dist/**"
+              - "**/.next/**"
+              - "**/node_modules/**"
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
