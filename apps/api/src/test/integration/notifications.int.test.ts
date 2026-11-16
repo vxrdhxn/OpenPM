@@ -77,7 +77,8 @@ describe('notifications (real Postgres)', () => {
       // Ada (creator) is mentioned: one "mentioned", no extra "commented".
       expect((await inbox(ada)).map((n) => n.type)).toEqual(['mentioned']);
       expect((await inbox(ada))[0]).toMatchObject({ comment_id: res.json().id, data: { excerpt: '@Ada can you look? Thanks' } });
-      expect((await inbox(bo)).map((n) => n.type)).toEqual(['commented']);
+      // Bo (assignee) also has the earlier task_assigned; exactly one 'commented' for this comment.
+      expect((await inbox(bo)).map((n) => n.type)).toEqual(['commented', 'task_assigned']);
     });
 
     it('notifies only newly mentioned people when a comment is edited', async () => {
