@@ -190,7 +190,7 @@ Review/finalize:
 - [x] Comments. — `task_comments` (migration 015)
 - [x] Attachments.
 - [x] Activity/audit events. — `activity_log`
-- [ ] Notifications.
+- [x] Notifications. — `notifications` + `comment_mentions` (migration 018)
 - [x] Invitations.
 
 ## Integrity
@@ -298,7 +298,7 @@ Actions:
 - [x] Delete own comment. — author, or an admin as moderation
 - [x] Enforce comment ownership. — server-side, scoped to task → project → org
 - [x] Timestamp comments.
-- [ ] Add mentions if supported. — not supported yet (comes with notifications)
+- [x] Add mentions if supported. — `@` autocomplete, `mention_ids` validated against active members
 - [x] Generate comment activity events. — `activity_log` (no text) and live `comment_*` events
 - [x] Sanitize rich text/HTML if supported. — n/a: plain text, rendered as text, never as HTML
 
@@ -489,21 +489,21 @@ Operational controls:
 
 # 15. Notifications
 
-- [ ] Notification model.
-- [ ] In-app notifications.
-- [ ] Mark read.
-- [ ] Mark all read.
+- [x] Notification model. — one row per recipient, written in the triggering transaction (`docs/notifications.md`)
+- [x] In-app notifications. — sidebar badge and `/notifications`
+- [x] Mark read.
+- [x] Mark all read.
 - [ ] Notification preferences.
-- [ ] Real-time delivery.
-- [ ] Tenant isolation.
-- [ ] Retention/cleanup policy.
+- [x] Real-time delivery. — content-free `notification` event; clients fetch their own
+- [x] Tenant isolation. — recipients filtered to active org members in the INSERT; reads scoped to the caller
+- [ ] Retention/cleanup policy. — kept until the task is deleted
 
 Triggers:
 
-- [ ] Assignment. — *partial:* email to the assignee when a task is created with one; not on reassignment, no in-app notification
-- [ ] Mention.
-- [ ] Comment.
-- [ ] Status change.
+- [x] Assignment. — in-app on create and reassignment (plus the email on create)
+- [x] Mention.
+- [x] Comment. — to the task's assignee and creator
+- [x] Status change. — to the task's assignee and creator
 - [ ] Due-date reminder.
 - [ ] Organization invitation.
 - [ ] Project membership change.
@@ -782,7 +782,7 @@ Track:
 - [x] Project CRUD. — route-level and against real Postgres
 - [x] Task CRUD. — route-level and against real Postgres
 - [x] Comments. — `comments.int.test.ts` (real Postgres)
-- [ ] Notifications.
+- [x] Notifications. — `notifications.int.test.ts` (real Postgres)
 - [ ] Redis.
 - [ ] Workers.
 
@@ -1155,7 +1155,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] WebSockets.
 - [x] Real-time task updates.
 - [x] Real-time comments. — `comment_created/updated/deleted` on the org channel
-- [ ] Notifications.
+- [x] Notifications.
 - [x] Redis pub/sub.
 - [x] Reconnection handling.
 
@@ -1306,7 +1306,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Sessions are revocable (H.3): logout, password change and reset end every session, WebSockets included, and each request uses the current role. Register no longer says which field conflicted. Remaining: changing the password does not ask for the current one; register can still be told apart from success without email verification. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
-| Database              | 🟡     | 16 reversible migrations, FKs, indexes and transactions. No notifications or project-member tables. No backups. |
+| Database              | 🟡     | 18 reversible migrations, FKs, indexes and transactions. No project-member tables. No backups. |
 | Organizations         | 🟡     | Create on register; invite, accept, revoke (F.1); member list, role change, remove and leave with rank rules, a last-admin guard and an audit trail (`docs/members.md`). No ownership transfer, reactivation or org deletion; register creates an admin, not an owner. |
 | Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
 | Tasks                 | 🟢     | All core fields and actions, labels, comments, Kanban board with filters, org-wide search, activity log. No archive. |
@@ -1316,7 +1316,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
 | Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. With Redis down the API serves from Postgres, stays ready (`/health` "degraded"), and liveness no longer depends on it (H.2). Not tested against a live outage; job enqueueing during an outage unverified. No eviction policy. |
 | BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
-| Notifications         | ⬜     | Only the assignment email on task creation. |
+| Notifications         | 🟢     | In-app: assignment, mention, comment, status change; badge with live updates over one shared socket; mark read / all read (`docs/notifications.md`). No due-date reminders, preferences or retention policy. |
 | Audit logging         | 🟡     | `activity_log` covers projects, tasks, comments, labels, invites, membership changes and password resets; product activity is readable via `GET /api/activity`. Login events are not recorded, there is no `request_id` column, and there is no admin view of account events. |
 | API hardening         | 🟡     | Body schemas, UUID path params, 1 MB limit, rate limits, helmet, strict CORS, one `{ error }` shape with generic 5xx bodies, 30s request and 10s statement timeouts (H.1). Swagger is dev-only and routes lack response schemas. |
 | Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. CodeQL on TypeScript and workflows (H.4). No threat model, no rotation procedure. |

@@ -83,7 +83,7 @@ What still stands between the project and production:
 | Gap | Detail |
 | :--- | :--- |
 | Member management | Done (I.1), except ownership transfer, reactivation and org deletion. |
-| Notifications | Not started: no table, only the assignment email. (Search, pagination, comments and labels: done, I.2-I.4.) |
+| Product gaps after Phase I | Ownership transfer, reactivation, org deletion; due-date reminders and notification preferences; no browser review of the new UI yet. |
 
 ### 3.2 Hardening (🟡 Medium)
 
@@ -180,7 +180,9 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 - [x] **I.3 Comments (done):** `/api/projects/:projectId/tasks/:taskId/comments` (migration 015). Viewers read, members post, only the author edits (marked edited), the author or an admin deletes. Plain text up to 10,000 characters, rendered as text. Newest-first pagination; live `comment_created/updated/deleted` events applied idempotently in the task dialog; `activity_log` records each change without the text. A removed member's comments stay, marked removed. `docs/comments.md`; `comments.int.test.ts` against Postgres. No mentions yet.
 - [x] **I.4 Labels (done):** org-wide labels (migration 016) with case-insensitive unique names and a fixed color palette; viewers read, members create/rename/recolor, admins delete. `PUT .../tasks/:taskId/labels` replaces a task's set (≤ 20, all from the caller's org, task row locked). Tasks carry labels on the board and in search, and both filter by label. Label changes drop the affected cached boards and publish `labels_changed`. UI: chips on cards, picker in the task dialog, Labels panel in settings, label filter. `docs/labels.md`; `labels.int.test.ts` against Postgres.
 - [x] **I.5 Dashboard (done):** `/dashboard` is the landing page: stat tiles (my open, overdue, due in 7 days, active projects), assigned to me, upcoming deadlines, recently updated, project progress (meter list) and an activity feed. New `GET /api/dashboard` and `GET /api/activity` (product events only, org-scoped, paginated); task and project deletions now log their names. Colors from the dataviz palette, validated against the card surfaces. `docs/dashboard.md`; `dashboard.int.test.ts` against Postgres. Not yet reviewed in a browser.
-- [ ] Next: in-app notifications (with mentions).
+- [x] **I.6 Notifications (done):** notifications for assignment (create/reassign), @mentions, comments and status changes, written in the triggering transaction; never for your own action, never to removed members or other orgs. `@` autocomplete sends validated `mention_ids`; edits notify only new mentions. `/api/notifications` (list, unread count, mark read/all); a content-free live `notification` event, one shared WebSocket for the app, a sidebar badge and a `/notifications` page. Migration 018; `docs/notifications.md`; `notifications.int.test.ts` against Postgres. Not done: due-date reminders, preferences, retention.
+
+**Phase I is complete.** Remaining product gaps: ownership transfer, org deletion, due-date reminders, notification preferences.
 
 ---
 
@@ -189,7 +191,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Notifications (Phase I) |
+| **API Backend & RBAC** | 🟢 Solid | Load tests and failure testing (Phase 9) |
 | **Organizations & Invites** | 🟢 Solid | Ownership transfer, org deletion |
 | **Authentication** | 🟢 Solid | Require the current password to change it; verify-by-email sign-up |
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
