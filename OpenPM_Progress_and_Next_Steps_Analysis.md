@@ -83,7 +83,7 @@ What still stands between the project and production:
 | Gap | Detail |
 | :--- | :--- |
 | Member management | Done (I.1), except ownership transfer, reactivation and org deletion. |
-| Labels, notifications | Not started. There are no tables for labels or notifications. (Search, pagination and comments: done, I.2-I.3.) |
+| Notifications | Not started: no table, only the assignment email. (Search, pagination, comments and labels: done, I.2-I.4.) |
 
 ### 3.2 Hardening (🟡 Medium)
 
@@ -178,7 +178,8 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 - [x] **I.1 Member management (done):** `/api/members` list, role change, remove and leave, with a Members panel in organization settings. You must outrank whom you change (owners may manage owners), cannot grant above your own role, and cannot change yourself; the last admin/owner cannot leave, and the organization row is locked so concurrent changes cannot break that. Removal deactivates the account (migration 013) instead of deleting it, since creators are referenced by NOT NULL keys and the activity log would cascade away: sessions and sockets end, tasks are unassigned, the email is freed for re-invites and the name stays in history. Audited in `activity_log`; rules in `docs/members.md`; `members.int.test.ts` against Postgres. Not done: ownership transfer, reactivation, org deletion.
 - [x] **I.2 Pagination and filtering (done):** keyset pagination (`{ items, next_cursor }`, limit ≤ 100, validated opaque cursors that keep Postgres' microsecond timestamps so no row is skipped) on `GET /api/projects` (name search, status) and a new org-wide `GET /api/tasks` (project, status, priority, assignee me/none/id, due range, text; sort by created/updated/due/priority). The board takes the same filters and is capped at 1000 tasks. Unknown query parameters are a 400. Projects page: search, status filter, Load more; board: filter bar. Migration 014 adds indexes. `docs/pagination.md`; `pagination.int.test.ts` against Postgres. Not measured under load.
 - [x] **I.3 Comments (done):** `/api/projects/:projectId/tasks/:taskId/comments` (migration 015). Viewers read, members post, only the author edits (marked edited), the author or an admin deletes. Plain text up to 10,000 characters, rendered as text. Newest-first pagination; live `comment_created/updated/deleted` events applied idempotently in the task dialog; `activity_log` records each change without the text. A removed member's comments stay, marked removed. `docs/comments.md`; `comments.int.test.ts` against Postgres. No mentions yet.
-- [ ] Next: labels, in-app notifications (with mentions), and a dashboard.
+- [x] **I.4 Labels (done):** org-wide labels (migration 016) with case-insensitive unique names and a fixed color palette; viewers read, members create/rename/recolor, admins delete. `PUT .../tasks/:taskId/labels` replaces a task's set (≤ 20, all from the caller's org, task row locked). Tasks carry labels on the board and in search, and both filter by label. Label changes drop the affected cached boards and publish `labels_changed`. UI: chips on cards, picker in the task dialog, Labels panel in settings, label filter. `docs/labels.md`; `labels.int.test.ts` against Postgres.
+- [ ] Next: in-app notifications (with mentions), and a dashboard.
 
 ---
 
@@ -187,7 +188,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Labels and notifications (Phase I) |
+| **API Backend & RBAC** | 🟢 Solid | Notifications (Phase I) |
 | **Organizations & Invites** | 🟢 Solid | Ownership transfer, org deletion |
 | **Authentication** | 🟢 Solid | Require the current password to change it; verify-by-email sign-up |
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |

@@ -186,7 +186,7 @@ Review/finalize:
 - [x] Tasks/issues.
 - [x] Status.
 - [x] Priority.
-- [ ] Labels/tags.
+- [x] Labels/tags. — `labels` + `task_labels` (migration 016)
 - [x] Comments. — `task_comments` (migration 015)
 - [x] Attachments.
 - [x] Activity/audit events. — `activity_log`
@@ -270,7 +270,7 @@ Core fields:
 - [x] Priority.
 - [x] Assignee.
 - [x] Creator/reporter.
-- [ ] Labels.
+- [x] Labels. — org-wide, palette colors (`docs/labels.md`)
 - [x] Due date.
 - [x] Created timestamp.
 - [x] Updated timestamp.
@@ -284,7 +284,7 @@ Actions:
 - [x] Assign task.
 - [x] Change status.
 - [x] Change priority.
-- [ ] Add/remove labels.
+- [x] Add/remove labels. — `PUT .../tasks/:taskId/labels`
 - [x] Set/clear due date.
 - [ ] Archive/restore if supported.
 - [x] Audit important task actions. — `activity_log` for create/update/delete
@@ -311,7 +311,7 @@ Actions:
 - [x] Filter by status. — projects (`active`/`archived`) and tasks
 - [x] Filter by priority.
 - [x] Filter by assignee. — `me`, `none` or a user id; board filter bar
-- [ ] Filter by label. — labels do not exist yet
+- [x] Filter by label. — `label` on the board and `GET /api/tasks` (any of)
 - [x] Filter by due date. — `due_after` / `due_before`
 - [x] Sort results. — tasks: created, updated, due date (undated last), priority
 - [x] Paginate results. — keyset cursors, `{ items, next_cursor }` (`docs/pagination.md`)
@@ -350,7 +350,7 @@ Actions:
 - [x] Status control. — drag and drop on the board
 - [ ] Priority control.
 - [ ] Assignee control.
-- [ ] Labels.
+- [x] Labels. — chips on cards, picker in the task dialog, Labels panel in settings
 - [ ] Due date.
 - [ ] Description editor.
 - [x] Comments. — Comments section in the task dialog
@@ -1144,9 +1144,9 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [ ] Organizations.
 - [x] Memberships. — list, role change, remove, leave (no ownership transfer yet)
 - [ ] Projects. — *partial:* CRUD/archive done; no project members or settings
-- [ ] Tasks. — *partial:* everything except labels
+- [x] Tasks. — every field, including labels (no archive)
 - [x] Comments.
-- [ ] Labels.
+- [x] Labels.
 - [x] Search/filtering. — projects and tasks; label filter waits for labels
 - [ ] Dashboard.
 
@@ -1306,10 +1306,10 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Sessions are revocable (H.3): logout, password change and reset end every session, WebSockets included, and each request uses the current role. Register no longer says which field conflicted. Remaining: changing the password does not ask for the current one; register can still be told apart from success without email verification. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
-| Database              | 🟡     | 15 reversible migrations, FKs, indexes and transactions. No labels, notifications or project-member tables. No backups. |
+| Database              | 🟡     | 16 reversible migrations, FKs, indexes and transactions. No notifications or project-member tables. No backups. |
 | Organizations         | 🟡     | Create on register; invite, accept, revoke (F.1); member list, role change, remove and leave with rank rules, a last-admin guard and an audit trail (`docs/members.md`). No ownership transfer, reactivation or org deletion; register creates an admin, not an owner. |
 | Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
-| Tasks                 | 🟡     | All core fields and actions, Kanban board, activity log. No labels, no archive. |
+| Tasks                 | 🟢     | All core fields and actions, labels, comments, Kanban board with filters, org-wide search, activity log. No archive. |
 | Comments              | 🟢     | Post, edit (author), delete (author or admin), newest-first pagination, live events, audit without text, plain-text rendering (`docs/comments.md`). No mentions. |
 | Search/filtering      | 🟢     | Keyset pagination on projects and the new org-wide task search; search, status/priority/assignee/due filters and sorting; board filters with a 1000-task cap (`docs/pagination.md`). Not measured under load; no label filter yet. |
 | Dashboard             | ⬜     | |
