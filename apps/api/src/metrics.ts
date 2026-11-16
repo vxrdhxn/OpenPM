@@ -32,7 +32,7 @@ export const activeWebsocketConnections = new client.Gauge({
   help: 'Number of active WebSocket connections',
 });
 
-/** reason: unauthorized | origin | subscription_failed */
+/** reason: unauthorized | origin | subscription_failed | revoked (session ended while connected) */
 export const websocketRejectionsTotal = new client.Counter({
   name: 'websocket_rejections_total',
   help: 'WebSocket connections refused or closed because setup failed',
@@ -44,7 +44,7 @@ export const websocketErrorsTotal = new client.Counter({
   help: 'WebSocket socket-level errors',
 });
 
-/** reason: missing | expired | invalid (bad JWT) | bad_credentials (failed login) */
+/** reason: missing | expired | invalid (bad JWT) | revoked (session ended, H.3) | bad_credentials (failed login) */
 export const authFailuresTotal = new client.Counter({
   name: 'auth_failures_total',
   help: 'Failed authentication attempts',

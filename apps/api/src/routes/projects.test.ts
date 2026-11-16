@@ -1,6 +1,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
+import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 
 vi.mock('../db/client', () => ({
@@ -50,7 +51,7 @@ describe('Project routes', () => {
                 },
             },
         });
-        await app.register(authPlugin);
+        await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
         await app.register(projectRoutes, { prefix: '/projects' });
         await app.ready();
 

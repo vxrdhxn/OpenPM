@@ -22,9 +22,10 @@ vi.mock('../queue', () => ({ getJobQueue: () => ({ add: queueAdd }) }));
 
 import { db } from '../db/client';
 import { hashToken } from '../security/tokens';
+import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 import { authFailuresTotal } from '../metrics';
-import authRoutes from './auth';
+import authRoutes, { REGISTER_CONFLICT } from './auth';
 
 const mockClient = { query: vi.fn(), release: vi.fn() };
 const rows = (r: unknown[] = []) => ({ rows: r, rowCount: r.length });
@@ -37,7 +38,7 @@ describe('Auth routes', () => {
     vi.resetAllMocks();
     app = Fastify();
     await app.register(cookie);
-    await app.register(authPlugin);
+    await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
     await app.register(authRoutes, { prefix: '/auth' });
     await app.ready();
     vi.mocked(db.getClient).mockResolvedValue(mockClient as never);
@@ -70,6 +71,7 @@ describe('Auth routes', () => {
         user_id: 'user-1',
         org_id: 'org-1',
         role: 'admin',
+        tv: 0,
       });
       expect(String(res.headers['set-cookie'])).toMatch(/auth_token=.*HttpOnly/i);
 
@@ -90,6 +92,7 @@ describe('Auth routes', () => {
       const res = await app.inject({ method: 'POST', url: '/auth/register', payload: validRegister });
 
       expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: REGISTER_CONFLICT });
       expect(mockClient.query.mock.calls.map(sqlOf)).toContain('ROLLBACK');
       expect(mockClient.release).toHaveBeenCalled();
     });
@@ -101,7 +104,10 @@ describe('Auth routes', () => {
 
       const res = await app.inject({ method: 'POST', url: '/auth/register', payload: validRegister });
 
+      // Same answer as a taken slug: the response does not reveal that the email is registered.
       expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({ error: REGISTER_CONFLICT });
+      expect(res.body).not.toMatch(/email/i);
     });
 
     it('rejects invalid payloads without touching the database', async () => {
@@ -123,7 +129,7 @@ describe('Auth routes', () => {
     it('issues a token for valid credentials', async () => {
       const hash = await bcrypt.hash('password123', 4);
       vi.mocked(db.query).mockResolvedValue([
-        { id: 'u1', org_id: 'o1', role: 'member', password_hash: hash },
+        { id: 'u1', org_id: 'o1', role: 'member', password_hash: hash, token_version: 7 },
       ]);
 
       const res = await app.inject({
@@ -137,6 +143,7 @@ describe('Auth routes', () => {
         user_id: 'u1',
         org_id: 'o1',
         role: 'member',
+        tv: 7, // the user's current token version, or the session would be rejected as revoked
       });
       expect(vi.mocked(db.query).mock.calls[0]?.[1]).toEqual(['a@b.com']);
     });
@@ -218,10 +225,23 @@ describe('Auth routes', () => {
       expect(anon.statusCode).toBe(401);
     });
 
-    it('logout clears the cookie', async () => {
+    it('logout clears the cookie, even when signed out, without touching the database', async () => {
       const res = await app.inject({ method: 'POST', url: '/auth/logout' });
       expect(res.statusCode).toBe(200);
       expect(String(res.headers['set-cookie'])).toMatch(/auth_token=;/);
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('logout by a signed-in user ends all of their sessions (bumps token_version)', async () => {
+      vi.mocked(db.query).mockResolvedValue([{ token_version: 1 }]);
+      const token = app.jwt.sign({ user_id: 'u1', org_id: 'o1', role: 'viewer', tv: 0 });
+
+      const res = await app.inject({ method: 'POST', url: '/auth/logout', headers: { authorization: `Bearer ${token}` } });
+
+      expect(res.statusCode).toBe(200);
+      const call = vi.mocked(db.query).mock.calls[0]!;
+      expect(sqlOf(call)).toMatch(/^UPDATE users SET token_version = token_version \+ 1 WHERE id = \$1/);
+      expect(call[1]).toEqual(['u1']);
     });
   });
 
@@ -305,6 +325,11 @@ describe('Auth routes', () => {
       expect(sqlOf(lookup)).toContain('FOR UPDATE');
       expect(lookup[1]).toEqual([hashToken(TOKEN)]);
       expect(calls.find((c) => sqlOf(c).startsWith('UPDATE users SET password_hash'))![1]).toEqual(['hashed:newpassword1', 'u1']);
+      // Every existing session ends, in the same transaction as the password change.
+      const sqls = calls.map(sqlOf);
+      const revoke = sqls.findIndex((q) => q.startsWith('UPDATE users SET token_version = token_version + 1'));
+      expect(revoke).toBeGreaterThan(sqls.indexOf('BEGIN'));
+      expect(revoke).toBeLessThan(sqls.indexOf('COMMIT'));
       expect(calls.map(sqlOf)).toContain('DELETE FROM password_reset_tokens WHERE user_id = $1');
       expect(calls.find((c) => sqlOf(c).startsWith('INSERT INTO activity_log'))![1]).toEqual(['o1', 'u1', 'user', 'u1', 'password_reset', '{}']);
       expect(calls.map(sqlOf)).toContain('COMMIT');

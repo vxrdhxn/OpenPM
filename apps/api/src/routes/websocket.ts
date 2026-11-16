@@ -57,9 +57,15 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       return;
     }
 
+    // Token signature/expiry AND the session still being current (not revoked, user still exists).
+    let check;
     try {
-      await request.jwtVerify();
-    } catch {
+      check = await fastify.verifySession(request);
+    } catch (err) {
+      fastify.log.error(err, 'WS session check failed');
+      check = { ok: false as const };
+    }
+    if (!check.ok) {
       websocketRejectionsTotal.inc({ reason: 'unauthorized' });
       socket.close(1008, 'Unauthorized');
       return;
@@ -72,7 +78,7 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     activeWebsocketConnections.inc();
     counted = true;
 
-    const { org_id: orgId, exp } = request.user as { org_id: string; exp?: number };
+    const { org_id: orgId, exp } = request.user;
     const channel = `org:${orgId}:updates`;
 
     // Don't keep serving a session whose token has expired.
@@ -82,11 +88,14 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       expiry.unref();
     }
 
-    // Detect dead peers (e.g. dropped by a load balancer without a FIN).
+    // Detect dead peers (e.g. dropped by a load balancer without a FIN), and end the socket once its
+    // session is revoked (logout, password change/reset): otherwise it would keep receiving the
+    // org's events until the token expires. A failed check (database blip) keeps the socket.
     let alive = true;
     socket.on('pong', () => {
       alive = true;
     });
+    const claims = request.user;
     heartbeat = setInterval(() => {
       if (!alive) {
         socket.terminate();
@@ -94,6 +103,16 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       }
       alive = false;
       socket.ping();
+
+      fastify.isSessionCurrent(claims).then(
+        (current) => {
+          if (!current && !closed) {
+            websocketRejectionsTotal.inc({ reason: 'revoked' });
+            socket.close(1008, 'Session revoked');
+          }
+        },
+        (err) => fastify.log.warn(err, 'WS session re-check failed; keeping the socket')
+      );
     }, heartbeatMs);
     heartbeat.unref();
 

@@ -10,6 +10,7 @@ vi.mock('../cache/redis', () => ({
   },
 }));
 import Fastify from 'fastify';
+import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin, { hasMinRole } from '../plugins/auth';
 import projectRoutes from './projects';
 import taskRoutes from './tasks';
@@ -46,7 +47,7 @@ describe('RBAC & Tenant Isolation Security Suite', () => {
   describe('Route RBAC Security Controls', () => {
     async function buildApp() {
       const app = Fastify();
-      await app.register(authPlugin);
+      await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
       await app.register(projectRoutes, { prefix: '/projects' });
       await app.register(taskRoutes, { prefix: '/projects' });
       await app.register(inviteRoutes, { prefix: '/invites' });

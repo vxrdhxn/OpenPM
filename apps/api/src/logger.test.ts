@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import Fastify, { FastifyRequest, LogController } from 'fastify';
 import cookie from '@fastify/cookie';
 import pino from 'pino';
+import { TRUST_TOKEN_CLAIMS } from './test/auth';
 import authPlugin, { authFailureReason } from './plugins/auth';
 import requestIdPlugin from './plugins/requestId';
 import { REDACT_PATHS, genReqId, loggerOptions } from './logger';
@@ -120,7 +121,7 @@ describe('request context in logs', () => {
     });
     await app.register(cookie); // as in src/app.ts: the JWT plugin reads the auth cookie via it
     await app.register(requestIdPlugin);
-    await app.register(authPlugin);
+    await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
     app.get('/open', async (request: FastifyRequest) => {
       request.log.info('open handler');
       return { ok: true };

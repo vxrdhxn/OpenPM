@@ -14,6 +14,7 @@ vi.mock('../storage', () => ({ getStorage }));
 
 import { db } from '../db/client';
 import { cache } from '../cache/redis';
+import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 import { genReqId } from '../logger';
 import taskRoutes from './tasks';
@@ -34,7 +35,7 @@ describe('Task routes lifecycle', () => {
   beforeEach(async () => {
     vi.resetAllMocks();
     app = Fastify();
-    await app.register(authPlugin);
+    await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
     await app.register(taskRoutes, { prefix: '/projects' });
     await app.ready();
     vi.mocked(db.getClient).mockResolvedValue(mockClient as never);
@@ -328,7 +329,7 @@ describe('Task routes lifecycle', () => {
   describe('job correlation', () => {
     it('hands the request id to the background job so logs can be followed into the worker', async () => {
       const wired = Fastify({ genReqId, logController: new LogController({ requestIdLogLabel: 'request_id' }) }); // same wiring as src/app.ts
-      await wired.register(authPlugin);
+      await wired.register(authPlugin, TRUST_TOKEN_CLAIMS);
       await wired.register(taskRoutes, { prefix: '/projects' });
       await wired.ready();
       mockClient.query.mockImplementation(async (sql: string) => {
@@ -360,7 +361,7 @@ describe('Task routes lifecycle', () => {
 
     beforeEach(async () => {
       strictApp = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
-      await strictApp.register(authPlugin);
+      await strictApp.register(authPlugin, TRUST_TOKEN_CLAIMS);
       await strictApp.register(taskRoutes, { prefix: '/projects' });
       await strictApp.ready();
     });

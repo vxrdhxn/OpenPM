@@ -11,7 +11,8 @@ vi.mock('../cache/redis', () => ({
 import { cache } from '../cache/redis';
 import { config } from '../config';
 import { activeWebsocketConnections, websocketErrorsTotal, websocketRejectionsTotal } from '../metrics';
-import authPlugin from '../plugins/auth';
+import { TRUST_TOKEN_CLAIMS } from '../test/auth';
+import authPlugin, { type AuthPluginOptions } from '../plugins/auth';
 import websocketRoutes from './websocket';
 
 type Handler = (message: unknown, raw: string) => void;
@@ -30,10 +31,10 @@ describe('GET /ws', () => {
   let handlers: Map<string, Handler>;
   let unsubscribe: ReturnType<typeof vi.fn>;
 
-  async function build(heartbeatMs?: number) {
+  async function build(heartbeatMs?: number, authOptions: AuthPluginOptions = TRUST_TOKEN_CLAIMS) {
     app = Fastify();
     await app.register(cookie);
-    await app.register(authPlugin);
+    await app.register(authPlugin, authOptions);
     await app.register(websocket);
     await app.register(websocketRoutes, { heartbeatMs });
     await app.listen({ port: 0, host: '127.0.0.1' });
@@ -80,6 +81,53 @@ describe('GET /ws', () => {
   afterEach(async () => {
     clients.forEach((ws) => ws.terminate());
     await app.close();
+  });
+
+  describe('session revocation', () => {
+    it('refuses a token whose session was revoked', async () => {
+      await build(undefined, { verifySession: async () => null });
+
+      const c = connect({ headers: asCookie(tokenFor()) });
+
+      expect(await c.closed).toMatchObject({ code: 1008, reason: 'Unauthorized' });
+      expect(cache.subscribe).not.toHaveBeenCalled();
+    });
+
+    it('closes an open socket at the next heartbeat once its session is revoked', async () => {
+      let current = true;
+      await build(30, { verifySession: async (claims) => (current ? { role: claims.role } : null) });
+      websocketRejectionsTotal.reset();
+
+      const c = connect({ headers: asCookie(tokenFor()) });
+      await open(c);
+      await tick(80);
+      expect(c.ws.readyState).toBe(WebSocket.OPEN);
+
+      current = false; // e.g. the user logged out on another device
+
+      expect(await c.closed).toMatchObject({ code: 1008, reason: 'Session revoked' });
+      expect(unsubscribe).toHaveBeenCalled();
+      const revoked = (await websocketRejectionsTotal.get()).values.find((v) => v.labels.reason === 'revoked');
+      expect(revoked?.value).toBe(1);
+    });
+
+    it('keeps the socket when the re-check itself fails (database blip)', async () => {
+      let calls = 0;
+      await build(30, {
+        verifySession: async (claims) => {
+          calls += 1;
+          if (calls > 1) throw new Error('db down');
+          return { role: claims.role };
+        },
+      });
+
+      const c = connect({ headers: asCookie(tokenFor()) });
+      await open(c);
+      await tick(150);
+
+      expect(calls).toBeGreaterThan(1);
+      expect(c.ws.readyState).toBe(WebSocket.OPEN);
+    });
   });
 
   describe('authentication', () => {

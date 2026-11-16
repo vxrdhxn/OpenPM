@@ -10,6 +10,7 @@ vi.mock('../storage', () => ({ getStorage }));
 
 import { db } from '../db/client';
 import { config } from '../config';
+import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 import attachmentRoutes from './attachments';
 
@@ -79,7 +80,7 @@ describe('Attachment routes', () => {
     storage.delete.mockResolvedValue(undefined);
 
     app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
-    await app.register(authPlugin);
+    await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
     await app.register(attachmentRoutes, { prefix: '/projects' });
     await app.ready();
   });

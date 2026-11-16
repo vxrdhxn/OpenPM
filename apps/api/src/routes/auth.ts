@@ -3,9 +3,12 @@ import bcrypt from 'bcrypt';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { authFailuresTotal } from '../metrics';
-import { issueSession } from '../plugins/session';
+import { clearSessionCookie, issueSession, revokeSessions } from '../plugins/session';
 import { generateToken, hashToken, TOKEN_PATTERN } from '../security/tokens';
 import { getJobQueue } from '../queue';
+
+export const REGISTER_CONFLICT =
+  'Could not create the account. Try a different organization URL, or sign in if you already have an account.';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // Register: Create Org + User
@@ -66,12 +69,17 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         return { orgId, userId: userRes.rows[0].id };
       });
 
-      const token = issueSession(fastify, reply, { user_id: userId, org_id: orgId, role: 'admin' });
+      const token = issueSession(fastify, reply, { user_id: userId, org_id: orgId, role: 'admin', tv: 0 });
 
       return reply.code(201).send({ token });
     } catch (err: any) {
-      if (err.message === 'SLUG_TAKEN') return reply.code(409).send({ error: 'Organization slug is already taken' });
-      if (err.message === 'EMAIL_TAKEN') return reply.code(409).send({ error: 'Email is already registered' });
+      // One answer for both conflicts, so the response does not say whether an email is registered.
+      // (Registration still fails where it would otherwise succeed; fully hiding that needs a
+      // verify-by-email sign-up. Rate-limited to 10/min per client.)
+      if (err.message === 'SLUG_TAKEN' || err.message === 'EMAIL_TAKEN') {
+        authFailuresTotal.inc({ reason: 'register_conflict' });
+        return reply.code(409).send({ error: REGISTER_CONFLICT });
+      }
       throw err;
     }
   });
@@ -106,7 +114,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(401).send({ error: 'Invalid credentials' });
     };
 
-    const users = await db.query('SELECT id, org_id, role, password_hash FROM users WHERE email = $1', [normalizedEmail]);
+    const users = await db.query('SELECT id, org_id, role, password_hash, token_version FROM users WHERE email = $1', [normalizedEmail]);
 
     if (users.length === 0) {
       return rejectLogin();
@@ -119,26 +127,31 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return rejectLogin();
     }
 
-    const token = issueSession(fastify, reply, { user_id: user.id, org_id: user.org_id, role: user.role });
+    const token = issueSession(fastify, reply, {
+      user_id: user.id,
+      org_id: user.org_id,
+      role: user.role,
+      tv: user.token_version ?? 0,
+    });
 
     return reply.send({ token });
   });
 
-  // Get current user details (Stateless, from JWT)
+  // Current user, from the verified token (role as stored now; see plugins/auth.ts)
   fastify.get('/me', { preValidation: [fastify.authenticate] }, async (request, reply) => {
-    // Decoding JWT provides identity without DB lookup
-    return reply.send({ user: request.user });
+    const { user_id, org_id, role } = request.user;
+    return reply.send({ user: { user_id, org_id, role } });
   });
 
-  // Logout
-  fastify.post('/logout', async (_request, reply) => {
-    reply.setCookie('auth_token', '', {
-      path: '/',
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 0, // Delete immediately
-    });
+  // Logout: clears the cookie and, when the caller is signed in, ends ALL of their sessions (every
+  // device), so a copied or stolen token stops working too. Always succeeds, signed in or not.
+  fastify.post('/logout', async (request, reply) => {
+    const check = await fastify.verifySession(request);
+    if (check.ok) {
+      await revokeSessions(request.user.user_id);
+      request.log.info({ event: 'logout', user_id: request.user.user_id }, 'Sessions revoked on logout');
+    }
+    clearSessionCookie(reply);
     return reply.send({ success: true });
   });
 
@@ -216,6 +229,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         const passwordHash = await bcrypt.hash(password, 12);
 
         await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
+        // Whoever had the old password (or a stolen session) is signed out everywhere.
+        await revokeSessions(userId, client);
         // Consumes this link and any other outstanding ones for the user.
         await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
         await client.query(

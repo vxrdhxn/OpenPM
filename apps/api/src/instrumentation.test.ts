@@ -17,6 +17,7 @@ const { pool } = vi.hoisted(() => ({
 vi.mock('pg', () => ({ Pool: vi.fn().mockImplementation(function () { return pool; }) }));
 
 import { db } from './db/client';
+import { TRUST_TOKEN_CLAIMS } from './test/auth';
 import authPlugin from './plugins/auth';
 import { authFailuresTotal, dbQueryDurationSeconds } from './metrics';
 
@@ -103,7 +104,7 @@ describe('auth failure metrics', () => {
     authFailuresTotal.reset();
     app = Fastify();
     await app.register(cookie);
-    await app.register(authPlugin);
+    await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
     app.get('/secure', { preValidation: app.authenticate }, async () => ({ ok: true }));
     await app.ready();
   });

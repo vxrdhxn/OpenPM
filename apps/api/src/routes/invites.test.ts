@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
+import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 import { hashToken } from '../security/tokens';
 
@@ -34,7 +35,7 @@ describe('Invite routes', () => {
     vi.mocked(db.query).mockReset();
     app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
     await app.register(cookie);
-    await app.register(authPlugin);
+    await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
     await app.register(inviteRoutes, { prefix: '/invites' });
     await app.ready();
 

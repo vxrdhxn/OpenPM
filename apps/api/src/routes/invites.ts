@@ -225,7 +225,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
         await client.query('DELETE FROM organization_invites WHERE id = $1', [invite.id]);
         await logInviteActivity(client, invite.org_id, userId, invite.id, 'accepted', { role: invite.role });
 
-        return { user_id: userId as string, org_id: invite.org_id as string, role: invite.role as string };
+        return { user_id: userId as string, org_id: invite.org_id as string, role: invite.role as string, tv: 0 };
       });
 
       const sessionToken = issueSession(fastify, reply, user);
