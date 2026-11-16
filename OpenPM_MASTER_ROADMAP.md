@@ -252,8 +252,8 @@ Review/finalize:
 - [x] Delete project. — also removes attachment files
 - [ ] Project members.
 - [ ] Project settings.
-- [ ] Project activity. — *partial:* recorded in `activity_log`; no endpoint or UI exposes it
-- [ ] Project statistics.
+- [x] Project activity. — `GET /api/activity?project_id=`
+- [x] Project statistics. — tasks by status per project (`GET /api/dashboard`)
 - [ ] Project-level authorization.
 - [ ] Project empty states.
 - [ ] Project loading/error states.
@@ -336,12 +336,12 @@ Actions:
 
 ## Dashboard
 
-- [ ] Project overview.
-- [ ] Assigned tasks.
-- [ ] Recently updated tasks.
-- [ ] Upcoming deadlines.
-- [ ] Activity summary.
-- [ ] Useful empty states.
+- [x] Project overview. — KPI tiles and a per-project progress meter list (`docs/dashboard.md`)
+- [x] Assigned tasks. — soonest deadline first
+- [x] Recently updated tasks.
+- [x] Upcoming deadlines. — next 14 days, org-wide
+- [x] Activity summary. — `GET /api/activity` feed
+- [x] Useful empty states. — per section, plus per-section loading and error states
 
 ## Task UI
 
@@ -518,7 +518,7 @@ Track important actions:
 - [ ] Organization creation.
 - [x] Membership changes.
 - [x] Role changes.
-- [ ] Project creation/deletion. — *partial:* creation is logged; project deletion is not
+- [x] Project creation/deletion. — deletion logged with the name
 - [x] Task deletion.
 - [ ] Permission changes.
 - [x] Invitation actions. — created/revoked/accepted in `activity_log`
@@ -541,7 +541,7 @@ metadata
 - [x] Tenant isolation enforced. — `org_id` on every row
 - [x] Secrets never stored in metadata.
 - [ ] Retention policy documented.
-- [ ] Audit logs queryable.
+- [ ] Audit logs queryable. — *partial:* product activity via `GET /api/activity`; no admin view of account/membership events
 
 ---
 
@@ -1148,7 +1148,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] Comments.
 - [x] Labels.
 - [x] Search/filtering. — projects and tasks; label filter waits for labels
-- [ ] Dashboard.
+- [x] Dashboard.
 
 ## Phase 3 — Collaboration
 
@@ -1312,12 +1312,12 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Tasks                 | 🟢     | All core fields and actions, labels, comments, Kanban board with filters, org-wide search, activity log. No archive. |
 | Comments              | 🟢     | Post, edit (author), delete (author or admin), newest-first pagination, live events, audit without text, plain-text rendering (`docs/comments.md`). No mentions. |
 | Search/filtering      | 🟢     | Keyset pagination on projects and the new org-wide task search; search, status/priority/assignee/due filters and sorting; board filters with a 1000-task cap (`docs/pagination.md`). Not measured under load; no label filter yet. |
-| Dashboard             | ⬜     | |
+| Dashboard             | 🟢     | Landing page: KPI tiles, my tasks, upcoming deadlines, recently updated, project progress meters and the activity feed, each section loading on its own (`docs/dashboard.md`). Not reviewed in a browser yet. |
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
 | Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. With Redis down the API serves from Postgres, stays ready (`/health` "degraded"), and liveness no longer depends on it (H.2). Not tested against a live outage; job enqueueing during an outage unverified. No eviction policy. |
 | BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
 | Notifications         | ⬜     | Only the assignment email on task creation. |
-| Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
+| Audit logging         | 🟡     | `activity_log` covers projects, tasks, comments, labels, invites, membership changes and password resets; product activity is readable via `GET /api/activity`. Login events are not recorded, there is no `request_id` column, and there is no admin view of account events. |
 | API hardening         | 🟡     | Body schemas, UUID path params, 1 MB limit, rate limits, helmet, strict CORS, one `{ error }` shape with generic 5xx bodies, 30s request and 10s statement timeouts (H.1). Swagger is dev-only and routes lack response schemas. |
 | Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. CodeQL on TypeScript and workflows (H.4). No threat model, no rotation procedure. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
