@@ -26,6 +26,7 @@ import profileRoutes from './routes/profile';
 import inviteRoutes from './routes/invites';
 import memberRoutes from './routes/members';
 import taskSearchRoutes from './routes/taskSearch';
+import commentRoutes from './routes/comments';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -135,6 +136,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   fastify.register(projectRoutes, { prefix: '/api/projects' });
   fastify.register(taskRoutes, { prefix: '/api/projects' }); // /:projectId/tasks
   fastify.register(attachmentRoutes, { prefix: '/api/projects' }); // /:projectId/tasks/:taskId/attachments
+  fastify.register(commentRoutes, { prefix: '/api/projects' }); // /:projectId/tasks/:taskId/comments
   fastify.register(profileRoutes, { prefix: '/api/profile' });
   fastify.register(inviteRoutes, { prefix: '/api/invites' });
   fastify.register(memberRoutes, { prefix: '/api/members' });

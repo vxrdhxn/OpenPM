@@ -281,6 +281,7 @@ export default function KanbanBoard() {
           task={selectedTask}
           projectId={params.id}
           me={me}
+          lastMessage={lastMessage}
           onClose={() => setSelectedTaskId(null)}
         />
       )}

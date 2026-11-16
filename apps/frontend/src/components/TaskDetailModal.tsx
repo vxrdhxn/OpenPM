@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import AttachmentsPanel from './AttachmentsPanel';
+import CommentsPanel from './CommentsPanel';
+import type { CommentEvent } from '@/lib/comments';
 
 export interface TaskSummary {
   id: string;
@@ -23,6 +25,8 @@ interface Props {
   task: TaskSummary;
   projectId: string;
   me: CurrentUser | null;
+  /** The latest live event from the organization channel (comments update from it). */
+  lastMessage?: CommentEvent | null;
   onClose: () => void;
 }
 
@@ -33,9 +37,10 @@ const STATUS_LABELS: Record<string, string> = {
   done: 'Done',
 };
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function TaskDetailModal({ task, projectId, me, onClose }: Props) {
+export default function TaskDetailModal({ task, projectId, me, lastMessage = null, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -131,6 +136,8 @@ export default function TaskDetailModal({ task, projectId, me, onClose }: Props)
             currentUserId={me?.user_id ?? null}
             isAdmin={isAdmin}
           />
+
+          <CommentsPanel projectId={projectId} taskId={task.id} me={me} lastMessage={lastMessage} />
         </div>
       </div>
     </div>
