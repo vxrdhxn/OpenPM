@@ -3,6 +3,15 @@ import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
+import {
+  Conditions,
+  DEFAULT_PAGE_SIZE,
+  decodeCursor,
+  likePattern,
+  paginationQuerySchema,
+  searchQuerySchema,
+  toPage,
+} from '../query/pagination';
 
 const projectRoutes: FastifyPluginAsync = async (fastify) => {
   // All routes in this plugin require authentication
@@ -52,30 +61,53 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(201).send(newProject);
   });
 
-  // GET / (Viewer or higher)
+  // GET / (Viewer or higher): newest first, paginated, optionally searched by name and filtered by status.
+  // Response: { items, next_cursor } (see query/pagination.ts).
   fastify.get('/', {
-    preHandler: fastify.requireRole('viewer')
+    preHandler: fastify.requireRole('viewer'),
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          ...paginationQuerySchema,
+          q: searchQuerySchema,
+          status: { type: 'string', enum: ['active', 'archived'] },
+        },
+        additionalProperties: false,
+      },
+    },
   }, async (request, reply) => {
     const { org_id } = request.user;
-    const cacheKey = `org:${org_id}:projects`;
+    const { limit, cursor, q, status } = request.query as { limit: number; cursor?: string; q?: string; status?: string };
 
-    // Try cache first
-    const cachedProjects = await cache.get(cacheKey);
-    if (cachedProjects) {
-      fastify.log.info('CACHE HIT projects');
-      return reply.send(cachedProjects);
+    // Only the plain first page is cached (it is what the projects page loads); every write clears it.
+    const cacheable = !cursor && !q && !status && limit === DEFAULT_PAGE_SIZE;
+    const cacheKey = `org:${org_id}:projects`;
+    if (cacheable) {
+      const cached = await cache.get(cacheKey);
+      if (cached) return reply.send(cached);
     }
 
-    fastify.log.info('CACHE MISS projects');
-    const projects = await db.query(
-      'SELECT id, name, description, status, created_at FROM projects WHERE org_id = $1 ORDER BY created_at DESC',
-      [org_id]
+    const where = new Conditions().add((p) => `p.org_id = ${p(org_id)}`);
+    if (status) where.add((p) => `p.status = ${p(status)}`);
+    if (q) where.add((p) => `p.name ILIKE ${p(likePattern(q))} ESCAPE '\\'`);
+    if (cursor) {
+      const after = decodeCursor(cursor);
+      where.add((p) => `(p.created_at, p.id) < (${p(after.key)}::timestamptz, ${p(after.id)}::uuid)`);
+    }
+
+    const rows = await db.query(
+      `SELECT p.id, p.name, p.description, p.status, p.created_at, p.created_at::text AS sort_key
+         FROM projects p
+        WHERE ${where.sql()}
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT ${where.param(limit + 1)}`,
+      where.params
     );
+    const page = toPage(rows, limit);
 
-    // Populate cache with TTL of 5 minutes (300 seconds)
-    await cache.set(cacheKey, projects, 300);
-
-    return reply.send(projects);
+    if (cacheable) await cache.set(cacheKey, page, 300); // 5 minutes
+    return reply.send(page);
   });
 
   // GET /:id (Viewer or higher)

@@ -1,30 +1,80 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { buildQuery, type Page } from '@/lib/query';
 import Link from 'next/link';
-import { Plus, FolderKanban, Clock, Loader2 } from 'lucide-react';
+import { Plus, FolderKanban, Clock, Loader2, Search } from 'lucide-react';
+
+interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  status: 'active' | 'archived';
+  created_at: string;
+}
+
+const PAGE_SIZE = 24;
 
 export default function Projects() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState(''); // `search`, debounced
+  const [status, setStatus] = useState<'' | 'active' | 'archived'>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
 
-  const loadProjects = useCallback(
-    () =>
-      api
-        .get('/projects')
-        .then((data) => setProjects(data))
-        .catch((err) => console.error(err))
-        .finally(() => setLoading(false)),
-    []
+  // Only the newest request may update the list: a slow response for an old search must not
+  // overwrite the results of the current one.
+  const requestId = useRef(0);
+
+  // Search as you type, but not on every keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const loadPage = useCallback(
+    (cursor: string | null) => {
+      const id = ++requestId.current;
+      return api
+        .get(`/projects${buildQuery({ q: query, status, limit: PAGE_SIZE, cursor })}`)
+        .then((page: Page<Project>) => {
+          if (id !== requestId.current) return;
+          setProjects((current) => (cursor ? [...current, ...page.items] : page.items));
+          setNextCursor(page.next_cursor);
+          setError('');
+        })
+        .catch((err) => {
+          if (id === requestId.current) setError(err instanceof Error ? err.message : 'Could not load projects');
+        })
+        .finally(() => {
+          if (id !== requestId.current) return;
+          setLoading(false);
+          setLoadingMore(false);
+        });
+    },
+    [query, status]
   );
+
+  const loadProjects = useCallback(() => loadPage(null), [loadPage]);
+
+  const loadMore = () => {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    loadPage(nextCursor);
+  };
 
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
+
+  const filtered = query !== '' || status !== '';
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,9 +105,46 @@ export default function Projects() {
         </button>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          <input
+            type="search"
+            aria-label="Search projects"
+            placeholder="Search projects"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            maxLength={100}
+            className="input-field pl-9"
+          />
+        </div>
+        <select
+          aria-label="Filter by status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as typeof status)}
+          className="input-field sm:w-44"
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+
+      {error && (
+        <div role="alert" className="mb-6 p-3 rounded-lg text-sm bg-red-50 text-red-700">
+          {error}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        </div>
+      ) : projects.length === 0 && filtered ? (
+        <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
+          <Search className="w-12 h-12 text-slate-400 mb-4" />
+          <h3 className="text-lg font-medium">No matching projects</h3>
+          <p className="text-slate-500 mt-1 text-center max-w-sm">Try a different search or status.</p>
         </div>
       ) : projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
@@ -66,6 +153,7 @@ export default function Projects() {
           <p className="text-slate-500 mt-1 text-center max-w-sm">Create your first project to start organizing tasks and collaborating with your team.</p>
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {projects.map((p) => (
             <Link key={p.id} href={`/projects/${p.id}`} className="block group">
@@ -92,6 +180,19 @@ export default function Projects() {
             </Link>
           ))}
         </div>
+        {nextCursor && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
+            >
+              {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
+              Load more
+            </button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Modal for creating project */}

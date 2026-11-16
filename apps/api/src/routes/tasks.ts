@@ -4,6 +4,11 @@ import { withTransaction } from '../db/transaction';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
 import { getJobQueue } from '../queue';
+import { Conditions } from '../query/pagination';
+import { applyTaskFilters, hasTaskFilters, taskFilterQuerySchema, type TaskFilters } from '../query/taskFilters';
+
+/** Most tasks one board response carries (see GET /:projectId/tasks). */
+export const BOARD_TASK_LIMIT = 1000;
 
 // Columns a client may change via PATCH. Everything else (org_id, project_id,
 // created_by, id, ...) is server-controlled and must never be written from a request body.
@@ -105,16 +110,31 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /projects/:projectId/tasks (Viewer or higher)
+  // The board loads every matching task at once (it is grouped by column, not paged). Bounded so one
+  // huge project cannot produce an unbounded response; past the cap the response carries
+  // `X-Truncated: true` and narrowing the filters (or GET /api/tasks, which pages) is the way in.
   fastify.get('/:projectId/tasks', {
-    preHandler: fastify.requireRole('viewer')
+    preHandler: fastify.requireRole('viewer'),
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: taskFilterQuerySchema,
+        additionalProperties: false,
+      },
+    },
   }, async (request, reply) => {
     const { projectId } = request.params as any;
-    const { org_id } = request.user;
+    const { org_id, user_id } = request.user;
+    const filters = request.query as TaskFilters;
 
+    // Only the unfiltered board is cached; every task write clears it.
+    const cacheable = !hasTaskFilters(filters);
     const cacheKey = `org:${org_id}:project:${projectId}:tasks`;
-    const cached = await cache.get(cacheKey);
-    if (cached) {
-      return reply.send(cached);
+    if (cacheable) {
+      const cached = await cache.get(cacheKey);
+      if (cached) {
+        return reply.send(cached);
+      }
     }
 
     // Verify project ownership within tenant boundary
@@ -123,14 +143,23 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'Project not found' });
     }
 
-    const tasks = await db.query(
-      `SELECT t.*, u.name as assignee_name 
-       FROM tasks t 
-       LEFT JOIN users u ON t.assignee_id = u.id 
-       WHERE t.project_id = $1 AND t.org_id = $2 
-       ORDER BY t.created_at ASC`,
-      [projectId, org_id]
+    const where = new Conditions()
+      .add((p) => `t.project_id = ${p(projectId)}`)
+      .add((p) => `t.org_id = ${p(org_id)}`);
+    applyTaskFilters(where, filters, user_id);
+
+    const rows = await db.query(
+      `SELECT t.*, u.name as assignee_name
+       FROM tasks t
+       LEFT JOIN users u ON t.assignee_id = u.id
+       WHERE ${where.sql()}
+       ORDER BY t.created_at ASC, t.id ASC
+       LIMIT ${where.param(BOARD_TASK_LIMIT + 1)}`,
+      where.params
     );
+    const truncated = rows.length > BOARD_TASK_LIMIT;
+    const tasks = truncated ? rows.slice(0, BOARD_TASK_LIMIT) : rows;
+    if (truncated) reply.header('X-Truncated', 'true');
 
     // Group tasks by status for the kanban board
     const grouped = {
@@ -140,7 +169,8 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       done: tasks.filter(t => t.status === 'done')
     };
 
-    await cache.set(cacheKey, grouped, 60); // 60 seconds TTL
+    // Not when truncated: a cache hit could not repeat the X-Truncated header.
+    if (cacheable && !truncated) await cache.set(cacheKey, grouped, 60); // 60 seconds TTL
 
     return reply.send(grouped);
   });

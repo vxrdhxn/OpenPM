@@ -34,7 +34,7 @@ describe('Redis outage (real Postgres)', () => {
 
     const projects = await as('GET', '/api/projects');
     expect(projects.statusCode).toBe(200);
-    expect(projects.json().map((p: { id: string }) => p.id)).toContain(project.id);
+    expect(projects.json().items.map((p: { id: string }) => p.id)).toContain(project.id);
 
     const board = await as('GET', `/api/projects/${project.id}/tasks`);
     expect(board.statusCode).toBe(200);
@@ -53,7 +53,7 @@ describe('Redis outage (real Postgres)', () => {
     const task = await as('POST', `/api/projects/${project.id}/tasks`, { title: 'Created during the outage' });
     expect(task.statusCode).toBe(201);
 
-    const names = (await as('GET', '/api/projects')).json().map((p: { name: string }) => p.name);
+    const names = (await as('GET', '/api/projects')).json().items.map((p: { name: string }) => p.name);
     expect(names).toEqual(expect.arrayContaining(['During the outage', 'Renamed during the outage']));
 
     const board = (await as('GET', `/api/projects/${project.id}/tasks`)).json();

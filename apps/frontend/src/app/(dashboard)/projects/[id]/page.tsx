@@ -7,6 +7,9 @@ import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
 import { Plus, GripVertical, AlertCircle } from 'lucide-react';
 import TaskDetailModal, { CurrentUser } from '@/components/TaskDetailModal';
+import BoardFilters, { EMPTY_BOARD_FILTERS, isFiltering, type BoardFilterValues } from '@/components/BoardFilters';
+import { buildQuery } from '@/lib/query';
+import type { Member } from '@/lib/members';
 
 const COLUMNS = [
   { id: 'todo', title: 'To Do', color: 'bg-slate-200 dark:bg-slate-800' },
@@ -43,13 +46,31 @@ export default function KanbanBoard() {
     api.get('/auth/me').then((data) => setMe(data.user)).catch(() => setMe(null));
   }, []);
 
+  // Filters. The text search is debounced; the selects apply at once.
+  const [filters, setFilters] = useState<BoardFilterValues>(EMPTY_BOARD_FILTERS);
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const [members, setMembers] = useState<Member[]>([]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQ(filters.q.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [filters.q]);
+  useEffect(() => {
+    api.get('/members').then(setMembers).catch(() => setMembers([]));
+  }, []);
+
   // Close the dialog if its task disappeared (adjusting state during render, not in an effect).
   if (selectedTaskId && !selectedTask) setSelectedTaskId(null);
 
   const fetchTasks = useCallback(
     () =>
       api
-        .get(`/projects/${params.id}/tasks`)
+        .get(
+          `/projects/${params.id}/tasks${buildQuery({
+            q: debouncedQ,
+            priority: filters.priority ? [filters.priority] : undefined,
+            assignee: filters.assignee,
+          })}`
+        )
         .then((data) => {
           // API returns grouped tasks
           setTasks({
@@ -60,7 +81,7 @@ export default function KanbanBoard() {
           });
         })
         .catch((e) => console.error(e)),
-    [params.id]
+    [params.id, debouncedQ, filters.priority, filters.assignee]
   );
 
   const fetchProject = useCallback(
@@ -74,8 +95,12 @@ export default function KanbanBoard() {
 
   useEffect(() => {
     fetchProject();
+  }, [fetchProject]);
+
+  // Also re-runs when the filters change (fetchTasks depends on them).
+  useEffect(() => {
     fetchTasks();
-  }, [fetchProject, fetchTasks]);
+  }, [fetchTasks]);
 
   // Handle real-time WebSocket updates
   useEffect(() => {
@@ -174,6 +199,11 @@ export default function KanbanBoard() {
           Add Task
         </button>
       </div>
+
+      <BoardFilters value={filters} onChange={setFilters} members={members} />
+      {isFiltering(filters) && (
+        <p className="px-8 pt-2 text-xs text-slate-500">Showing matching tasks only.</p>
+      )}
 
       <div className="flex-1 overflow-x-auto p-8">
         <DragDropContext onDragEnd={onDragEnd}>

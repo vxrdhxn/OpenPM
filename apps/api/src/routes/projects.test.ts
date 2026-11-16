@@ -69,6 +69,33 @@ describe('Project routes', () => {
         await app.close();
     });
 
+    describe('GET / (list)', () => {
+        const list = (qs = '') =>
+            app.inject({ method: 'GET', url: `/projects${qs}`, headers: { authorization: `Bearer ${token}` } });
+
+        it('caches the plain first page as { items, next_cursor }', async () => {
+            vi.mocked(cache.get).mockResolvedValue(null);
+            vi.mocked(db.query).mockResolvedValue([{ id: 'p1', name: 'A', sort_key: 'k' }]);
+
+            const res = await list();
+
+            expect(res.json()).toEqual({ items: [{ id: 'p1', name: 'A' }], next_cursor: null });
+            expect(cache.set).toHaveBeenCalledWith('org:org-1:projects', res.json(), 300);
+            expect(vi.mocked(db.query).mock.calls[0]![1]).toEqual(['org-1', 51]); // org, limit + 1
+        });
+
+        it('never caches or serves the cache for searches, filters or later pages', async () => {
+            vi.mocked(db.query).mockResolvedValue([]);
+
+            await list('?q=web');
+            await list('?status=archived');
+            await list('?limit=10');
+
+            expect(cache.get).not.toHaveBeenCalled();
+            expect(cache.set).not.toHaveBeenCalled();
+        });
+    });
+
     function patch(payload: Record<string, unknown>) {
         return app.inject({
             method: 'PATCH',

@@ -25,6 +25,7 @@ import websocketRoutes from './routes/websocket';
 import profileRoutes from './routes/profile';
 import inviteRoutes from './routes/invites';
 import memberRoutes from './routes/members';
+import taskSearchRoutes from './routes/taskSearch';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -137,6 +138,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   fastify.register(profileRoutes, { prefix: '/api/profile' });
   fastify.register(inviteRoutes, { prefix: '/api/invites' });
   fastify.register(memberRoutes, { prefix: '/api/members' });
+  fastify.register(taskSearchRoutes, { prefix: '/api/tasks' });
   fastify.register(websocketRoutes);
 
   return fastify;

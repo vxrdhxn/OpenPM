@@ -37,7 +37,7 @@ describe('tenant isolation (real Postgres)', () => {
       const res = await asB('GET', '/api/projects');
 
       expect(res.statusCode).toBe(200);
-      const ids = res.json().map((p: { id: string }) => p.id);
+      const ids = res.json().items.map((p: { id: string }) => p.id);
       expect(ids).toContain(projectB.id);
       expect(ids).not.toContain(projectA.id);
     });
