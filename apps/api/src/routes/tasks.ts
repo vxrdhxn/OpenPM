@@ -30,7 +30,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
   // to another organization's user, whose name then shows on this org's board (and who gets the email).
   async function assertAssigneeInOrg(client: any, assigneeId: string | null | undefined, orgId: string) {
     if (!assigneeId) return;
-    const res = await client.query('SELECT id FROM users WHERE id = $1 AND org_id = $2', [assigneeId, orgId]);
+    const res = await client.query('SELECT id FROM users WHERE id = $1 AND org_id = $2 AND deactivated_at IS NULL', [assigneeId, orgId]);
     if (res.rows.length === 0) {
       throw new Error('INVALID_ASSIGNEE');
     }

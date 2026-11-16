@@ -7,7 +7,7 @@ import { authFailuresTotal } from '../metrics';
 
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';
 
-const ROLE_RANKS: Record<string, number> = {
+export const ROLE_RANKS: Record<string, number> = {
   owner: 4,
   admin: 3,
   member: 2,
@@ -57,7 +57,7 @@ export type SessionVerifier = (claims: SessionClaims) => Promise<{ role: string 
 
 export const databaseSessionVerifier: SessionVerifier = async (claims) => {
   const [user] = await db.query<{ role: string; token_version: number }>(
-    'SELECT role, token_version FROM users WHERE id = $1 AND org_id = $2',
+    'SELECT role, token_version FROM users WHERE id = $1 AND org_id = $2 AND deactivated_at IS NULL',
     [claims.user_id, claims.org_id]
   );
   if (!user || user.token_version !== (claims.tv ?? 0)) return null;

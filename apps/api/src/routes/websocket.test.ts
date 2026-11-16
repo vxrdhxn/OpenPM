@@ -412,13 +412,15 @@ describe('GET /ws', () => {
 
   describe('heartbeat', () => {
     it('keeps a responsive client connected across many intervals', async () => {
-      await build(25);
+      // 100ms, not shorter: a pong must come back within one interval, and on a loaded machine (the
+      // whole monorepo's tests at once, a CI runner) a 25ms window was occasionally missed.
+      await build(100);
       const c = connect({ headers: asCookie(tokenFor()) });
       let closed = false;
       c.ws.on('close', () => (closed = true));
       await open(c);
 
-      await tick(250); // ~10 heartbeats; the ws client answers pings automatically
+      await tick(650); // ~6 heartbeats; the ws client answers pings automatically
 
       expect(closed).toBe(false);
       expect(unsubscribe).not.toHaveBeenCalled();

@@ -114,7 +114,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(401).send({ error: 'Invalid credentials' });
     };
 
-    const users = await db.query('SELECT id, org_id, role, password_hash, token_version FROM users WHERE email = $1', [normalizedEmail]);
+    const users = await db.query('SELECT id, org_id, role, password_hash, token_version FROM users WHERE email = $1 AND deactivated_at IS NULL', [normalizedEmail]);
 
     if (users.length === 0) {
       return rejectLogin();

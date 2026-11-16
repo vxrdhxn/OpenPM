@@ -71,7 +71,7 @@ describe('processTaskCreated', () => {
     expect(taskSql).toContain('t.org_id = $2');
     expect(taskSql).toContain('p.org_id = t.org_id');
     expect(taskParams).toEqual(['t1', 'o1']);
-    expect(query.mock.calls[1]).toEqual(['SELECT name, email FROM users WHERE id = $1 AND org_id = $2', ['u1', 'o1']]);
+    expect(query.mock.calls[1]).toEqual(['SELECT name, email FROM users WHERE id = $1 AND org_id = $2 AND deactivated_at IS NULL', ['u1', 'o1']]);
   });
 
   it('does not send when the task or the assignee is not in the org (or gone), and still releases the client', async () => {

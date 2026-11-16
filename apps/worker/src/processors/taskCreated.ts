@@ -36,7 +36,7 @@ export default async function processTaskCreated(job: Job, log: Logger = logger)
     }
     const { title: taskTitle, project_name: projName } = taskRes.rows[0];
 
-    const userRes = await client.query('SELECT name, email FROM users WHERE id = $1 AND org_id = $2', [assignee_id, org_id]);
+    const userRes = await client.query('SELECT name, email FROM users WHERE id = $1 AND org_id = $2 AND deactivated_at IS NULL', [assignee_id, org_id]);
     if (userRes.rows.length === 0) {
       log.warn({ task_id, assignee_id }, 'Assignee no longer exists in this organization; skipping notification');
       return;

@@ -11,7 +11,7 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
     const { user_id } = request.user;
     
     const users = await db.query(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, created_at FROM users WHERE id = $1 AND deactivated_at IS NULL',
       [user_id]
     );
 
