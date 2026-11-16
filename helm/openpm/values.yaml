@@ -159,14 +159,17 @@ frontend:
     enabled: true
     maxUnavailable: 1
 
-# Ingress Configuration
+# Ingress: a standard networking.k8s.io/v1 Ingress, served by any controller.
+# - className: your IngressClass; empty uses the cluster's default class. (Verified with Traefik in
+#   G.5. ingress-nginx was retired by Kubernetes in March 2026 and no longer gets security fixes.)
+# - /ws carries long-lived WebSockets. The API pings every 30 s, so a proxy idle timeout above that
+#   is enough. Controller-specific settings go in annotations, e.g. for ingress-nginx:
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+#   Do not also set the deprecated kubernetes.io/ingress.class annotation next to className.
 ingress:
   enabled: true
-  className: "nginx"
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  className: ""
+  annotations: {}
   hosts:
     - host: "openpm.local"
       paths:

@@ -18,9 +18,10 @@ spec:
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: openpm-prod
+  # Manual sync on purpose: production changes only when someone syncs a reviewed revision (in the
+  # UI or `argocd app sync openpm-prod`). Automated sync with prune would deploy every commit on main
+  # the moment it lands, and delete whatever a bad commit removes. Dev (openpm-dev.yaml) syncs
+  # automatically. For release pinning, set targetRevision to a tag instead of HEAD.
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
     syncOptions:
       - CreateNamespace=true

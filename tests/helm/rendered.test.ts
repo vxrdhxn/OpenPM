@@ -75,6 +75,15 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       expect(api.readinessProbe.httpGet.path).toBe('/health');
     });
 
+    it('renders a controller-neutral Ingress (no deprecated class annotation)', () => {
+      const ingress = objects.find((o) => o.kind === 'Ingress') as K8sObject & { metadata: { annotations?: Record<string, string> } };
+      expect(ingress).toBeDefined();
+      expect(ingress.metadata.annotations?.['kubernetes.io/ingress.class']).toBeUndefined();
+      expect(ingress.spec.ingressClassName).toBeUndefined(); // the cluster default
+      const paths = ingress.spec.rules[0].http.paths.map((p: { path: string }) => p.path);
+      expect(paths).toEqual(['/', '/api', '/ws']);
+    });
+
     it('gives the frontend no runtime NEXT_PUBLIC_* (they are build-time only)', () => {
       const env = deployment(objects, 'frontend')!.spec.template.spec.containers[0].env ?? [];
       expect(env.map((e: { name: string }) => e.name).filter((n: string) => n.startsWith('NEXT_PUBLIC_'))).toEqual([]);

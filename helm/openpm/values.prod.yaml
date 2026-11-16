@@ -58,12 +58,12 @@ frontend:
 
 ingress:
   enabled: true
+  # Set className to your controller's IngressClass (empty = the cluster default). HTTP->HTTPS
+  # redirects are configured on the controller (e.g. Traefik entryPoint redirection), or with a
+  # controller annotation such as nginx.ingress.kubernetes.io/ssl-redirect: "true".
+  className: ""
   annotations:
-    kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
     - host: "app.openpm.com"
       paths:
