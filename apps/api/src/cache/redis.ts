@@ -55,6 +55,7 @@ export const cache = {
 // A connection in subscriber mode can't run normal commands, so it must be separate from `client`.
 // Created lazily so importing this module doesn't open a second connection until it's needed.
 let hub: RealtimeHub | null = null;
+let hubSubscriber: Redis | null = null;
 
 function getHub(): RealtimeHub {
   if (!hub) {
@@ -64,7 +65,15 @@ function getHub(): RealtimeHub {
       logger.error({ err }, 'Redis subscriber connection error');
     });
     // ioredis re-issues SUBSCRIBE for active channels after a reconnect (autoResubscribe, default on).
+    hubSubscriber = subscriber;
     hub = new RealtimeHub(subscriber);
   }
   return hub;
+}
+
+/** Close the cache/publish client and, if it was opened, the pub/sub subscriber (on shutdown). */
+export async function closeRedis(): Promise<void> {
+  const clients = hubSubscriber ? [client, hubSubscriber] : [client];
+  // QUIT lets pending commands finish; fall back to a hard disconnect if Redis is unreachable.
+  await Promise.all(clients.map((c) => c.quit().catch(() => c.disconnect())));
 }

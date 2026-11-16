@@ -18,10 +18,14 @@ describe('rate limiting (real app wiring)', () => {
       app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: 'nobody@example.com', password: 'x' } });
 
     const codes: number[] = [];
-    for (let i = 0; i < 11; i++) codes.push((await attempt()).statusCode);
+    for (let i = 0; i < 10; i++) codes.push((await attempt()).statusCode);
+    const limited = await attempt();
 
-    expect(codes.slice(0, 10).every((c) => c === 401)).toBe(true);
-    expect(codes[10]).toBe(429);
+    expect(codes.every((c) => c === 401)).toBe(true);
+    expect(limited.statusCode).toBe(429);
+    // Same error shape as every other response (plugins/errors.ts), and a hint for the client.
+    expect(Object.keys(limited.json())).toEqual(['error']);
+    expect(limited.headers['retry-after']).toBeDefined();
   });
 
   it('limits forgot-password to 5 per minute per client', async () => {

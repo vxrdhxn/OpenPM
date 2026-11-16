@@ -14,6 +14,9 @@ const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  // Postgres cancels any statement still running after 10s, so one slow query cannot hold a pool
+  // connection (and the request waiting on it) indefinitely. Migrations use their own pool.
+  statement_timeout: 10_000,
 });
 
 pool.on('error', (err) => {
@@ -56,3 +59,8 @@ export const db = {
     return await pool.connect();
   }
 };
+
+/** Close every pool connection (on shutdown, after the HTTP server has stopped). */
+export async function closeDb(): Promise<void> {
+  await pool.end();
+}

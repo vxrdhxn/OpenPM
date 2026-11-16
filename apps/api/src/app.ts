@@ -12,6 +12,8 @@ import { corsOptions } from './corsOptions';
 import { httpRequestDurationMicroseconds, httpRequestsTotal } from './metrics';
 import { genReqId, loggerOptions } from './logger';
 import requestIdPlugin from './plugins/requestId';
+import errorHandling from './plugins/errors';
+import uuidParams from './plugins/uuidParams';
 import authPlugin from './plugins/auth';
 import healthRoutes from './routes/health';
 import metricsRoutes from './routes/metrics';
@@ -46,12 +48,22 @@ export function buildApp(options: BuildAppOptions = {}) {
     genReqId,
     logController: new LogController({ requestIdLogLabel: 'request_id' }),
     bodyLimit: 1048576, // 1MB request size limit
+    // Time a client gets to send a complete request (headers and body). Node's default is 5 minutes,
+    // which lets slow clients hold connections open (slowloris). Upgraded WebSockets are not
+    // affected. Slow handlers are bounded separately by the database statement_timeout.
+    requestTimeout: 30_000,
     ajv: {
       customOptions: {
         removeAdditional: false,
       },
     },
   });
+
+  // One error shape for every response, and no internal messages in 5xx bodies (plugins/errors.ts).
+  fastify.register(errorHandling);
+
+  // Must come before the routes: rejects non-UUID ids with a 400 (plugins/uuidParams.ts).
+  fastify.register(uuidParams);
 
   // Prometheus request metrics
   fastify.addHook('onRequest', (request, _reply, done) => {

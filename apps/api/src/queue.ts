@@ -30,3 +30,11 @@ export function getJobQueue(): Queue {
   });
   return queue;
 }
+
+/** Close the queue's Redis connection, if one was opened (on shutdown). */
+export async function closeJobQueue(): Promise<void> {
+  if (!queue) return;
+  const q = queue;
+  queue = null;
+  await q.close();
+}

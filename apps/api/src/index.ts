@@ -1,6 +1,10 @@
 import client from 'prom-client';
 import { config } from './config';
 import { buildApp } from './app';
+import { createShutdown } from './shutdown';
+import { closeDb } from './db/client';
+import { closeRedis } from './cache/redis';
+import { closeJobQueue } from './queue';
 
 // Process-level Prometheus metrics (CPU, memory, event loop, ...). Registered once, here, not in
 // buildApp(): tests build several apps in one process.
@@ -8,17 +12,18 @@ client.collectDefaultMetrics();
 
 const fastify = buildApp();
 
-// Graceful Shutdown on SIGTERM
-// WHY: K8s sends SIGTERM before killing pods. Without it: in-flight requests drop.
-// With it: finish current requests, exit cleanly.
-const listeners = ['SIGINT', 'SIGTERM'];
-listeners.forEach((signal) => {
-  process.on(signal, async () => {
-    fastify.log.info(`Received ${signal}. Shutting down gracefully...`);
-    await fastify.close();
-    process.exit(0);
-  });
+// Graceful shutdown. Kubernetes sends SIGTERM before killing a pod: finish in-flight requests, then
+// close the queue, Redis and the database pool so nothing is cut off mid-command (see shutdown.ts).
+const shutdown = createShutdown({
+  app: fastify,
+  resources: { queue: closeJobQueue, redis: closeRedis, database: closeDb },
+  log: fastify.log,
+  exit: (code) => process.exit(code),
 });
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => void shutdown(signal));
+}
 
 const start = async () => {
   try {
