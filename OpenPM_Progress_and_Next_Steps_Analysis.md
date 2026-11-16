@@ -89,10 +89,8 @@ What still stands between the project and production:
 
 | Area | Current state | Gap |
 | :--- | :--- | :--- |
-| API shutdown | `fastify.close()` only | The pg pool and Redis clients are not closed. |
-| Error responses | Ad-hoc string errors | No shared error handler. Unhandled 500s can echo error messages, and validation errors use a different shape. |
 | Auth | Fixed 24h JWT | No revocation or refresh. Forgot/reset-password only have the global rate limit. Register reveals whether an email is already registered. |
-| Input validation | Body schemas | Path params (UUIDs) are not validated; there are no request timeouts. |
+| Input validation | Body and path-param schemas (H.1) | WebSocket payloads are not validated. |
 | Redis outage | Errors logged and counted | A failed cache read fails the request instead of falling back to the database. |
 | Audit log | `activity_log` for project/task changes | Project deletion, auth and membership events are not recorded; there is no `request_id` column and no read endpoint. |
 | Attachments | See `docs/attachments.md` | No malware scanning, no reaper for abandoned pending uploads, no retention or quotas. |
@@ -172,7 +170,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 - [ ] **G.5 Remaining cluster checks:** ArgoCD sync and drift, a real Ingress controller, and HPA with metrics-server. Applying their upstream manifests needs your approval (see the G.4 notes).
 
 ### Phase H: Hardening
-- [ ] **H.1** Close the pg pool and Redis clients on API shutdown; add a shared error handler with a consistent error shape and no leaked messages; validate path params; set request timeouts.
+- [x] **H.1 (done):** `plugins/errors.ts` gives every response the `{ error }` shape (validation, unknown routes, rate limits included); 5xx bodies say only "Internal server error" and the details go to the log. `plugins/uuidParams.ts` requires every `:id`/`:*Id` param to be a UUID, so a malformed id is a 400 instead of a Postgres cast error surfacing as a 500 (authentication still runs first). `requestTimeout` is 30s (Node default 5 min) and the API pool sets a 10s Postgres `statement_timeout`. On SIGTERM the API stops HTTP and WebSockets, then closes the job queue, both Redis clients and the pg pool, logging failures without blocking the rest, with a forced exit at 25s (`shutdown.ts`). Covered by unit tests and a new integration file (`apiErrors.int.test.ts`); green in CI.
 - [ ] **H.2** Let cached reads fall back to the database when Redis is unavailable.
 - [ ] **H.3** Make register responses not reveal existing emails; decide on token revocation.
 - [ ] **H.4** Add CodeQL to CI; remove the README's reference to the missing k6 script, or add the script.
@@ -187,7 +185,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Shared error handling, path-param validation (H.1) |
+| **API Backend & RBAC** | 🟢 Solid | Redis fallback for cached reads (H.2) |
 | **Organizations & Invites** | 🟡 Partial | Member list, role change, removal |
 | **Authentication** | 🟡 Partial | Enumeration fix and session revocation (H.3) |
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |

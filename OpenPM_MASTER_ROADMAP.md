@@ -85,18 +85,18 @@ npm test
 - [ ] Keep route handlers thin.
 - [x] Centralize authentication middleware. — `fastify.authenticate` (`plugins/auth.ts`), applied per route plugin
 - [x] Centralize authorization. — `fastify.requireRole` (owner > admin > member > viewer)
-- [ ] Centralize error handling. — *partial:* routes map ad-hoc thrown strings (`NOT_FOUND`, ...) to responses; no shared error handler
-- [ ] Establish consistent API error responses. — *partial:* handlers return `{ error }`, but Fastify validation errors use a different shape
+- [x] Centralize error handling. — `plugins/errors.ts` (H.1); routes still map a few thrown strings (`NOT_FOUND`) locally
+- [x] Establish consistent API error responses. — `{ error }` everywhere, including validation, 404 and 429
 - [x] Add request/correlation IDs. — `X-Request-Id` in/out, propagated to worker jobs
 - [x] Implement graceful shutdown. — API and worker handle SIGTERM/SIGINT
-- [ ] Cleanly close DB/Redis/WebSocket connections. — *partial:* worker closes its pool; the API only calls `fastify.close()` and never ends the pg pool or Redis clients
+- [x] Cleanly close DB/Redis/WebSocket connections. — API: HTTP + WebSockets, then queue, Redis clients and pg pool, 25s deadline (`shutdown.ts`, H.1)
 
 ## TypeScript
 
 - [x] Use strict TypeScript settings where practical. — `strict` plus `noUncheckedIndexedAccess` etc. in `tsconfig.base.json`
 - [ ] Remove unsafe `any` from important paths. — *partial:* route handlers still cast `request.body/params as any`
 - [ ] Avoid duplicated domain types.
-- [ ] Validate external input at runtime. — *partial:* JSON-schema validation on request bodies; path params (UUIDs) are not validated
+- [ ] Validate external input at runtime. — *partial:* request bodies and path params (UUIDs) are validated; WebSocket payloads are not
 - [ ] Validate environment variables at startup. — *partial:* API validates with zod (`config.ts`); the worker reads `process.env` directly
 
 ## Dependencies
@@ -549,12 +549,12 @@ metadata
 
 - [x] Consistent endpoint naming.
 - [x] Consistent HTTP status codes.
-- [ ] Consistent error structure.
+- [x] Consistent error structure. — `{ error }` (H.1)
 - [ ] Consistent pagination.
 - [ ] Consistent filtering.
 - [ ] Consistent validation.
 - [x] Consistent authorization.
-- [ ] Validate path parameters.
+- [x] Validate path parameters. — every `:id`/`:*Id` must be a UUID (`plugins/uuidParams.ts`)
 - [ ] Validate query parameters.
 - [x] Validate request bodies. — JSON schema, unknown keys rejected on PATCH
 - [ ] Validate WebSocket payloads.
@@ -562,8 +562,8 @@ metadata
 - [x] Rate limiting. — global 100/min, auth 10/min
 - [x] Strict CORS. — single configured origin; tested
 - [x] Security headers where appropriate. — `@fastify/helmet`
-- [ ] Request timeouts.
-- [ ] Safe error responses. — *partial:* unhandled 500s use Fastify's default handler, which returns the error message
+- [x] Request timeouts. — 30s `requestTimeout`, 10s Postgres `statement_timeout`
+- [x] Safe error responses. — 5xx bodies are generic; details only in the log
 - [ ] OpenAPI documentation. — *partial:* Swagger UI in non-production only; routes lack response schemas
 - [ ] Authentication documentation.
 - [ ] WebSocket event documentation.
@@ -589,11 +589,11 @@ metadata
 - [x] Security headers.
 - [x] Request limits.
 - [x] Rate limits.
-- [ ] Safe error responses.
+- [x] Safe error responses.
 
 ## Input
 
-- [ ] Validate all external input. — *partial:* bodies yes; path params no
+- [ ] Validate all external input. — *partial:* bodies and path params yes; WebSocket payloads no
 - [x] Prevent injection. — parameterized SQL, whitelisted column names
 - [ ] Sanitize rich text/HTML.
 - [ ] Validate URLs where accepted.
@@ -887,7 +887,7 @@ Audit event
 - [x] Add evidence-based indexes.
 - [x] Cache appropriate reads.
 - [ ] Avoid unnecessary serialization.
-- [ ] Request timeouts.
+- [x] Request timeouts.
 
 ## Frontend
 
@@ -1302,7 +1302,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Area                  | Status | Notes |
 | --------------------- | ------ | ----- |
 | Repository foundation | 🟢     | Install/lint/build/test clean on Node 22. Dependencies upgraded (Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6) with npm audit clean. |
-| Architecture          | 🟡     | Central auth/role checks, request IDs and graceful shutdown are in place. SQL and business logic still sit in route handlers, error handling is ad hoc, and the API never closes its pg pool or Redis clients on shutdown. |
+| Architecture          | 🟡     | Central auth/role checks, request IDs, a shared error handler and a full graceful shutdown (HTTP, queue, Redis, pg pool) are in place (H.1). SQL and business logic still sit in route handlers. |
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Still missing: revocation/refresh (a reset does not end existing sessions), and register still reveals whether an email exists. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
@@ -1318,7 +1318,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
 | Notifications         | ⬜     | Only the assignment email on task creation. |
 | Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
-| API hardening         | 🟡     | Body schemas, 1 MB limit, rate limits, helmet, strict CORS. Path params are not validated, there are no request timeouts, Swagger is dev-only, and 500 responses can echo error messages. |
+| API hardening         | 🟡     | Body schemas, UUID path params, 1 MB limit, rate limits, helmet, strict CORS, one `{ error }` shape with generic 5xx bodies, 30s request and 10s statement timeouts (H.1). Swagger is dev-only and routes lack response schemas. |
 | Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. No CodeQL, no threat model, no rotation procedure. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
 | Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`, `npm ci`. Runtime images ship no npm/yarn/corepack (their bundled deps failed Trivy). Trivy-clean and blocking in CI. No tag strategy. |
