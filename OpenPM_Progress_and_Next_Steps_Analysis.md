@@ -82,7 +82,7 @@ What still stands between the project and production:
 
 | Gap | Detail |
 | :--- | :--- |
-| Member management | No member list, role change, removal, leave, ownership transfer or org deletion. |
+| Member management | Done (I.1), except ownership transfer, reactivation and org deletion. |
 | Comments, labels, notifications, search, pagination | Not started. There are no tables for comments, labels or notifications. List endpoints return every row. |
 
 ### 3.2 Hardening (🟡 Medium)
@@ -175,7 +175,8 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 - [x] **H.4 (done):** `.github/workflows/codeql.yml` analyses `javascript-typescript` and `actions` with `security-extended` queries on PRs, pushes and weekly; green on GitHub. The README no longer claims a k6 script, `grafana/`/`k6/` directories or a nonexistent metric. **Still to do (repo admin):** review the first CodeQL alerts (Security → Code scanning) and add a code-scanning rule so findings block merges (`docs/ci.md`).
 
 ### Phase I: Core product
-- [ ] Member management (list, change role, remove, leave), comments, labels, pagination and filtering, in-app notifications, and a dashboard.
+- [x] **I.1 Member management (done):** `/api/members` list, role change, remove and leave, with a Members panel in organization settings. You must outrank whom you change (owners may manage owners), cannot grant above your own role, and cannot change yourself; the last admin/owner cannot leave, and the organization row is locked so concurrent changes cannot break that. Removal deactivates the account (migration 013) instead of deleting it, since creators are referenced by NOT NULL keys and the activity log would cascade away: sessions and sockets end, tasks are unassigned, the email is freed for re-invites and the name stays in history. Audited in `activity_log`; rules in `docs/members.md`; `members.int.test.ts` against Postgres. Not done: ownership transfer, reactivation, org deletion.
+- [ ] Next: comments, labels, pagination and filtering, in-app notifications, and a dashboard.
 
 ---
 
@@ -184,8 +185,8 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Member management (Phase I) |
-| **Organizations & Invites** | 🟡 Partial | Member list, role change, removal |
+| **API Backend & RBAC** | 🟢 Solid | Pagination and filtering (Phase I) |
+| **Organizations & Invites** | 🟢 Solid | Ownership transfer, org deletion |
 | **Authentication** | 🟢 Solid | Require the current password to change it; verify-by-email sign-up |
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |

@@ -156,7 +156,7 @@ Member
 Viewer
 ```
 
-- [ ] Document permissions.
+- [ ] Document permissions. — *partial:* membership rules in `docs/members.md`; per-route permissions for projects/tasks not yet documented
 - [x] Enforce permissions server-side.
 - [x] Add UI restrictions only as a UX layer, never as the security boundary.
 - [x] Add authorization tests. — `security_rbac.test.ts`
@@ -180,7 +180,7 @@ Review/finalize:
 
 - [x] Users.
 - [x] Organizations.
-- [ ] Organization memberships. — *partial:* no membership table; each user has a single `users.org_id`
+- [ ] Organization memberships. — *partial:* one org per user (`users.org_id`); removal deactivates the row (`deactivated_at`, migration 013). No multi-org membership table
 - [x] Projects.
 - [ ] Project members.
 - [x] Tasks/issues.
@@ -229,17 +229,17 @@ Review/finalize:
 
 - [x] Create organization. — on registration
 - [ ] Organization settings.
-- [ ] Organization member list.
+- [x] Organization member list. — `GET /api/members` + Members panel
 - [x] Invite member. — admin-only; the worker emails a link (`invite_created` job); token stored as a SHA-256 hash
 - [x] Accept invitation. — public `POST /api/invites/lookup` + `/accept` and an `/invite` page; org, role and email come from the invite; verified on real Postgres via Compose
 - [ ] Reject/expire invitation. — *partial:* invites expire after 7 days and can be revoked; no reject flow
-- [ ] Remove member.
-- [ ] Change member role.
+- [x] Remove member. — deactivates the account (sessions end, tasks unassigned, history kept, email freed)
+- [x] Change member role. — must outrank the target, cannot grant above own role (`security/memberPolicy.ts`)
 - [ ] Transfer ownership.
-- [ ] Leave organization.
+- [x] Leave organization. — refused for the last admin/owner; org row locked against races
 - [ ] Delete organization with explicit confirmation.
-- [ ] Audit membership changes.
-- [ ] Test every operation against cross-tenant access.
+- [x] Audit membership changes. — `role_changed`, `removed`, `left` in `activity_log`
+- [x] Test every operation against cross-tenant access. — `members.int.test.ts` (real Postgres)
 
 ---
 
@@ -516,8 +516,8 @@ Track important actions:
 
 - [ ] Authentication/security events.
 - [ ] Organization creation.
-- [ ] Membership changes.
-- [ ] Role changes.
+- [x] Membership changes.
+- [x] Role changes.
 - [ ] Project creation/deletion. — *partial:* creation is logged; project deletion is not
 - [x] Task deletion.
 - [ ] Permission changes.
@@ -1142,7 +1142,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 ## Phase 2 — Core Product
 
 - [ ] Organizations.
-- [ ] Memberships.
+- [x] Memberships. — list, role change, remove, leave (no ownership transfer yet)
 - [ ] Projects. — *partial:* CRUD/archive done; no project members or settings
 - [ ] Tasks. — *partial:* everything except labels
 - [ ] Comments.
@@ -1306,8 +1306,8 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Sessions are revocable (H.3): logout, password change and reset end every session, WebSockets included, and each request uses the current role. Register no longer says which field conflicted. Remaining: changing the password does not ask for the current one; register can still be told apart from success without email verification. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
-| Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications, memberships or project-member tables. No pagination anywhere. No backups. |
-| Organizations         | 🟡     | Create on register; invite by email, accept via link, revoke (F.1). No member list, role change, removal or org deletion. |
+| Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. 13 migrations. No comments, labels, notifications or project-member tables. No pagination anywhere. No backups. |
+| Organizations         | 🟡     | Create on register; invite, accept, revoke (F.1); member list, role change, remove and leave with rank rules, a last-admin guard and an audit trail (`docs/members.md`). No ownership transfer, reactivation or org deletion; register creates an admin, not an owner. |
 | Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
 | Tasks                 | 🟡     | All core fields and actions, Kanban board, activity log. No labels, no archive. |
 | Comments              | ⬜     | No table, routes or UI. |
