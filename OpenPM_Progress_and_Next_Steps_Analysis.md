@@ -17,7 +17,7 @@ All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lin
 What still stands between the project and production:
 
 1. **Kubernetes is only proven on kind.** The chart now installs, upgrades and rolls back on a local cluster (G.4). ArgoCD, an Ingress controller and HPA scaling are still unverified, and there is no real cloud deployment yet.
-2. **Hardening (Phase H)** and the missing product features (Phase I). Phase F, the broken user flows, is complete.
+2. **The missing product features (Phase I).** Phases F (broken user flows) and H (hardening) are complete.
 
 ---
 
@@ -89,13 +89,13 @@ What still stands between the project and production:
 
 | Area | Current state | Gap |
 | :--- | :--- | :--- |
-| Auth | Fixed 24h JWT | No revocation or refresh. Forgot/reset-password only have the global rate limit. Register reveals whether an email is already registered. |
+| Auth | 24h JWT, revocable via token_version (H.3) | Password change does not ask for the current password. Register can still be told apart from success without email verification. |
 | Input validation | Body and path-param schemas (H.1) | WebSocket payloads are not validated. |
 | Audit log | `activity_log` for project/task changes | Project deletion, auth and membership events are not recorded; there is no `request_id` column and no read endpoint. |
 | Attachments | See `docs/attachments.md` | No malware scanning, no reaper for abandoned pending uploads, no retention or quotas. |
 | Helm / ArgoCD | Lint and render checked | `values.yaml` ships dev secrets; no `values.schema.json`; prod auto-syncs from `HEAD`. |
 | Docker | Hardened images | The runtime stage uses `npm install --omit=dev`, not `npm ci`; the worker image has no healthcheck; no tag strategy. |
-| Docs | README, guides | The README refers to `k6/load-test.js`, which does not exist. Permissions, WebSocket events, threat model and backup/rollback are not documented. |
+| Docs | README, guides | Permissions, WebSocket events, threat model and backup/rollback are not documented. |
 
 ### 3.3 Verification debt (🟡 Medium)
 
@@ -171,8 +171,8 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 ### Phase H: Hardening
 - [x] **H.1 (done):** `plugins/errors.ts` gives every response the `{ error }` shape (validation, unknown routes, rate limits included); 5xx bodies say only "Internal server error" and the details go to the log. `plugins/uuidParams.ts` requires every `:id`/`:*Id` param to be a UUID, so a malformed id is a 400 instead of a Postgres cast error surfacing as a 500 (authentication still runs first). `requestTimeout` is 30s (Node default 5 min) and the API pool sets a 10s Postgres `statement_timeout`. On SIGTERM the API stops HTTP and WebSockets, then closes the job queue, both Redis clients and the pg pool, logging failures without blocking the rest, with a forced exit at 25s (`shutdown.ts`). Covered by unit tests and a new integration file (`apiErrors.int.test.ts`); green in CI.
 - [x] **H.2 (done):** the cache client no longer queues commands while disconnected or replays them after reconnecting, and each command has a 250ms deadline, so a Redis outage no longer makes requests hang. `get` misses, `set`/`del`/`publish` never throw (a write no longer fails after its DB commit), invalidations missed during the outage are retried on reconnect, and skips are counted in `cache_bypassed_total`. **Also fixed:** liveness, readiness and startup all used `/health`, which returned 503 without Redis, so an outage would have restarted every API pod. Liveness now uses a new `/health/live`; `/health` returns 200 `degraded` when only Redis is down (503 only without Postgres). Unit tests, an integration file (`redisOutage.int.test.ts`) and a Helm render test; green in CI. Not yet verified against a real Redis outage (Compose or kind), and enqueueing jobs while Redis is down is unverified.
-- [ ] **H.3** Make register responses not reveal existing emails; decide on token revocation.
-- [ ] **H.4** Add CodeQL to CI; remove the README's reference to the missing k6 script, or add the script.
+- [x] **H.3 (done):** sessions are revocable. Migration 012 adds `users.token_version`; session JWTs carry it (`tv`) and every authenticated request compares it with the user's row (scoped to user and org). Logout, password change and password reset bump it, ending every session on every device; a password change re-issues the caller's own cookie. WebSockets check at connect and on every heartbeat and close with `Session revoked`. The same lookup returns the current role, so demotions and deleted users take effect on the next request instead of after 24h. Tokens from before the migration count as version 0. Register answers a taken email and a taken slug with one message. Unit tests, plus `sessions.int.test.ts` against Postgres. Remaining: changing the password does not require the current one, and full non-enumeration on register needs verify-by-email sign-up.
+- [x] **H.4 (done):** `.github/workflows/codeql.yml` analyses `javascript-typescript` and `actions` with `security-extended` queries on PRs, pushes and weekly; green on GitHub. The README no longer claims a k6 script, `grafana/`/`k6/` directories or a nonexistent metric. **Still to do (repo admin):** review the first CodeQL alerts (Security → Code scanning) and add a code-scanning rule so findings block merges (`docs/ci.md`).
 
 ### Phase I: Core product
 - [ ] Member management (list, change role, remove, leave), comments, labels, pagination and filtering, in-app notifications, and a dashboard.
@@ -184,14 +184,14 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Register enumeration and session revocation (H.3) |
+| **API Backend & RBAC** | 🟢 Solid | Member management (Phase I) |
 | **Organizations & Invites** | 🟡 Partial | Member list, role change, removal |
-| **Authentication** | 🟡 Partial | Enumeration fix and session revocation (H.3) |
+| **Authentication** | 🟢 Solid | Require the current password to change it; verify-by-email sign-up |
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
 | **Kubernetes & DevOps** | 🟢 Works on kind | ArgoCD, Ingress and HPA (G.5) |
 | **Observability** | 🟢 Verified locally | Run on a cluster with the Prometheus Operator (G.4) |
 
 ### Recommended Immediate Action
-1. **G.1 (remaining):** enable branch protection on `main` in GitHub settings (see `docs/ci.md`).
+1. **Repo settings (admin):** enable branch protection on `main`, review the first CodeQL alerts and make them merge-blocking (see `docs/ci.md`).
 2. **G.5:** ArgoCD, Ingress controller and HPA on the kind cluster (needs approval to apply upstream manifests).

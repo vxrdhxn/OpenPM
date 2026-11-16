@@ -119,11 +119,11 @@ npm test
 - [x] Keep signing keys/secrets outside source code. — `JWT_SECRET` required in production; a dev-only fallback key remains in `config.ts`
 - [x] Never log tokens. — credentials redacted in logs; tested
 - [x] Define access-token lifetime. — 24h, httpOnly SameSite=strict cookie
-- [ ] Define refresh-token strategy if applicable.
-- [ ] Define token rotation/revocation.
-- [x] Define logout behavior. — clears the cookie; the JWT itself stays valid until expiry (no revocation)
+- [x] Define refresh-token strategy if applicable. — not used: 24h tokens plus server-side revocation (H.3)
+- [x] Define token rotation/revocation. — `users.token_version` (migration 012), checked on every request and WebSocket heartbeat; bumped by logout, password change and reset
+- [x] Define logout behavior. — clears the cookie and ends all of the user's sessions on every device (H.3)
 - [x] Rate-limit authentication endpoints. — login/register 10/min, forgot-password 5/min, reset-password 10/min, invite lookup/accept 20/10 per min
-- [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform (forgot-password replies before doing any work, so timing is uniform too); register still returns "Email is already registered"
+- [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform; register answers a taken email and a taken slug identically (H.3), but still fails where a fresh email would succeed. Fully closing it needs verify-by-email sign-up
 - [ ] Audit security-sensitive authentication events. — *partial:* password resets go to `activity_log`; login failures are only logged and counted (`auth_failures_total`)
 - [x] Add authentication bypass tests. — `security_rbac.test.ts`, `websocket.test.ts`
 
@@ -602,7 +602,7 @@ metadata
 
 ## Tooling
 
-- [ ] CodeQL passes.
+- [x] CodeQL passes. — javascript-typescript + actions, `security-extended`, green on GitHub (H.4); findings are not yet merge-blocking
 - [x] Trivy passes or has documented exceptions. — blocking on HIGH/CRITICAL (fixable) since G.1
 - [x] Secret scanning enabled.
 - [x] Dependency scanning enabled. — Dependabot
@@ -854,7 +854,7 @@ Audit event
 - [x] Build.
 - [ ] Dependency audit.
 - [x] Secret scanning.
-- [ ] CodeQL.
+- [x] CodeQL. — `codeql.yml` (H.4)
 - [x] Container scan. — Trivy, blocking
 - [x] Helm validation.
 
@@ -1089,7 +1089,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Gate 3 — Security
 
-- [ ] CodeQL passes.
+- [x] CodeQL passes. — analysis runs green; open alerts not yet reviewed (Security → Code scanning)
 - [x] Trivy passes or exceptions are documented.
 - [x] Secret scanning passes.
 - [x] No unresolved critical vulnerabilities. — npm audit clean after the Nov 2026 upgrades
@@ -1135,7 +1135,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [ ] Architecture cleanup.
 - [x] Environment validation.
 - [ ] Database schema finalization.
-- [ ] Authentication hardening. — *partial:* no revocation, register leaks existing emails
+- [x] Authentication hardening. — revocation via token_version, current role on every request, uniform register conflicts (H.3)
 - [x] Authorization foundation.
 - [x] Tenant isolation.
 
@@ -1303,7 +1303,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | --------------------- | ------ | ----- |
 | Repository foundation | 🟢     | Install/lint/build/test clean on Node 22. Dependencies upgraded (Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6) with npm audit clean. |
 | Architecture          | 🟡     | Central auth/role checks, request IDs, a shared error handler and a full graceful shutdown (HTTP, queue, Redis, pg pool) are in place (H.1). SQL and business logic still sit in route handlers. |
-| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Still missing: revocation/refresh (a reset does not end existing sessions), and register still reveals whether an email exists. |
+| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Sessions are revocable (H.3): logout, password change and reset end every session, WebSockets included, and each request uses the current role. Register no longer says which field conflicted. Remaining: changing the password does not ask for the current one; register can still be told apart from success without email verification. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
 | Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications, memberships or project-member tables. No pagination anywhere. No backups. |
@@ -1319,15 +1319,15 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Notifications         | ⬜     | Only the assignment email on task creation. |
 | Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
 | API hardening         | 🟡     | Body schemas, UUID path params, 1 MB limit, rate limits, helmet, strict CORS, one `{ error }` shape with generic 5xx bodies, 30s request and 10s statement timeouts (H.1). Swagger is dev-only and routes lack response schemas. |
-| Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. No CodeQL, no threat model, no rotation procedure. |
+| Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. CodeQL on TypeScript and workflows (H.4). No threat model, no rotation procedure. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
 | Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`, `npm ci`. Runtime images ship no npm/yarn/corepack (their bundled deps failed Trivy). Trivy-clean and blocking in CI. No tag strategy. |
 | Kubernetes            | 🟢     | Installed and exercised on kind (G.4): app flow, NetworkPolicy enforcement, upgrades, rollback. Fixed on the way: invalid NetworkPolicies, Postgres crash loop, missing migrations, config changes not rolling pods. Not yet tested: Ingress controller, HPA scaling, a real cloud cluster. |
 | Helm                  | 🟢     | Install, upgrade and rollback tested on kind; CI renders three value sets and checks the objects (`tests/helm`). No `values.schema.json`; `values.yaml` still ships dev secrets. |
 | ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
 | Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Run against live Prometheus/Grafana with real traffic in Compose (G.3): every target up, an alert fired and cleared, every dashboard query checked. No log retention policy. |
-| Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec, no load tests (the k6 script mentioned in the README does not exist). |
-| CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + blocking Trivy; actionlint clean; green on GitHub. No CodeQL, no release pipeline; branch protection documented but not yet enabled. |
+| Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec, no load tests (Phase 9; the README no longer claims a k6 script). |
+| CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + blocking Trivy; actionlint clean; green on GitHub. CodeQL in its own workflow. No release pipeline; branch protection documented but not yet enabled. |
 | Performance           | ⬜     | Indexes and caching only; nothing measured. |
 | Reliability           | ⬜     | No failure testing. |
 | Backup/restore        | ⬜     | |
