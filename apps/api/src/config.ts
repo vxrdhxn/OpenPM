@@ -25,6 +25,8 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'), // true for MinIO
   ATTACHMENT_MAX_BYTES: z.string().regex(/^\d+$/).default('10485760').transform(Number), // 10 MiB
+  // Load tests only: IPs/CIDRs exempt from rate limiting (security/rateLimitAllowlist.ts). Never in production.
+  RATE_LIMIT_ALLOWLIST: z.string().optional(),
 });
 
 const DEV_JWT_SECRET = 'super_secret_development_key_change_me_in_prod_123';
@@ -41,6 +43,7 @@ const BLANK_MEANS_UNSET = new Set([
   'S3_SECRET_ACCESS_KEY',
   'S3_FORCE_PATH_STYLE',
   'ATTACHMENT_MAX_BYTES',
+  'RATE_LIMIT_ALLOWLIST',
 ]);
 
 const env = Object.fromEntries(

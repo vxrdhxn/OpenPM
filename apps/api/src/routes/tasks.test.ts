@@ -18,6 +18,8 @@ import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 import { genReqId } from '../logger';
 import taskRoutes from './tasks';
+import { BOARD_COLUMN_LIMIT } from './tasks';
+import { decodeCursor } from '../query/pagination';
 
 const mockClient = { query: vi.fn(), release: vi.fn() };
 const rows = (r: unknown[] = []) => ({ rows: r, rowCount: r.length });
@@ -127,24 +129,55 @@ describe('Task routes lifecycle', () => {
       expect(db.query).not.toHaveBeenCalled();
     });
 
-    it('groups tasks by status and caches the result on a miss', async () => {
+    it('returns each column with totals and cursors, and caches the unfiltered board', async () => {
       vi.mocked(cache.get).mockResolvedValue(null);
-      vi.mocked(db.query)
-        .mockResolvedValueOnce([{ id: P }])
-        .mockResolvedValueOnce([
-          { id: 'a', status: 'todo' },
-          { id: 'b', status: 'done' },
-          { id: 'c', status: 'todo' },
-        ]);
+      vi.mocked(db.query).mockImplementation((async (sql: string) => {
+        if (sql.startsWith('SELECT id FROM projects')) return [{ id: P }];
+        if (sql.includes('CROSS JOIN LATERAL')) {
+          return [
+            { id: 'a', status: 'todo', sort_key: '2026-01-01 00:00:01+00' },
+            { id: 'c', status: 'todo', sort_key: '2026-01-01 00:00:02+00' },
+            { id: 'b', status: 'done', sort_key: '2026-01-01 00:00:03+00' },
+          ];
+        }
+        if (sql.includes('GROUP BY t.status')) return [{ status: 'todo', n: 2 }, { status: 'done', n: 1 }];
+        if (sql.includes('FROM task_labels')) return [{ task_id: 'a', id: 'l1', name: 'Bug', color: 'red' }];
+        return [];
+      }) as never);
 
       const res = await app.inject({ method: 'GET', url: `/projects/${P}/tasks`, headers: auth('viewer') });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.todo.map((t: { id: string }) => t.id)).toEqual(['a', 'c']);
+      expect(body.todo[0]).toEqual({ id: 'a', status: 'todo', labels: [{ id: 'l1', name: 'Bug', color: 'red' }] });
       expect(body.done).toHaveLength(1);
       expect(body.in_progress).toEqual([]);
+      expect(body.totals).toEqual({ todo: 2, in_progress: 0, in_review: 0, done: 1 });
+      expect(body.cursors).toEqual({ todo: null, in_progress: null, in_review: null, done: null });
       expect(cache.set).toHaveBeenCalledWith(`org:org-1:project:${P}:tasks`, body, 60);
+    });
+
+    it('limits each column and returns a cursor for the rest', async () => {
+      vi.mocked(cache.get).mockResolvedValue(null);
+      const many = Array.from({ length: BOARD_COLUMN_LIMIT + 1 }, (_, i) => ({
+        id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+        status: 'todo',
+        sort_key: `2026-01-01 00:00:00.${String(i).padStart(6, '0')}+00`,
+      }));
+      vi.mocked(db.query).mockImplementation((async (sql: string) => {
+        if (sql.startsWith('SELECT id FROM projects')) return [{ id: P }];
+        if (sql.includes('CROSS JOIN LATERAL')) return many;
+        if (sql.includes('GROUP BY t.status')) return [{ status: 'todo', n: 500 }];
+        return [];
+      }) as never);
+
+      const body = (await app.inject({ method: 'GET', url: `/projects/${P}/tasks`, headers: auth('viewer') })).json();
+
+      expect(body.todo).toHaveLength(BOARD_COLUMN_LIMIT);
+      expect(body.totals.todo).toBe(500);
+      const last = many[BOARD_COLUMN_LIMIT - 1]!;
+      expect(decodeCursor(body.cursors.todo)).toEqual({ key: last.sort_key, id: last.id });
     });
 
     it('returns 404 when the project is not in the caller org', async () => {

@@ -27,6 +27,10 @@ export default function KanbanBoard() {
     todo: [], in_progress: [], in_review: [], done: []
   });
   const [project, setProject] = useState<any>(null);
+  // The board sends each column's first page; these say how many match in all and how to get more.
+  const [totals, setTotals] = useState<Record<string, number>>({});
+  const [cursors, setCursors] = useState<Record<string, string | null>>({});
+  const [loadingColumn, setLoadingColumn] = useState<string | null>(null);
   
   // Create task modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,17 +93,51 @@ export default function KanbanBoard() {
           })}`
         )
         .then((data) => {
-          // API returns grouped tasks
+          // Each column is its first page (see the API's BOARD_COLUMN_LIMIT).
           setTasks({
             todo: data.todo || [],
             in_progress: data.in_progress || [],
             in_review: data.in_review || [],
             done: data.done || []
           });
+          setTotals(data.totals ?? {});
+          setCursors(data.cursors ?? {});
         })
         .catch((e) => console.error(e)),
     [params.id, debouncedQ, filters.priority, filters.assignee, filters.label]
   );
+
+  // "Show more" in one column: the next page of that column from task search, with the same filters.
+  const loadMore = async (column: string) => {
+    const cursor = cursors[column];
+    if (!cursor) return;
+    setLoadingColumn(column);
+    try {
+      const page = await api.get(
+        `/tasks${buildQuery({
+          project_id: params.id,
+          status: [column],
+          q: debouncedQ,
+          priority: filters.priority ? [filters.priority] : undefined,
+          assignee: filters.assignee,
+          label: filters.label ? [filters.label] : undefined,
+          sort: 'created_at',
+          order: 'asc',
+          limit: 100,
+          cursor,
+        })}`
+      );
+      setTasks((prev) => ({
+        ...prev,
+        [column]: [...(prev[column] ?? []), ...page.items.filter((t: any) => !(prev[column] ?? []).some((x) => x.id === t.id))],
+      }));
+      setCursors((prev) => ({ ...prev, [column]: page.next_cursor }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingColumn(null);
+    }
+  };
 
   const fetchProject = useCallback(
     () =>
@@ -170,6 +208,13 @@ export default function KanbanBoard() {
       [source.droppableId]: sourceCol,
       [destination.droppableId]: destCol
     }));
+    if (source.droppableId !== destination.droppableId) {
+      setTotals((prev) => ({
+        ...prev,
+        [source.droppableId]: Math.max(0, (prev[source.droppableId] ?? 1) - 1),
+        [destination.droppableId]: (prev[destination.droppableId] ?? 0) + 1,
+      }));
+    }
 
     // Persist change
     try {
@@ -235,7 +280,7 @@ export default function KanbanBoard() {
             {COLUMNS.map(col => (
               <div key={col.id} className="w-80 shrink-0 flex flex-col max-h-full">
                 <div className={`px-4 py-3 rounded-t-xl font-semibold text-sm ${col.color}`}>
-                  {col.title} <span className="ml-2 opacity-60 text-xs font-normal">{tasks[col.id]?.length || 0}</span>
+                  {col.title} <span className="ml-2 opacity-60 text-xs font-normal">{totals[col.id] ?? tasks[col.id]?.length ?? 0}</span>
                 </div>
                 
                 <Droppable droppableId={col.id}>
@@ -298,6 +343,18 @@ export default function KanbanBoard() {
                         </Draggable>
                       ))}
                       {provided.placeholder}
+                      {cursors[col.id] && (
+                        <button
+                          type="button"
+                          onClick={() => loadMore(col.id)}
+                          disabled={loadingColumn === col.id}
+                          className="w-full mt-1 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-white/60 dark:hover:bg-slate-800 rounded-lg disabled:opacity-50"
+                        >
+                          {loadingColumn === col.id
+                            ? 'Loading...'
+                            : `Show more (${Math.max(0, (totals[col.id] ?? 0) - (tasks[col.id]?.length ?? 0))} more)`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </Droppable>

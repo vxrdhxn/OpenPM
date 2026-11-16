@@ -63,7 +63,7 @@ const taskSearchRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const rows = await db.query(
-      `SELECT t.id, t.project_id, p.name AS project_name, t.title, t.status, t.priority,
+      `SELECT t.id, t.project_id, p.name AS project_name, t.title, t.description, t.status, t.priority,
               t.assignee_id, u.name AS assignee_name, t.due_date, t.created_at, t.updated_at, ${TASK_LABELS_COLUMN},
               (${expr})::text AS sort_key
          FROM tasks t

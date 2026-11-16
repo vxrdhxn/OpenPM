@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import client from 'prom-client';
 import { config } from '../config';
 import { logger } from '../logger';
-import { dbQueryDurationSeconds } from '../metrics';
+import { dbConnectionErrorsTotal, dbQueryDurationSeconds } from '../metrics';
 
 // WHY max 20 connections:
 // PostgreSQL has a default max_connections of 100.
@@ -12,16 +12,22 @@ import { dbQueryDurationSeconds } from '../metrics';
 const pool = new Pool({
   connectionString: config.DATABASE_URL,
   max: 20,
-  idleTimeoutMillis: 30000,
+  // Long enough that a busy pod rarely has to reconnect (each new connection needs a DNS lookup on
+  // the libuv thread pool, which bcrypt also uses; see security/passwords.ts).
+  idleTimeoutMillis: 120_000,
   connectionTimeoutMillis: 2000,
   // Postgres cancels any statement still running after 10s, so one slow query cannot hold a pool
   // connection (and the request waiting on it) indefinitely. Migrations use their own pool.
   statement_timeout: 10_000,
 });
 
+// An idle connection broke (Postgres restarted, failed over, or the network dropped). pg-pool has
+// already discarded it and opens a new one on demand, so this is logged and counted, not fatal.
+// It used to call process.exit(): the Phase 9 failure test showed a 20-second Postgres restart
+// then also killed the API, with every in-flight request and WebSocket (docs/load-testing.md).
 pool.on('error', (err) => {
-  logger.error({ err }, 'Unexpected error on idle pg client');
-  process.exit(-1);
+  dbConnectionErrorsTotal.inc();
+  logger.warn({ err }, 'Idle database connection failed; the pool will reconnect');
 });
 
 // Pool saturation, read at scrape time so it is always current. "waiting" > 0 means requests are

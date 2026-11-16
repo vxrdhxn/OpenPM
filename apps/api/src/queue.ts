@@ -25,7 +25,9 @@ let queue: Queue | null = null;
 
 export function getJobQueue(): Queue {
   queue ??= new Queue('tasks', {
-    connection: { url: config.REDIS_URL },
+    // Fail at once while Redis is down instead of buffering (and hanging the request): see
+    // jobs/enqueue.ts, which also adds a deadline.
+    connection: { url: config.REDIS_URL, enableOfflineQueue: false },
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
   return queue;

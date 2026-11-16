@@ -1,0 +1,11 @@
+# Load-test overlay (docs/load-testing.md). Exempts requests from inside the API container's own
+# network namespace (127.0.0.1) from rate limiting, because k6 is run with
+# `--network container:openpm-api` and every request would otherwise come from one address and be
+# throttled to 100/min. Never use this overlay in production.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d --build
+services:
+  api:
+    environment:
+      - RATE_LIMIT_ALLOWLIST=127.0.0.1
+      - LOG_LEVEL=warn

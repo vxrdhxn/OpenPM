@@ -1,11 +1,11 @@
 import { FastifyPluginAsync } from 'fastify';
-import bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword } from '../security/passwords';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { authFailuresTotal } from '../metrics';
 import { clearSessionCookie, issueSession, revokeSessions } from '../plugins/session';
 import { generateToken, hashToken, TOKEN_PATTERN } from '../security/tokens';
-import { getJobQueue } from '../queue';
+import { enqueue } from '../jobs/enqueue';
 
 export const REGISTER_CONFLICT =
   'Could not create the account. Try a different organization URL, or sign in if you already have an account.';
@@ -51,7 +51,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           throw new Error('EMAIL_TAKEN');
         }
 
-        const passwordHash = await bcrypt.hash(password, 12);
+        const passwordHash = await hashPassword(password);
 
         // Create organization
         const orgRes = await client.query(
@@ -116,14 +116,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const users = await db.query('SELECT id, org_id, role, password_hash, token_version FROM users WHERE email = $1 AND deactivated_at IS NULL', [normalizedEmail]);
 
-    if (users.length === 0) {
-      return rejectLogin();
-    }
-
+    // Always one full bcrypt comparison (against a dummy hash for an unknown email), so the response
+    // time does not reveal whether the account exists.
     const user = users[0];
-    const match = await bcrypt.compare(password, user.password_hash);
+    const match = await verifyPassword(password, user?.password_hash);
 
-    if (!match) {
+    if (!user || !match) {
       return rejectLogin();
     }
 
@@ -226,7 +224,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const { user_id: userId, org_id: orgId } = tokenRes.rows[0];
-        const passwordHash = await bcrypt.hash(password, 12);
+        const passwordHash = await hashPassword(password);
 
         await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, userId]);
         // Whoever had the old password (or a stolen session) is signed out everywhere.
@@ -274,7 +272,7 @@ export async function issuePasswordResetLink(email: string, requestId: string): 
 
   if (!userId) return;
 
-  await getJobQueue().add(
+  await enqueue(
     'password_reset_requested',
     { user_id: userId, token, request_id: requestId },
     { removeOnComplete: true, removeOnFail: { age: RESET_TOKEN_TTL_MS / 1000 } }

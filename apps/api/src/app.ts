@@ -14,6 +14,7 @@ import { genReqId, loggerOptions } from './logger';
 import requestIdPlugin from './plugins/requestId';
 import errorHandling from './plugins/errors';
 import uuidParams from './plugins/uuidParams';
+import { parseAllowlist } from './security/rateLimitAllowlist';
 import authPlugin from './plugins/auth';
 import healthRoutes from './routes/health';
 import metricsRoutes from './routes/metrics';
@@ -100,12 +101,28 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   fastify.register(cookie);
 
+  // Exempt addresses (load tests only; empty by default). Route-level limits inherit this too.
+  const exempt = parseAllowlist(config.RATE_LIMIT_ALLOWLIST);
+  if (exempt) {
+    fastify.log.warn({ allowlist: config.RATE_LIMIT_ALLOWLIST }, 'RATE_LIMIT_ALLOWLIST is set: these clients are not rate-limited. Never use this in production.');
+  }
+
   fastify.register(rateLimit, {
     max: 100, // 100 req/min general limit
-    timeWindow: '1 minute'
+    timeWindow: '1 minute',
+    ...(exempt && { allowList: (request: { ip: string }) => exempt(request.ip) }),
   });
 
-  fastify.register(websocket);
+  fastify.register(websocket, {
+    // On shutdown, tell connected clients this is a restart (1001 Going Away), not a broken
+    // connection: the default closes without a code (1005). Clients reconnect either way (the
+    // frontend retries everything except 1008); see docs/load-testing.md, failure test 4.
+    preClose(this: { websocketServer: { clients?: Set<{ close(code: number, reason: string): void }>; close(): void } }, done: () => void) {
+      for (const client of this.websocketServer.clients ?? []) client.close(1001, 'Server restarting');
+      this.websocketServer.close();
+      done();
+    },
+  });
 
   if (config.NODE_ENV !== 'production') {
     fastify.register(swagger, {

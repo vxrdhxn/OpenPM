@@ -132,6 +132,27 @@ groups:
           summary: "OpenPM API event loop is blocked"
           description: "{{ $labels.pod }} p99 event-loop lag is {{ $value | humanizeDuration }}. Something is doing heavy synchronous work."
 
+      # Requests answered 503 instead of served (docs/load-testing.md). reason=db_pool: every
+      # database connection busy, so the API is past its capacity (scale out, look for slow
+      # queries); reason=db_unavailable: the database cannot be reached.
+      - alert: OpenPMApiOverloaded
+        expr: sum by (namespace, reason) (rate(overload_rejections_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM API is turning requests away (503)"
+          description: "{{ $value | humanize }} requests/s in {{ $labels.namespace }} answered 503 for reason {{ $labels.reason }} over the last 5 minutes."
+
+      # A job could not be queued (Redis down or too slow), so its email was not sent.
+      - alert: OpenPMJobsNotQueued
+        expr: sum by (namespace, job_name) (increase(jobs_enqueue_failed_total[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM could not queue background jobs"
+          description: "{{ $value | humanize }} {{ $labels.job_name }} jobs in {{ $labels.namespace }} were not queued in the last 10 minutes; those emails were not sent. Check Redis."
+
   - name: openpm-worker
     rules:
       - alert: OpenPMWorkerDown

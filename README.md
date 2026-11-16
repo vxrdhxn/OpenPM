@@ -196,6 +196,7 @@ openpm/
 │       └── Dockerfile
 ├── helm/openpm/            # Kubernetes Helm chart (also the Grafana dashboards and alert rules)
 ├── argocd/                 # ArgoCD GitOps manifests
+├── load/                   # k6 load tests and seed data (docs/load-testing.md)
 ├── .github/                # CI/CD + Dependabot + Security
 ├── docker-compose.yml      # Local development stack
 ├── .env.example            # Environment variable template
@@ -304,9 +305,11 @@ traffic, use `docker-compose.monitoring.yml` (see `docs/observability.md`).
 
 ### Load Testing
 
-Not implemented yet: there are no load tests or performance baselines. They are planned in Phase 9
-of [`OpenPM_MASTER_ROADMAP.md`](OpenPM_MASTER_ROADMAP.md) (authentication, task-list and
-task-creation load, concurrent WebSockets, worker throughput).
+k6 scripts for mixed HTTP traffic, single endpoints, 1,000 concurrent WebSockets and worker
+throughput live in `load/`, with a seed of 50,000 tasks (`load/seed.sql`) and a Compose overlay for
+running them (`docker-compose.loadtest.yml`). [`docs/load-testing.md`](docs/load-testing.md) has the
+commands, the measured baselines, the failure tests (Postgres, Redis, worker and API restarts) and
+what each finding changed.
 
 ---
 

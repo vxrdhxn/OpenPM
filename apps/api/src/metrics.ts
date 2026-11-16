@@ -75,3 +75,26 @@ export const cacheBypassedTotal = new client.Counter({
   help: 'Cache operations skipped because Redis was unavailable',
   labelNames: ['operation', 'reason'],
 });
+
+/** Idle database connections that broke (Postgres restart, failover, network). */
+export const dbConnectionErrorsTotal = new client.Counter({
+  name: 'db_connection_errors_total',
+  help: 'Idle database connections that failed and were discarded',
+});
+
+/**
+ * Requests answered 503 + Retry-After instead of being served (reason: db_pool = every connection
+ * busy; db_unavailable = the database cannot be reached).
+ */
+export const overloadRejectionsTotal = new client.Counter({
+  name: 'overload_rejections_total',
+  help: 'Requests answered 503 because the server was overloaded',
+  labelNames: ['reason'],
+});
+
+/** Background jobs that could not be queued (Redis down or too slow); the request still succeeded. */
+export const jobsEnqueueFailedTotal = new client.Counter({
+  name: 'jobs_enqueue_failed_total',
+  help: 'Background jobs that could not be queued',
+  labelNames: ['job_name'],
+});

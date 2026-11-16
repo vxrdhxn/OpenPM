@@ -33,7 +33,7 @@ const rules = doc.groups.flatMap((g) => g.rules);
 
 // Labels Prometheus/the Operator attach to every scraped series (`up` has only these).
 const INFRA_LABELS = new Set(['namespace', 'job', 'pod', 'instance', 'service', 'container', 'endpoint']);
-const OURS = /\b(?:http_|db_|auth_|websocket_|active_websocket|redis_|worker_|emails_|nodejs_|process_)[a-z0-9_]*/g;
+const OURS = /\b(?:http_|db_|auth_|websocket_|active_websocket|redis_|worker_|emails_|overload_|jobs_|cache_|nodejs_|process_)[a-z0-9_]*/g;
 
 let metricLabels: Map<string, string[]>;
 let histograms: Set<string>;

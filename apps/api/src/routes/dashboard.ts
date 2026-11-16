@@ -36,20 +36,32 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         [org_id, user_id]
       ),
       db.query<{ n: number }>(`SELECT count(*)::int AS n FROM projects WHERE org_id = $1 AND status = 'active'`, [org_id]),
+      // First pick the most recently active projects (one index lookup each, on
+      // idx_tasks_project_updated), then count statuses for those few only. Aggregating every task
+      // of the organization first took 57 ms at 50,000 tasks; this takes 8 ms (docs/load-testing.md).
       db.query(
-        `SELECT p.id, p.name,
-                count(t.id)::int AS total,
-                count(t.id) FILTER (WHERE t.status = 'todo')::int AS todo,
-                count(t.id) FILTER (WHERE t.status = 'in_progress')::int AS in_progress,
-                count(t.id) FILTER (WHERE t.status = 'in_review')::int AS in_review,
-                count(t.id) FILTER (WHERE t.status = 'done')::int AS done,
-                COALESCE(max(t.updated_at), p.created_at) AS last_activity
-           FROM projects p
-           LEFT JOIN tasks t ON t.project_id = p.id AND t.org_id = p.org_id
-          WHERE p.org_id = $1 AND p.status = 'active'
-          GROUP BY p.id
-          ORDER BY COALESCE(max(t.updated_at), p.created_at) DESC, p.id
-          LIMIT $2`,
+        `SELECT top.id, top.name, top.last_activity, c.total, c.todo, c.in_progress, c.in_review, c.done
+           FROM (
+             SELECT p.id, p.name, COALESCE(la.last, p.created_at) AS last_activity
+               FROM projects p
+               LEFT JOIN LATERAL (
+                 SELECT t.updated_at AS last FROM tasks t
+                  WHERE t.project_id = p.id ORDER BY t.updated_at DESC LIMIT 1
+               ) la ON TRUE
+              WHERE p.org_id = $1 AND p.status = 'active'
+              ORDER BY COALESCE(la.last, p.created_at) DESC, p.id
+              LIMIT $2
+           ) top
+           CROSS JOIN LATERAL (
+             SELECT count(*)::int AS total,
+                    count(*) FILTER (WHERE t.status = 'todo')::int AS todo,
+                    count(*) FILTER (WHERE t.status = 'in_progress')::int AS in_progress,
+                    count(*) FILTER (WHERE t.status = 'in_review')::int AS in_review,
+                    count(*) FILTER (WHERE t.status = 'done')::int AS done
+               FROM tasks t
+              WHERE t.project_id = top.id AND t.org_id = $1 -- a parameter, not top.org_id: see migration 019
+           ) c
+          ORDER BY top.last_activity DESC, top.id`,
         [org_id, DASHBOARD_PROJECTS]
       ),
     ]);

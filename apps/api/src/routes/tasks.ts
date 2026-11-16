@@ -3,14 +3,22 @@ import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
-import { getJobQueue } from '../queue';
-import { Conditions } from '../query/pagination';
-import { applyTaskFilters, hasTaskFilters, taskFilterQuerySchema, type TaskFilters } from '../query/taskFilters';
-import { TASK_LABELS_COLUMN } from '../query/taskLabels';
+import { enqueue } from '../jobs/enqueue';
+import { Conditions, encodeCursor } from '../query/pagination';
+import { applyTaskFilters, hasTaskFilters, TASK_STATUSES, taskFilterQuerySchema, type TaskFilters } from '../query/taskFilters';
+import { labelsForTasks } from '../query/taskLabels';
 import { announce, notify } from '../notifications/notify';
 
-/** Most tasks one board response carries (see GET /:projectId/tasks). */
-export const BOARD_TASK_LIMIT = 1000;
+/**
+ * Tasks per column in one board response (GET /:projectId/tasks); "Show more" pages through the rest
+ * with GET /api/tasks. Measured in the Phase 9 load test: returning whole boards (up to 1000 tasks,
+ * 250-500 KB) saturated the API at 20 boards/s; per-column pages keep a board bounded at 400 tasks
+ * whatever the project's size (docs/load-testing.md).
+ */
+export const BOARD_COLUMN_LIMIT = 100;
+
+/** Longest task description accepted (no limit before; 400 cards of unbounded text could be megabytes). */
+export const MAX_DESCRIPTION_LENGTH = 50_000;
 
 // Columns a client may change via PATCH. Everything else (org_id, project_id,
 // created_by, id, ...) is server-controlled and must never be written from a request body.
@@ -54,7 +62,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         required: ['title'],
         properties: {
           title: { type: 'string', minLength: 1 },
-          description: { type: 'string' },
+          description: { type: 'string', maxLength: MAX_DESCRIPTION_LENGTH },
           priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
           assignee_id: { type: 'string', format: 'uuid' },
           due_date: { type: 'string', format: 'date-time' }
@@ -98,13 +106,14 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       await announce(org_id, notified);
 
       // Async background job processing
-      await getJobQueue().add('task_created', {
+      // Best effort: the task is saved either way (jobs/enqueue.ts).
+      await enqueue('task_created', {
         task_id: newTask.id,
         assignee_id: assignee_id,
         org_id: org_id,
         // Lets the worker log under the same id as the request that caused this job.
         request_id: request.id
-      });
+      }, undefined, request.log);
 
       // Clear cache and emit WS event
       await cache.del(`org:${org_id}:project:${projectId}:tasks`);
@@ -122,10 +131,11 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // GET /projects/:projectId/tasks (Viewer or higher)
-  // The board loads every matching task at once (it is grouped by column, not paged). Bounded so one
-  // huge project cannot produce an unbounded response; past the cap the response carries
-  // `X-Truncated: true` and narrowing the filters (or GET /api/tasks, which pages) is the way in.
+  // GET /projects/:projectId/tasks (Viewer or higher): the board.
+  // { todo: [...], in_progress: [...], in_review: [...], done: [...], totals: {...}, cursors: {...} }
+  // Each column holds its first BOARD_COLUMN_LIMIT tasks (oldest first); `totals` counts every match;
+  // `cursors[column]`, when not null, continues that column via
+  // GET /api/tasks?project_id=&status=<column>&sort=created_at&order=asc&cursor=<it> (same filters).
   fastify.get('/:projectId/tasks', {
     preHandler: fastify.requireRole('viewer'),
     schema: {
@@ -160,32 +170,49 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       .add((p) => `t.project_id = ${p(projectId)}`)
       .add((p) => `t.org_id = ${p(org_id)}`);
     applyTaskFilters(where, filters, user_id);
+    const columns: string[] = filters.status?.length ? filters.status : [...TASK_STATUSES];
 
-    const rows = await db.query(
-      `SELECT t.*, u.name as assignee_name, ${TASK_LABELS_COLUMN}
-       FROM tasks t
-       LEFT JOIN users u ON t.assignee_id = u.id
-       WHERE ${where.sql()}
-       ORDER BY t.created_at ASC, t.id ASC
-       LIMIT ${where.param(BOARD_TASK_LIMIT + 1)}`,
-      where.params
-    );
-    const truncated = rows.length > BOARD_TASK_LIMIT;
-    const tasks = truncated ? rows.slice(0, BOARD_TASK_LIMIT) : rows;
-    if (truncated) reply.header('X-Truncated', 'true');
+    // One bounded index range scan per column (idx_tasks_project_status_created), plus the totals.
+    const columnParam = where.param(columns);
+    const limitParam = where.param(BOARD_COLUMN_LIMIT + 1);
+    const [rows, counts] = await Promise.all([
+      db.query(
+        `SELECT t.*, u.name AS assignee_name, t.created_at::text AS sort_key
+           FROM unnest(${columnParam}::text[]) AS col(status)
+           CROSS JOIN LATERAL (
+             SELECT t.* FROM tasks t
+              WHERE ${where.sql()} AND t.status = col.status
+              ORDER BY t.created_at ASC, t.id ASC
+              LIMIT ${limitParam}
+           ) t
+           LEFT JOIN users u ON u.id = t.assignee_id`,
+        where.params
+      ),
+      db.query<{ status: string; n: number }>(
+        `SELECT t.status, count(*)::int AS n FROM tasks t WHERE ${where.sql()} GROUP BY t.status`,
+        where.params.slice(0, where.params.length - 2)
+      ),
+    ]);
 
-    // Group tasks by status for the kanban board
-    const grouped = {
-      todo: tasks.filter(t => t.status === 'todo'),
-      in_progress: tasks.filter(t => t.status === 'in_progress'),
-      in_review: tasks.filter(t => t.status === 'in_review'),
-      done: tasks.filter(t => t.status === 'done')
-    };
+    const labels = await labelsForTasks(rows.map((r) => r.id), org_id);
+    const board: Record<string, unknown> = {};
+    const totals: Record<string, number> = {};
+    const cursors: Record<string, string | null> = {};
+    for (const status of TASK_STATUSES) {
+      const column = rows
+        .filter((r) => r.status === status)
+        .sort((a, b) => (a.sort_key < b.sort_key ? -1 : a.sort_key > b.sort_key ? 1 : a.id < b.id ? -1 : 1));
+      const page = column.slice(0, BOARD_COLUMN_LIMIT);
+      const last = page[page.length - 1];
+      board[status] = page.map(({ sort_key: _sortKey, ...task }) => ({ ...task, labels: labels.get(task.id) ?? [] }));
+      totals[status] = counts.find((c) => c.status === status)?.n ?? 0;
+      cursors[status] = column.length > BOARD_COLUMN_LIMIT && last ? encodeCursor({ key: last.sort_key, id: last.id }) : null;
+    }
+    const response = { ...board, totals, cursors };
 
-    // Not when truncated: a cache hit could not repeat the X-Truncated header.
-    if (cacheable && !truncated) await cache.set(cacheKey, grouped, 60); // 60 seconds TTL
+    if (cacheable) await cache.set(cacheKey, response, 60); // 60 seconds TTL
 
-    return reply.send(grouped);
+    return reply.send(response);
   });
 
   // PATCH /projects/:projectId/tasks/:taskId (Requires member role or higher)
@@ -196,7 +223,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         properties: {
           title: { type: 'string', minLength: 1 },
-          description: { type: 'string' },
+          description: { type: 'string', maxLength: MAX_DESCRIPTION_LENGTH },
           status: { type: 'string', enum: ['todo', 'in_progress', 'in_review', 'done'] },
           priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
           assignee_id: { type: 'string', format: 'uuid', nullable: true },

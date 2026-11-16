@@ -49,11 +49,20 @@ assignee, `due_date` and timestamps.
 
 ## The board: `GET /api/projects/:projectId/tasks`
 
-It is still grouped by status (`{ todo, in_progress, in_review, done }`), because a board shows
-everything at once. It takes the same filters as task search except `project_id`, `sort` and
-`order`. It returns at most 1000 tasks; past that the response has `X-Truncated: true`, and narrowing
-the filters or paging through `GET /api/tasks` is the way to see the rest. Only the unfiltered board
-is cached.
+Grouped by status, and paged **per column**:
+
+```json
+{ "todo": [...], "in_progress": [...], "in_review": [...], "done": [...],
+  "totals": { "todo": 812, "in_progress": 40, "in_review": 12, "done": 3301 },
+  "cursors": { "todo": "WyIy...", "in_progress": null, "in_review": null, "done": "WyIy..." } }
+```
+
+Each column holds its first 100 tasks, oldest first. `totals` counts every match. A non-null
+`cursors[column]` continues that column through
+`GET /api/tasks?project_id=<id>&status=<column>&sort=created_at&order=asc&cursor=<it>` with the same
+filters (the board's "Show more"). The board takes the same filters as task search except
+`project_id`, `sort` and `order`. Only the unfiltered board is cached. Returning whole boards (up to
+1000 tasks) saturated the API in the Phase 9 load test; see `docs/load-testing.md`.
 
 ## Rules for all list parameters
 

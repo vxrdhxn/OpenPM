@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
-import bcrypt from 'bcrypt';
+import { hashPassword } from '../security/passwords';
 import { issueSession } from '../plugins/session';
 
 const profileRoutes: FastifyPluginAsync = async (fastify) => {
@@ -50,7 +50,7 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
       setClauses.push(`name = $${values.length}`);
     }
     if (password !== undefined) {
-      values.push(await bcrypt.hash(password, 12));
+      values.push(await hashPassword(password));
       setClauses.push(`password_hash = $${values.length}`);
       // A new password ends every other session (see plugins/session.ts); this one is re-issued below.
       setClauses.push('token_version = token_version + 1');

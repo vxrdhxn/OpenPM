@@ -1,11 +1,11 @@
 import { FastifyPluginAsync } from 'fastify';
 import type { PoolClient } from 'pg';
-import bcrypt from 'bcrypt';
+import { hashPassword } from '../security/passwords';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { generateToken, hashToken, TOKEN_PATTERN } from '../security/tokens';
 import { issueSession } from '../plugins/session';
-import { getJobQueue } from '../queue';
+import { enqueue } from '../jobs/enqueue';
 
 const INVITE_TTL_DAYS = 7;
 
@@ -78,10 +78,12 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
 
         // The raw token goes only into the job that emails it. The job is removed from Redis once it
         // completes; a failed one is kept for a day for debugging. Never logged (see worker).
-        await getJobQueue().add(
+        // Best effort (jobs/enqueue.ts): if it fails, the invite exists and can be re-sent.
+        await enqueue(
           'invite_created',
           { invite_id: invite.id, org_id, token, request_id: request.id },
-          { removeOnComplete: true, removeOnFail: { age: 24 * 60 * 60 } }
+          { removeOnComplete: true, removeOnFail: { age: 24 * 60 * 60 } },
+          request.log
         );
 
         return reply.code(201).send(invite);
@@ -215,7 +217,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
           throw new Error('EMAIL_TAKEN');
         }
 
-        const passwordHash = await bcrypt.hash(password, 12);
+        const passwordHash = await hashPassword(password);
         const userRes = await client.query(
           'INSERT INTO users (org_id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
           [invite.org_id, invite.email, passwordHash, name, invite.role]

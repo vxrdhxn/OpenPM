@@ -29,6 +29,11 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
+# bcrypt and DNS lookups (so new database/Redis connections) share Node's libuv thread pool, 4
+# threads by default. A burst of logins used to occupy all of them and stall every other request
+# (docs/load-testing.md); the API also caps concurrent bcrypt work (security/passwords.ts).
+ENV UV_THREADPOOL_SIZE=16
+
 USER appuser
 EXPOSE 3000
 

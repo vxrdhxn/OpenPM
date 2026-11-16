@@ -73,6 +73,9 @@ Label values come from small fixed sets, so cardinality is bounded (no ids, emai
 | `db_query_duration_seconds` | `outcome` | Queries through `db.query` (`ok`/`error`). Transactions are not included. |
 | `db_pool_connections` | `state` | `total`, `idle`, `waiting`. |
 | `redis_errors_total` | `client` | `main`, `subscriber`. |
+| `overload_rejections_total` | `reason` | Requests answered 503 + `Retry-After` instead of served: `db_pool` (every database connection busy, the API is past its capacity) or `db_unavailable` (the database cannot be reached). See [load-testing.md](load-testing.md). |
+| `db_connection_errors_total` | | Idle database connections that broke (Postgres restart, failover, network) and were discarded; the pool reconnects. |
+| `jobs_enqueue_failed_total` | `job_name` | Background jobs that could not be queued (Redis down or slower than 2 s). The request still succeeded; that email was not sent. |
 | `cache_bypassed_total` | `operation`, `reason` | Cache commands skipped because Redis was unavailable (`reason`: `unavailable` = not connected, `error` = failed or slower than 250ms). The request carried on without the cache: reads went to Postgres. A steady rate means the API is running degraded. |
 | `nodejs_*`, `process_*` | | Default Node.js process metrics. |
 
@@ -152,6 +155,8 @@ file directly. Route notifications with Alertmanager on the `severity` label: `c
 | `OpenPMRedisErrors` | warning | Redis client errors for 5 minutes |
 | `OpenPMWebsocketErrors` | warning | More than 0.5 socket errors/s for 10 minutes |
 | `OpenPMEventLoopLag` | warning | API p99 event-loop lag above 0.5 s for 10 minutes |
+| `OpenPMApiOverloaded` | warning | More than 0.1 requests/s answered 503 (overloaded or database unreachable) for 5 minutes |
+| `OpenPMJobsNotQueued` | warning | A background job could not be queued in the last 10 minutes (Redis down): its email was not sent |
 | `OpenPMWorkerDown` | critical | A worker pod cannot be scraped for 2 minutes |
 | `OpenPMWorkerTargetMissing` | warning | There is no worker scrape target for 10 minutes |
 | `OpenPMQueueLagHigh` | warning | The oldest waiting job is over 1 minute old for 5 minutes |

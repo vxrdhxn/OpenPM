@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../db/client';
 import { addUser, registerOrg, startApp, type Actor, type App } from './harness';
 
+const COLUMNS = ['todo', 'in_progress', 'in_review', 'done'];
+
 /** Phase I: pagination, search and filters on projects, the board and task search (real Postgres). */
 describe('pagination and filtering (real Postgres)', () => {
   let app: App;
@@ -51,9 +53,9 @@ describe('pagination and filtering (real Postgres)', () => {
   }
 
   /** Follow next_cursor to the end and return every item id, in order. */
-  async function collect(actor: Actor, url: string): Promise<string[]> {
+  async function collect(actor: Actor, url: string, startCursor: string | null = null): Promise<string[]> {
     const ids: string[] = [];
-    let cursor: string | null = null;
+    let cursor: string | null = startCursor;
     for (let guard = 0; guard < 50; guard++) {
       const sep = url.includes('?') ? '&' : '?';
       const res = await get(actor, cursor ? `${url}${sep}cursor=${cursor}` : url);
@@ -122,6 +124,31 @@ describe('pagination and filtering (real Postgres)', () => {
     });
   });
 
+  describe('board columns', () => {
+    it('caps each column, counts every match, and continues a column through GET /api/tasks', async () => {
+      const [projectId] = await insertProjects(admin, ['Huge']);
+      // 130 to-do tasks (more than one page), 3 done.
+      await db.query(
+        `INSERT INTO tasks (org_id, project_id, title, status, created_by, created_at)
+         SELECT $1, $2, 'T' || g, 'todo', $3, '2026-01-01T00:00:00Z'::timestamptz + (g || ' microseconds')::interval
+           FROM generate_series(1, 130) g`,
+        [admin.orgId, projectId, admin.userId]
+      );
+      for (let i = 0; i < 3; i++) await insertTask(admin, projectId!, { status: 'done' });
+
+      const board = (await get(admin, `/api/projects/${projectId}/tasks`)).json();
+      expect(board.todo).toHaveLength(100);
+      expect(board.done).toHaveLength(3);
+      expect(board.totals).toEqual({ todo: 130, in_progress: 0, in_review: 0, done: 3 });
+      expect(board.cursors.done).toBeNull();
+
+      const rest = await collect(admin, `/api/tasks?project_id=${projectId}&status=todo&sort=created_at&order=asc&limit=20`, board.cursors.todo);
+      const all = [...board.todo.map((t: { id: string }) => t.id), ...rest];
+      expect(all).toHaveLength(130);
+      expect(new Set(all).size).toBe(130); // no repeats across the board page and the continuation
+    });
+  });
+
   describe('board filters', () => {
     it('filters the board by assignee, priority and text, keeping the grouped shape', async () => {
       const [projectId] = await insertProjects(admin, ['Board']);
@@ -134,8 +161,8 @@ describe('pagination and filtering (real Postgres)', () => {
         const res = await get(admin, `/api/projects/${projectId}/tasks?${qs}`);
         expect(res.statusCode).toBe(200);
         const body = res.json();
-        expect(Object.keys(body).sort()).toEqual(['done', 'in_progress', 'in_review', 'todo']);
-        return Object.values(body).flat().map((t) => (t as { id: string }).id).sort();
+        expect(Object.keys(body).sort()).toEqual(['cursors', 'done', 'in_progress', 'in_review', 'todo', 'totals']);
+        return COLUMNS.flatMap((c) => body[c]).map((t: { id: string }) => t.id).sort();
       };
 
       expect(await board('assignee=me')).toEqual([mine]);

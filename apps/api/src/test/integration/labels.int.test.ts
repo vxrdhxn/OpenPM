@@ -88,7 +88,8 @@ describe('labels (real Postgres)', () => {
     const boardTasks = async (qs = '') => {
       const res = await call(admin, 'GET', `/api/projects/${project.id}/tasks${qs}`);
       expect(res.statusCode).toBe(200);
-      return Object.values(res.json()).flat() as Array<{ id: string; labels: Array<{ name: string }> }>;
+      const body = res.json();
+      return ['todo', 'in_progress', 'in_review', 'done'].flatMap((c) => body[c]) as Array<{ id: string; labels: Array<{ name: string }> }>;
     };
 
     it('sets and replaces a task labels, shows them on the board, audits the change', async () => {

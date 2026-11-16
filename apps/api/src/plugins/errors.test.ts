@@ -7,6 +7,7 @@ const ID = '3f1c2b9e-6a4d-4c1e-9b7a-2d5e8f0a1b2c';
 
 describe('error handling and id validation', () => {
   let app: FastifyInstance;
+  let thrown: Error = new Error('unset');
 
   async function build() {
     app = Fastify({ logger: false });
@@ -14,7 +15,13 @@ describe('error handling and id validation', () => {
     await app.register(uuidParams);
 
     app.get('/boom', async () => {
-      throw new Error('connect ECONNREFUSED 10.0.0.5:5432 password=hunter2');
+      throw new Error('query failed on 10.0.0.5 with password=hunter2');
+    });
+    app.get('/db-down', async () => {
+      throw thrown;
+    });
+    app.get('/busy', async () => {
+      throw new Error('timeout exceeded when trying to connect');
     });
     app.get('/teapot', async () => {
       throw Object.assign(new Error('I am a teapot'), { statusCode: 418 });
@@ -42,6 +49,35 @@ describe('error handling and id validation', () => {
     expect(res.json()).toEqual({ error: 'Internal server error' });
     expect(res.body).not.toContain('hunter2');
     expect(res.body).not.toContain('10.0.0.5');
+  });
+
+  it('answers database pool exhaustion as 503 with Retry-After (overload, not a bug)', async () => {
+    const res = await (await build()).inject({ method: 'GET', url: '/busy' });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['retry-after']).toBe('1');
+    expect(res.json()).toEqual({ error: 'The server is busy. Please try again.' });
+  });
+
+  it.each([
+    ['refused', Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:5432'), { code: 'ECONNREFUSED' })],
+    ['terminated', new Error('Connection terminated due to connection timeout')],
+    ['admin shutdown', Object.assign(new Error('terminating connection due to administrator command'), { code: '57P01' })],
+    ['connection exception', Object.assign(new Error('connection failure'), { code: '08006' })],
+  ])('answers an unreachable database (%s) as 503 with Retry-After', async (_label, error) => {
+    thrown = error;
+    const res = await (await build()).inject({ method: 'GET', url: '/db-down' });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['retry-after']).toBe('5');
+    expect(res.body).not.toContain('10.0.0.5');
+  });
+
+  it('still answers an ordinary query error as a plain 500', async () => {
+    thrown = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
+    const res = await (await build()).inject({ method: 'GET', url: '/db-down' });
+
+    expect(res.statusCode).toBe(500);
   });
 
   it('passes through the message of a 4xx error', async () => {
