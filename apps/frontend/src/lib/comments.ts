@@ -14,6 +14,8 @@ export interface Comment {
   created_at: string;
   updated_at: string;
   edited_at: string | null;
+  /** People mentioned (and notified) in this comment. */
+  mentions?: Array<{ id: string; name: string }>;
 }
 
 const base = (projectId: string, taskId: string) => `/projects/${projectId}/tasks/${taskId}/comments`;
@@ -22,11 +24,12 @@ const base = (projectId: string, taskId: string) => `/projects/${projectId}/task
 export const listComments = (projectId: string, taskId: string, cursor?: string | null): Promise<Page<Comment>> =>
   api.get(`${base(projectId, taskId)}${buildQuery({ cursor, limit: 30 })}`);
 
-export const postComment = (projectId: string, taskId: string, body: string): Promise<Comment> =>
-  api.post(base(projectId, taskId), { body });
+export const postComment = (projectId: string, taskId: string, body: string, mentionIds: string[] = []): Promise<Comment> =>
+  api.post(base(projectId, taskId), { body, mention_ids: mentionIds });
 
-export const editComment = (projectId: string, taskId: string, id: string, body: string): Promise<Comment> =>
-  api.patch(`${base(projectId, taskId)}/${id}`, { body });
+/** `mentionIds` replaces the comment's mentions; people newly mentioned are notified. */
+export const editComment = (projectId: string, taskId: string, id: string, body: string, mentionIds: string[]): Promise<Comment> =>
+  api.patch(`${base(projectId, taskId)}/${id}`, { body, mention_ids: mentionIds });
 
 export const deleteComment = (projectId: string, taskId: string, id: string): Promise<void> =>
   api.delete(`${base(projectId, taskId)}/${id}`);

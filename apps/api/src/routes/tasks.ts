@@ -7,6 +7,7 @@ import { getJobQueue } from '../queue';
 import { Conditions } from '../query/pagination';
 import { applyTaskFilters, hasTaskFilters, taskFilterQuerySchema, type TaskFilters } from '../query/taskFilters';
 import { TASK_LABELS_COLUMN } from '../query/taskLabels';
+import { announce, notify } from '../notifications/notify';
 
 /** Most tasks one board response carries (see GET /:projectId/tasks). */
 export const BOARD_TASK_LIMIT = 1000;
@@ -65,6 +66,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     const { title, description, priority = 'medium', assignee_id, due_date } = request.body as any;
     const { org_id, user_id } = request.user;
 
+    let notified: string[] = [];
     try {
       const newTask = await withTransaction(async (client) => {
         // Verify project ownership within tenant boundary
@@ -82,8 +84,18 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         const created = res.rows[0];
 
         await logActivity(client, org_id, user_id, created.id, 'created', { title });
+        notified = await notify(client, {
+          orgId: org_id,
+          actorId: user_id,
+          type: 'task_assigned',
+          recipients: [assignee_id],
+          projectId,
+          taskId: created.id,
+          data: { title },
+        });
         return created;
       });
+      await announce(org_id, notified);
 
       // Async background job processing
       await getJobQueue().add('task_created', {
@@ -204,10 +216,11 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'No fields to update' });
     }
 
+    let notified: string[] = [];
     try {
       const updatedTask = await withTransaction(async (client) => {
         const check = await client.query(
-          'SELECT status FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3',
+          'SELECT status, assignee_id, created_by FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3',
           [taskId, projectId, org_id]
         );
         if (check.rows.length === 0) {
@@ -245,8 +258,37 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         await logActivity(client, org_id, user_id, taskId, 'updated', metadata);
-        return res.rows[0];
+
+        // Notifications (never to the person making the change; see notifications/notify.ts).
+        const task = res.rows[0];
+        const before = check.rows[0];
+        const newlyAssigned = updates.assignee_id && updates.assignee_id !== before.assignee_id ? updates.assignee_id : null;
+        notified = await notify(client, {
+          orgId: org_id,
+          actorId: user_id,
+          type: 'task_assigned',
+          recipients: [newlyAssigned],
+          projectId,
+          taskId,
+          data: { title: task.title },
+        });
+        if (metadata.to) {
+          notified.push(
+            ...(await notify(client, {
+              orgId: org_id,
+              actorId: user_id,
+              type: 'status_changed',
+              // The person just assigned already got a notification for this change.
+              recipients: [task.assignee_id, before.created_by].filter((id) => id !== newlyAssigned),
+              projectId,
+              taskId,
+              data: { title: task.title, from: metadata.from, to: metadata.to },
+            }))
+          );
+        }
+        return task;
       });
+      await announce(org_id, notified);
 
       // Pub/Sub notification for real-time collaboration
       await cache.publish(`org:${org_id}:updates`, {

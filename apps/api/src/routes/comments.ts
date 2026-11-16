@@ -5,18 +5,26 @@ import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 import { hasMinRole } from '../plugins/auth';
 import { Conditions, decodeCursor, paginationQuerySchema, toPage } from '../query/pagination';
+import { announce, excerpt, notify } from '../notifications/notify';
 
 export const MAX_COMMENT_LENGTH = 10_000;
+/** Most people one comment can mention. */
+export const MAX_MENTIONS = 20;
 
 /** Every comment response has this shape (author name joined in, removed authors flagged). */
 const commentSelect = (extraColumns = '') => `
   SELECT c.id, c.task_id, c.body, c.author_id, u.name AS author_name,
          (u.deactivated_at IS NOT NULL) AS author_removed,
-         c.created_at, c.updated_at, c.edited_at${extraColumns}
+         c.created_at, c.updated_at, c.edited_at,
+         COALESCE((
+           SELECT json_agg(json_build_object('id', mu.id, 'name', mu.name) ORDER BY mu.name, mu.id)
+             FROM comment_mentions cm JOIN users mu ON mu.id = cm.user_id
+            WHERE cm.comment_id = c.id
+         ), '[]'::json) AS mentions${extraColumns}
     FROM task_comments c
     JOIN users u ON u.id = c.author_id`;
 
-const TASK_IN_ORG = 'SELECT id FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3';
+const TASK_IN_ORG = 'SELECT id, title, assignee_id, created_by FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3';
 
 const bodySchema = {
   type: 'object',
@@ -24,6 +32,8 @@ const bodySchema = {
   properties: {
     // At least one non-whitespace character.
     body: { type: 'string', minLength: 1, maxLength: MAX_COMMENT_LENGTH, pattern: '\\S' },
+    // People to notify (the UI's @-autocomplete). Each must be an active member of the organization.
+    mention_ids: { type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: MAX_MENTIONS, uniqueItems: true },
   },
   additionalProperties: false,
 } as const;
@@ -48,10 +58,41 @@ class CommentError extends Error {
 const TASK_NOT_FOUND = () => new CommentError(404, 'Task not found');
 const COMMENT_NOT_FOUND = () => new CommentError(404, 'Comment not found');
 
+interface TaskRow {
+  id: string;
+  title: string;
+  assignee_id: string | null;
+  created_by: string;
+}
+
 /** The task must belong to the project, and both to the caller's organization. */
-async function assertTask(client: PoolClient, { projectId, taskId }: TaskParams, orgId: string) {
-  const res = await client.query(TASK_IN_ORG, [taskId, projectId, orgId]);
+async function assertTask(client: PoolClient, { projectId, taskId }: TaskParams, orgId: string): Promise<TaskRow> {
+  const res = await client.query<TaskRow>(TASK_IN_ORG, [taskId, projectId, orgId]);
   if (res.rows.length === 0) throw TASK_NOT_FOUND();
+  return res.rows[0]!;
+}
+
+/** Every mentioned id must be an active member of the organization (400 otherwise). */
+async function assertMentionable(client: PoolClient, orgId: string, ids: string[]) {
+  if (ids.length === 0) return;
+  const res = await client.query(
+    'SELECT id FROM users WHERE org_id = $1 AND id = ANY($2::uuid[]) AND deactivated_at IS NULL',
+    [orgId, ids]
+  );
+  if (res.rows.length !== ids.length) throw new CommentError(400, 'You can only mention members of your organization');
+}
+
+/** Replace a comment's mentions; returns the ids that were not mentioned before. */
+async function setMentions(client: PoolClient, commentId: string, ids: string[]): Promise<string[]> {
+  const before = await client.query<{ user_id: string }>(
+    'DELETE FROM comment_mentions WHERE comment_id = $1 RETURNING user_id',
+    [commentId]
+  );
+  if (ids.length) {
+    await client.query('INSERT INTO comment_mentions (comment_id, user_id) SELECT $1, unnest($2::uuid[])', [commentId, ids]);
+  }
+  const had = new Set(before.rows.map((r) => r.user_id));
+  return ids.filter((id) => !had.has(id));
 }
 
 async function loadComment(client: PoolClient, commentId: string, taskId: string, orgId: string) {
@@ -133,20 +174,37 @@ const commentRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { org_id, user_id } = request.user;
     const params = request.params as TaskParams;
-    const { body } = request.body as { body: string };
+    const { body, mention_ids: mentionIds = [] } = request.body as { body: string; mention_ids?: string[] };
 
+    let notified: string[] = [];
     try {
       const comment = await withTransaction(async (client) => {
-        await assertTask(client, params, org_id);
+        const task = await assertTask(client, params, org_id);
+        await assertMentionable(client, org_id, mentionIds);
         const inserted = await client.query<{ id: string }>(
           'INSERT INTO task_comments (org_id, task_id, author_id, body) VALUES ($1, $2, $3, $4) RETURNING id',
           [org_id, params.taskId, user_id, body]
         );
         const id = inserted.rows[0]!.id;
+        await setMentions(client, id, mentionIds);
         await logCommentActivity(client, org_id, user_id, id, 'created', { task_id: params.taskId });
+
+        const common = { orgId: org_id, actorId: user_id, projectId: params.projectId, taskId: params.taskId, commentId: id };
+        const data = { title: task.title, excerpt: excerpt(body) };
+        notified = await notify(client, { ...common, type: 'mentioned', recipients: mentionIds, data });
+        // The task's assignee and creator hear about the comment, unless they were just mentioned.
+        notified.push(
+          ...(await notify(client, {
+            ...common,
+            type: 'commented',
+            recipients: [task.assignee_id, task.created_by].filter((r) => r && !mentionIds.includes(r)),
+            data,
+          }))
+        );
         return loadComment(client, id, params.taskId, org_id);
       });
 
+      await announce(org_id, notified);
       await publish(org_id, 'comment_created', { project_id: params.projectId, task_id: params.taskId, comment });
       return reply.code(201).send(comment);
     } catch (err) {
@@ -160,11 +218,12 @@ const commentRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { org_id, user_id } = request.user;
     const params = request.params as CommentParams;
-    const { body } = request.body as { body: string };
+    const { body, mention_ids: mentionIds } = request.body as { body: string; mention_ids?: string[] };
 
+    let notified: string[] = [];
     try {
       const comment = await withTransaction(async (client) => {
-        await assertTask(client, params, org_id);
+        const task = await assertTask(client, params, org_id);
         const existing = await loadComment(client, params.commentId, params.taskId, org_id);
         if (!existing) throw COMMENT_NOT_FOUND();
         if (existing.author_id !== user_id) throw new CommentError(403, 'Only the author can edit a comment');
@@ -174,9 +233,26 @@ const commentRoutes: FastifyPluginAsync = async (fastify) => {
           [body, params.commentId, org_id]
         );
         await logCommentActivity(client, org_id, user_id, params.commentId, 'updated', { task_id: params.taskId });
+
+        // mention_ids, when sent, replaces the mentions; only people newly mentioned are notified.
+        if (mentionIds) {
+          await assertMentionable(client, org_id, mentionIds);
+          const added = await setMentions(client, params.commentId, mentionIds);
+          notified = await notify(client, {
+            orgId: org_id,
+            actorId: user_id,
+            type: 'mentioned',
+            recipients: added,
+            projectId: params.projectId,
+            taskId: params.taskId,
+            commentId: params.commentId,
+            data: { title: task.title, excerpt: excerpt(body) },
+          });
+        }
         return loadComment(client, params.commentId, params.taskId, org_id);
       });
 
+      await announce(org_id, notified);
       await publish(org_id, 'comment_updated', { project_id: params.projectId, task_id: params.taskId, comment });
       return reply.send(comment);
     } catch (err) {

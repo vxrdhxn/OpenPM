@@ -162,7 +162,7 @@ describe('Task routes lifecycle', () => {
 
     it('updates, records the status transition and notifies subscribers', async () => {
       mockClient.query.mockImplementation(async (sql: string) => {
-        if (sql.startsWith('SELECT status FROM tasks')) return rows([{ status: 'todo' }]);
+        if (sql.startsWith('SELECT status, assignee_id, created_by FROM tasks')) return rows([{ status: 'todo' }]);
         if (sql.startsWith('UPDATE tasks')) return rows([{ id: T, status: 'done' }]);
         return rows();
       });
@@ -396,7 +396,7 @@ describe('Task routes lifecycle', () => {
 
     it('only ever interpolates whitelisted column names into the UPDATE', async () => {
       mockClient.query.mockImplementation(async (sql: string) => {
-        if (sql.startsWith('SELECT status FROM tasks')) return rows([{ status: 'todo' }]);
+        if (sql.startsWith('SELECT status, assignee_id, created_by FROM tasks')) return rows([{ status: 'todo' }]);
         if (sql.startsWith('UPDATE tasks')) return rows([{ id: T }]);
         return rows();
       });

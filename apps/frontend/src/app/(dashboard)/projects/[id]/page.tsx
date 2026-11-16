@@ -314,6 +314,7 @@ export default function KanbanBoard() {
           me={me}
           lastMessage={lastMessage}
           orgLabels={orgLabels}
+          members={members}
           onClose={() => setSelectedTaskId(null)}
         />
       )}

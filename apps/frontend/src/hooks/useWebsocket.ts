@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { websocketUrl } from '@/lib/endpoints';
 
-type WebSocketMessage = {
+export type WebSocketMessage = {
   type: string;
   [key: string]: any;
 };
@@ -23,7 +23,7 @@ const CLOSE_POLICY_VIOLATION = 1008;
  * `connectionEpoch` increments on every successful (re)connect. Events published while the
  * socket was down are not replayed, so consumers should refetch when it goes above 1.
  */
-export function useWebsocket() {
+export function useWebsocketConnection(): WebsocketState {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const [connectionEpoch, setConnectionEpoch] = useState(0);
@@ -73,4 +73,21 @@ export function useWebsocket() {
   }, []);
 
   return { isConnected, lastMessage, connectionEpoch };
+}
+
+export interface WebsocketState {
+  isConnected: boolean;
+  lastMessage: WebSocketMessage | null;
+  connectionEpoch: number;
+}
+
+/** The app's one socket, provided by the signed-in layout (WebsocketProvider). */
+export const WebsocketContext = createContext<WebsocketState>({ isConnected: false, lastMessage: null, connectionEpoch: 0 });
+
+/**
+ * Live updates for the signed-in user's organization, from the single socket the layout keeps open
+ * (so the sidebar's notification badge and a board share one connection instead of opening two).
+ */
+export function useWebsocket(): WebsocketState {
+  return useContext(WebsocketContext);
 }

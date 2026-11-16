@@ -12,7 +12,9 @@ belong to that project, and both must belong to the caller's organization; other
 
 - **Text:** 1-10,000 characters, at least one of them not whitespace. Comments are plain text: the
   API stores them exactly as written, and the frontend renders them as text (never as HTML), so
-  markup in a comment is shown, not run. There is no Markdown or @mention support yet.
+  markup in a comment is shown, not run. There is no Markdown.
+- **Mentions:** `mention_ids` (up to 20 active members of the organization) notifies them; see
+  `docs/notifications.md`. On edit, `mention_ids` replaces the set and only new people are notified.
 - **Listing:** newest first, paginated like the other lists (`limit`, `cursor`, `{ items, next_cursor }`;
   see `docs/pagination.md`). The task dialog shows the newest page with the latest comment at the
   bottom, and loads earlier ones with "Show earlier comments".

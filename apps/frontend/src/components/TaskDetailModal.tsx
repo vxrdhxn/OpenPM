@@ -6,6 +6,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import CommentsPanel from './CommentsPanel';
 import TaskLabels from './TaskLabels';
 import type { Label } from '@/lib/labels';
+import type { Mentionable } from '@/lib/mentions';
 import type { CommentEvent } from '@/lib/comments';
 
 export interface TaskSummary {
@@ -35,6 +36,8 @@ interface Props {
   lastMessage?: CommentEvent | null;
   /** Every label of the organization, for the label picker. */
   orgLabels?: Label[];
+  /** The organization's members, for @mentions in comments. */
+  members?: Mentionable[];
   onClose: () => void;
 }
 
@@ -48,7 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function TaskDetailModal({ task, projectId, me, lastMessage = null, orgLabels = NO_LABELS, onClose }: Props) {
+export default function TaskDetailModal({ task, projectId, me, lastMessage = null, orgLabels = NO_LABELS, members, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -153,7 +156,7 @@ export default function TaskDetailModal({ task, projectId, me, lastMessage = nul
             isAdmin={isAdmin}
           />
 
-          <CommentsPanel projectId={projectId} taskId={task.id} me={me} lastMessage={lastMessage} />
+          <CommentsPanel projectId={projectId} taskId={task.id} me={me} lastMessage={lastMessage} members={members} />
         </div>
       </div>
     </div>

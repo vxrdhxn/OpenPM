@@ -67,16 +67,16 @@ export function useComments(projectId: string, taskId: string, lastMessage: Comm
   }, [projectId, taskId, olderCursor]);
 
   const add = useCallback(
-    async (body: string) => {
-      const created = await postComment(projectId, taskId, body);
+    async (body: string, mentionIds: string[] = []) => {
+      const created = await postComment(projectId, taskId, body, mentionIds);
       if (mounted.current) setComments((current) => applyCommentEvent(current, taskId, { type: 'comment_created', task_id: taskId, comment: created }));
     },
     [projectId, taskId]
   );
 
   const edit = useCallback(
-    async (id: string, body: string) => {
-      const updated = await editComment(projectId, taskId, id, body);
+    async (id: string, body: string, mentionIds: string[]) => {
+      const updated = await editComment(projectId, taskId, id, body, mentionIds);
       if (mounted.current) setComments((current) => applyCommentEvent(current, taskId, { type: 'comment_updated', task_id: taskId, comment: updated }));
     },
     [projectId, taskId]

@@ -3,6 +3,8 @@
 import { useId, useState } from 'react';
 import { Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useComments } from '@/hooks/useComments';
+import MentionTextarea from './MentionTextarea';
+import { mentionIdsIn, type Mentionable } from '@/lib/mentions';
 import {
   canComment,
   canDeleteComment,
@@ -17,7 +19,11 @@ interface Props {
   taskId: string;
   me: { user_id: string; role: string } | null;
   lastMessage: CommentEvent | null;
+  /** The organization's members, for @mentions. */
+  members?: Mentionable[];
 }
+
+const NO_MEMBERS: Mentionable[] = [];
 
 const messageOf = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
 
@@ -32,12 +38,14 @@ function Counter({ length }: { length: number }) {
  * The task's discussion: comments oldest-first with the newest at the bottom, live updates, and a box
  * to write one. Text is rendered as text (React escapes it), never as HTML.
  */
-export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Props) {
+export default function CommentsPanel({ projectId, taskId, me, lastMessage, members = NO_MEMBERS }: Props) {
   const { comments, loading, error, hasOlder, loadingOlder, loadOlder, add, edit, remove } = useComments(projectId, taskId, lastMessage);
   const [draft, setDraft] = useState('');
+  // People picked from the @ suggestions while writing; only those still named in the text are sent.
+  const [draftMentions, setDraftMentions] = useState<Mentionable[]>([]);
   const [posting, setPosting] = useState(false);
   const [actionError, setActionError] = useState('');
-  const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; body: string; mentions: Mentionable[] } | null>(null);
   const inputId = useId();
 
   const submit = async () => {
@@ -46,8 +54,9 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Pr
     setPosting(true);
     setActionError('');
     try {
-      await add(body);
+      await add(body, mentionIdsIn(body, draftMentions));
       setDraft('');
+      setDraftMentions([]);
     } catch (err) {
       setActionError(messageOf(err, 'Could not post the comment'));
     } finally {
@@ -61,7 +70,7 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Pr
     if (!body || body.length > MAX_COMMENT_LENGTH) return;
     setActionError('');
     try {
-      await edit(editing.id, body);
+      await edit(editing.id, body, mentionIdsIn(body, editing.mentions));
       setEditing(null);
     } catch (err) {
       setActionError(messageOf(err, 'Could not save the comment'));
@@ -137,7 +146,7 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Pr
                       {canEditComment(me, c) && editing?.id !== c.id && (
                         <button
                           type="button"
-                          onClick={() => setEditing({ id: c.id, body: c.body })}
+                          onClick={() => setEditing({ id: c.id, body: c.body, mentions: c.mentions ?? [] })}
                           aria-label="Edit comment"
                           className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
                         >
@@ -159,10 +168,13 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Pr
 
                   {editing?.id === c.id ? (
                     <div className="space-y-2">
-                      <textarea
+                      <MentionTextarea
                         aria-label="Edit comment"
                         value={editing.body}
-                        onChange={(e) => setEditing({ id: c.id, body: e.target.value })}
+                        onChange={(body) => setEditing({ ...editing, body })}
+                        onMention={(m) => setEditing({ ...editing, mentions: [...editing.mentions, m] })}
+                        members={members}
+                        selfId={me?.user_id}
                         onKeyDown={keys(saveEdit, true, () => setEditing(null))}
                         rows={3}
                         autoFocus
@@ -191,12 +203,15 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Pr
               <label htmlFor={inputId} className="sr-only">
                 Write a comment
               </label>
-              <textarea
+              <MentionTextarea
                 id={inputId}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={setDraft}
+                onMention={(m) => setDraftMentions((list) => [...list, m])}
+                members={members}
+                selfId={me?.user_id}
                 onKeyDown={keys(submit, draft !== '')}
-                placeholder="Write a comment... (Ctrl+Enter to send)"
+                placeholder="Write a comment... (@ to mention, Ctrl+Enter to send)"
                 rows={3}
                 className="input-field text-sm"
               />
