@@ -603,11 +603,11 @@ metadata
 ## Tooling
 
 - [ ] CodeQL passes.
-- [x] Trivy passes or has documented exceptions. — report-only, documented in `docs/ci.md`
+- [x] Trivy passes or has documented exceptions. — blocking on HIGH/CRITICAL (fixable) since G.1
 - [x] Secret scanning enabled.
 - [x] Dependency scanning enabled. — Dependabot
 - [x] Container scanning enabled. — Trivy
-- [x] Security workflows run on PRs/releases. — on push and PR; first GitHub run not yet confirmed
+- [x] Security workflows run on PRs/releases. — on push and PR; green on GitHub since 2026-11-15
 
 ---
 
@@ -712,7 +712,7 @@ Review:
 - [x] Non-root runtime.
 - [x] No dev dependencies in production image.
 - [x] Complete `.dockerignore`.
-- [ ] Deterministic builds where practical. — *partial:* runtime stage uses `npm install --omit=dev`, not `npm ci`
+- [x] Deterministic builds where practical. — `npm ci` in every stage (G.1)
 - [x] Vulnerability scanning. — Trivy in CI
 - [ ] Image versioning/tag strategy.
 - [x] Environment configuration outside images.
@@ -855,7 +855,7 @@ Audit event
 - [ ] Dependency audit.
 - [x] Secret scanning.
 - [ ] CodeQL.
-- [x] Container scan. — Trivy, report-only
+- [x] Container scan. — Trivy, blocking
 - [x] Helm validation.
 
 ## Release
@@ -870,7 +870,7 @@ Audit event
 
 ## Branch protection
 
-- [ ] CI required.
+- [ ] CI required. — *pending:* settings documented in `docs/ci.md`; must be enabled in GitHub repo settings
 - [ ] Review required.
 - [ ] Protected branches.
 - [ ] Security checks required.
@@ -1319,15 +1319,15 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Notifications         | ⬜     | Only the assignment email on task creation. |
 | Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
 | API hardening         | 🟡     | Body schemas, 1 MB limit, rate limits, helmet, strict CORS. Path params are not validated, there are no request timeouts, Swagger is dev-only, and 500 responses can echo error messages. |
-| Security              | 🟡     | gitleaks, Trivy (report-only), Dependabot, no secrets in images or bundles. No CodeQL, no threat model, no rotation procedure. |
+| Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. No CodeQL, no threat model, no rotation procedure. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
-| Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`. Runtime stage uses `npm install`, not `npm ci`. No tag strategy. |
+| Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`, `npm ci`. Runtime images ship no npm/yarn/corepack (their bundled deps failed Trivy). Trivy-clean and blocking in CI. No tag strategy. |
 | Kubernetes            | 🟢     | Installed and exercised on kind (G.4): app flow, NetworkPolicy enforcement, upgrades, rollback. Fixed on the way: invalid NetworkPolicies, Postgres crash loop, missing migrations, config changes not rolling pods. Not yet tested: Ingress controller, HPA scaling, a real cloud cluster. |
 | Helm                  | 🟢     | Install, upgrade and rollback tested on kind; CI renders three value sets and checks the objects (`tests/helm`). No `values.schema.json`; `values.yaml` still ships dev secrets. |
 | ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
 | Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Run against live Prometheus/Grafana with real traffic in Compose (G.3): every target up, an alert fired and cleared, every dashboard query checked. No log retention policy. |
 | Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec, no load tests (the k6 script mentioned in the README does not exist). |
-| CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + Trivy; actionlint clean. No CodeQL, no release pipeline, no branch protection. First GitHub run not yet confirmed. |
+| CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + blocking Trivy; actionlint clean; green on GitHub. No CodeQL, no release pipeline; branch protection documented but not yet enabled. |
 | Performance           | ⬜     | Indexes and caching only; nothing measured. |
 | Reliability           | ⬜     | No failure testing. |
 | Backup/restore        | ⬜     | |

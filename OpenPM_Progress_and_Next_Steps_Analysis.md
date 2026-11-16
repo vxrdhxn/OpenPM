@@ -150,7 +150,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 - [x] **F.3 Worker job policy (done):** every job gets 5 attempts with exponential backoff (30s → 4m) and is trimmed from Redis afterwards. Email failures now fail the job: temporary ones (network, 15s timeout, rate limit, 5xx) are retried; permanent ones (invalid recipient or API key) and malformed payloads fail at once (`UnrecoverableError`). Sends carry a per-job idempotency key, so retries cannot deliver duplicates. Worker lookups are scoped to the job's `org_id`. Unknown job names fail retryably instead of being dropped. Concurrency is 5. `worker_jobs_total` gains `status="retrying"`, so `OpenPMJobsFailing` only fires when a job gives up, and `OpenPMEmailsFailing` needs 5 failures in 15m. See `docs/jobs.md`. Verified live: with Postgres cut off, attempt 1 failed and attempt 2 succeeded 30s later; a malformed job failed after one attempt.
 
 ### Phase G: Verify for real
-- [ ] **G.1** Confirm CI is green on GitHub, then make its jobs required in branch protection. Switch Trivy to blocking (`TRIVY_EXIT_CODE: "1"`) now that advisories are cleared.
+- [x] **G.1 CI on GitHub (done, except branch protection):** every job has been green on GitHub since 2026-11-15. Trivy is now blocking (`TRIVY_EXIT_CODE: "1"`). Turning it on failed all three images: 10 HIGH advisories in the npm CLI bundled with `node:22-alpine` (brace-expansion, ip-address, pacote, picomatch, sigstore), not in OpenPM's dependencies. Nothing runs npm in the containers, so the runtime stages now delete npm, yarn and corepack; builds also use `npm ci`. **Still to do (repo admin, in GitHub settings):** mark the seven CI checks as required on `main`; the exact settings are in `docs/ci.md`.
 - [x] **G.2 Real-database tests (done):** `npm run test:integration` drives the real app (`buildApp()`, split out of `index.ts`) against a throwaway Postgres database, in CI via a Postgres service container. Each run applies every migration, rolls all of them back to an empty schema and applies them again. 29 tests cover tenant isolation (each cross-org read/write/delete returns 404 and the row is unchanged), roles, privilege escalation, register/login, password reset, invites and rate limits. **Found and fixed a cross-tenant bug:** tasks could be assigned to a user from another organization (only the foreign key was checked), which put that user's name on the other org's board. Redis and the queue are in-memory fakes. actionlint now runs clean on the workflow.
 - [x] **G.3 Full-stack rehearsal (done):** new opt-in overlays `docker-compose.scale.yml` (second API on :3002) and `docker-compose.monitoring.yml` (Prometheus + Grafana with the chart's own rules and dashboards). Verified with a real browser:
   - Live updates cross API instances in both directions.
@@ -186,7 +186,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
-| **Foundation & Build** | 🟢 Complete | Confirm CI green on GitHub; make checks required |
+| **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
 | **API Backend & RBAC** | 🟢 Solid | Shared error handling, path-param validation (H.1) |
 | **Organizations & Invites** | 🟡 Partial | Member list, role change, removal |
 | **Authentication** | 🟡 Partial | Enumeration fix and session revocation (H.3) |
@@ -196,5 +196,5 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | **Observability** | 🟢 Verified locally | Run on a cluster with the Prometheus Operator (G.4) |
 
 ### Recommended Immediate Action
-1. **G.1:** confirm CI is green on GitHub (the Vitest `dist/` fix in `8bf0492` was likely needed) and turn on blocking checks.
+1. **G.1 (remaining):** enable branch protection on `main` in GitHub settings (see `docs/ci.md`).
 2. **G.5:** ArgoCD, Ingress controller and HPA on the kind cluster (needs approval to apply upstream manifests).

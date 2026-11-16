@@ -21,6 +21,11 @@ branch protection settings. The workflow cannot do that itself; see [Branch prot
 image fails its job. It was report-only until the November 2026 upgrades (Node 22, Fastify 5,
 Next 16, Zod 4, ...) cleared the backlog; `npm audit --omit=dev` has reported 0 vulnerabilities since.
 
+The first blocking run failed all three images on advisories in the **npm CLI bundled with
+`node:22-alpine`**, not in OpenPM's dependencies. Nothing runs npm inside the containers (Compose,
+Helm and the probes call `node` directly), so each runtime stage deletes npm, yarn and corepack. Do
+not add an `npm run ...` command to a container; call `node` on the built file instead.
+
 When a new advisory fails the build:
 
 1. Prefer the fix: bump the package (or rebuild to pick up a patched `node:22-alpine`).
