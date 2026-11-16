@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../db/client';
 import { addUser, createProject, createTask, registerOrg, row, startApp, type Actor, type App } from './harness';
 
@@ -6,11 +6,13 @@ import { addUser, createProject, createTask, registerOrg, row, startApp, type Ac
 describe('members (real Postgres)', () => {
   let app: App;
 
-  beforeAll(async () => {
+  // A fresh app per test: register is rate-limited (10/min) per app instance, and these tests
+  // create many organizations.
+  beforeEach(async () => {
     app = await startApp();
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await app.close();
   });
 
