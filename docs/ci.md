@@ -10,33 +10,37 @@ request cancels that PR's older run.
 | **Integration tests (Postgres)** | `npm run test:integration` against a Postgres service container: creates a throwaway database, runs every migration up, down to an empty schema and up again, then drives the real API (routes, auth, SQL) for tenant isolation, roles, account flows (register, password reset, invites) and rate limits. Redis and the job queue are in-memory fakes | Yes |
 | **Helm chart** | `helm lint --strict` and `helm template` for default values, `values.prod.yaml`, and monitoring + dashboards + alert rules enabled; `promtool check rules` and `promtool test rules` on the alert rules (promtool from the Prometheus image, pinned by digest) | Yes |
 | **Secret scan (gitleaks)** | Whole git history against `.gitleaks.toml`, plus a canary that proves the config still detects secrets | Yes |
-| **Image (api / worker / frontend)** | Builds each Dockerfile from a clean checkout, then scans the image with Trivy (HIGH/CRITICAL, fixable only) | Build: yes. Scan: **no, report-only** (see below) |
+| **Image (api / worker / frontend)** | Builds each Dockerfile from a clean checkout, then scans the image with Trivy (HIGH/CRITICAL, fixable only) | Yes (build and scan) |
 
 Note that jobs only gate merging once you mark them as **required status checks** in the repository's
-branch protection settings. The workflow cannot do that itself.
+branch protection settings. The workflow cannot do that itself; see [Branch protection](#branch-protection).
 
-## Image vulnerability scanning is report-only (for now)
+## Image vulnerability scanning is blocking
 
-`TRIVY_EXIT_CODE` at the top of the workflow is `"0"`, so Trivy prints findings but does not fail the
-build. The dependency tree currently has known HIGH/CRITICAL advisories, and several can only be
-fixed by major upgrades, so a blocking scan would fail every build for reasons unrelated to the change.
+`TRIVY_EXIT_CODE` at the top of the workflow is `"1"`, so a fixable HIGH/CRITICAL finding in any
+image fails its job. It was report-only until the November 2026 upgrades (Node 22, Fastify 5,
+Next 16, Zod 4, ...) cleared the backlog; `npm audit --omit=dev` has reported 0 vulnerabilities since.
 
-As of 2026-11-12, `npm audit --omit=dev` reported **4 critical and 12 high** advisories in production
-dependencies. The notable ones:
+When a new advisory fails the build:
 
-| Package | Advisory (summary) | Fix |
-|---|---|---|
-| `fast-jwt` (via `@fastify/jwt`) | Improper validation of `iss` claims | Major upgrade |
-| `next` 14.x | Self-hosted DoS via the image optimizer | Major upgrade |
-| `fastify` 4.x | DoS via unbounded memory in `sendWebStream` | Major upgrade (v5) |
-| `proxy-addr` | IP spoofing via IPv4-mapped IPv6 trust subnet | Non-breaking update available |
-| `tar` (build-time, via `bcrypt`) | Arbitrary file write via hardlink traversal | Non-breaking update available |
-| `zod` 3.x | Memory exhaustion on oversized collections | Major upgrade (v4) |
-| `ws`, `nanoid`, `brace-expansion`, `fast-uri` | DoS-class issues | Non-breaking updates available |
+1. Prefer the fix: bump the package (or rebuild to pick up a patched `node:22-alpine`).
+2. If it cannot be fixed yet and is not exploitable here, add its ID to a `.trivyignore` file at the
+   repository root with a comment saying why and when to revisit it.
+3. Do not set `TRIVY_EXIT_CODE` back to `"0"`; that silences every future finding too.
 
-Whether each is **exploitable here** has not been assessed (for example, the app does not use JWT
-`iss` claims). Plan the upgrades, then set `TRIVY_EXIT_CODE: "1"` so new HIGH/CRITICAL findings
-fail the build. Until then, read the Trivy output in each image job.
+## Branch protection
+
+CI ran green on GitHub for the first time on 2026-11-15 (every job, every commit since). To make it
+gate merges, in **Settings → Branches → Add branch protection rule** (or a ruleset) for `main`:
+
+- Require a pull request before merging (1 approval if there is more than one maintainer).
+- Require status checks to pass, and require branches to be up to date. Select these checks:
+  `Lint, build, test`, `Integration tests (Postgres)`, `Helm chart`, `Secret scan (gitleaks)`,
+  `Image (api)`, `Image (worker)`, `Image (frontend)`.
+- Require conversation resolution before merging.
+- Block force pushes and deletions.
+
+A check name only appears in the picker after it has run once on the repository.
 
 ## Secret scanning
 
@@ -67,11 +71,10 @@ and `helm template` for all three variants, the gitleaks canary and history scan
 negative control), YAML parsing, SHA-pin checks, that every `with:` input exists in each pinned
 action, `actionlint` (clean), and the integration suite against Postgres 16 in Docker.
 
+On GitHub, every job has passed on every push to `main` since 2026-11-15, including the Trivy scans.
+
 **Not verified:**
 
-- The workflow has not run on GitHub yet, so expect to fix small things on the first run.
-- Trivy was not run. (All three images were built and started with `docker compose up --build` on a
-  developer machine, and the stack was exercised end to end, but not from a clean CI runner.)
 - Some API tests are timing-based (heartbeat and token-expiry tests use short real timers); a heavily
   loaded runner could make one flaky.
 - `dist/` currently also contains compiled `*.test.js` files, so images ship them. Excluding tests

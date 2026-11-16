@@ -20,11 +20,10 @@ env:
   GITLEAKS_VERSION: "8.30.1"
   # sha256 of gitleaks_<version>_linux_x64.tar.gz from the release's checksums file.
   GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-  # Image vulnerability scanning is REPORT-ONLY for now: the dependency tree currently has known
-  # HIGH/CRITICAL advisories (several need major upgrades, e.g. Fastify 5, Next 15+, Zod 4), so
-  # blocking on them would fail every build for reasons unrelated to the change. Set to "1" to make
-  # HIGH/CRITICAL findings fail the build once that backlog is cleared. See docs/ci.md.
-  TRIVY_EXIT_CODE: "0"
+  # Image vulnerability scanning is BLOCKING: a fixable HIGH/CRITICAL finding fails the image job.
+  # The advisory backlog was cleared by the Nov 2026 upgrades. To accept a specific finding, add it
+  # to .trivyignore with a reason rather than setting this back to "0". See docs/ci.md.
+  TRIVY_EXIT_CODE: "1"
 
 jobs:
   node:
