@@ -95,25 +95,27 @@ describe('GET /ws', () => {
 
     it('closes an open socket at the next heartbeat once its session is revoked', async () => {
       let current = true;
-      await build(30, { verifySession: async (claims) => (current ? { role: claims.role } : null) });
+      await build(100, { verifySession: async (claims) => (current ? { role: claims.role } : null) });
       websocketRejectionsTotal.reset();
 
       const c = connect({ headers: asCookie(tokenFor()) });
       await open(c);
-      await tick(80);
+      await tick(250); // two heartbeats with the session still current
       expect(c.ws.readyState).toBe(WebSocket.OPEN);
 
       current = false; // e.g. the user logged out on another device
 
       expect(await c.closed).toMatchObject({ code: 1008, reason: 'Session revoked' });
-      expect(unsubscribe).toHaveBeenCalled();
+      // The server releases the subscription when its side of the close completes, which can be
+      // just after the client sees the close frame.
+      await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalled(), { timeout: 2000 });
       const revoked = (await websocketRejectionsTotal.get()).values.find((v) => v.labels.reason === 'revoked');
       expect(revoked?.value).toBe(1);
     });
 
     it('keeps the socket when the re-check itself fails (database blip)', async () => {
       let calls = 0;
-      await build(30, {
+      await build(100, {
         verifySession: async (claims) => {
           calls += 1;
           if (calls > 1) throw new Error('db down');
@@ -123,9 +125,9 @@ describe('GET /ws', () => {
 
       const c = connect({ headers: asCookie(tokenFor()) });
       await open(c);
-      await tick(150);
+      await vi.waitFor(() => expect(calls).toBeGreaterThan(2), { timeout: 2000 });
 
-      expect(calls).toBeGreaterThan(1);
+      expect(calls).toBeGreaterThan(2);
       expect(c.ws.readyState).toBe(WebSocket.OPEN);
     });
   });
