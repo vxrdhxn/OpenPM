@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Trash2, UserPlus, Mail, Shield } from 'lucide-react';
 import MembersPanel from '@/components/MembersPanel';
+import LabelsPanel from '@/components/LabelsPanel';
 
 export default function OrganizationSettings() {
   const [invites, setInvites] = useState<any[]>([]);
@@ -128,6 +129,7 @@ export default function OrganizationSettings() {
         {/* Right Col: Members, then Pending Invites */}
         <div className="lg:col-span-2 space-y-8">
           <MembersPanel />
+          <LabelsPanel />
 
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">

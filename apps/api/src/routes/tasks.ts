@@ -6,6 +6,7 @@ import { cache } from '../cache/redis';
 import { getJobQueue } from '../queue';
 import { Conditions } from '../query/pagination';
 import { applyTaskFilters, hasTaskFilters, taskFilterQuerySchema, type TaskFilters } from '../query/taskFilters';
+import { TASK_LABELS_COLUMN } from '../query/taskLabels';
 
 /** Most tasks one board response carries (see GET /:projectId/tasks). */
 export const BOARD_TASK_LIMIT = 1000;
@@ -149,7 +150,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     applyTaskFilters(where, filters, user_id);
 
     const rows = await db.query(
-      `SELECT t.*, u.name as assignee_name
+      `SELECT t.*, u.name as assignee_name, ${TASK_LABELS_COLUMN}
        FROM tasks t
        LEFT JOIN users u ON t.assignee_id = u.id
        WHERE ${where.sql()}

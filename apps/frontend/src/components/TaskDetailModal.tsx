@@ -4,6 +4,8 @@ import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import AttachmentsPanel from './AttachmentsPanel';
 import CommentsPanel from './CommentsPanel';
+import TaskLabels from './TaskLabels';
+import type { Label } from '@/lib/labels';
 import type { CommentEvent } from '@/lib/comments';
 
 export interface TaskSummary {
@@ -14,7 +16,11 @@ export interface TaskSummary {
   priority: string;
   assignee_name?: string | null;
   due_date?: string | null;
+  labels?: Label[];
 }
+
+/** Stable empty list: a fresh `[]` each render would look like new board data to TaskLabels. */
+const NO_LABELS: Label[] = [];
 
 export interface CurrentUser {
   user_id: string;
@@ -27,6 +33,8 @@ interface Props {
   me: CurrentUser | null;
   /** The latest live event from the organization channel (comments update from it). */
   lastMessage?: CommentEvent | null;
+  /** Every label of the organization, for the label picker. */
+  orgLabels?: Label[];
   onClose: () => void;
 }
 
@@ -40,7 +48,7 @@ const STATUS_LABELS: Record<string, string> = {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function TaskDetailModal({ task, projectId, me, lastMessage = null, onClose }: Props) {
+export default function TaskDetailModal({ task, projectId, me, lastMessage = null, orgLabels = NO_LABELS, onClose }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -123,6 +131,14 @@ export default function TaskDetailModal({ task, projectId, me, lastMessage = nul
         </div>
 
         <div className="p-6 space-y-6">
+          <TaskLabels
+            projectId={projectId}
+            taskId={task.id}
+            labels={task.labels ?? NO_LABELS}
+            orgLabels={orgLabels}
+            canEdit={canUpload}
+          />
+
           {task.description && (
             <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
               {task.description}

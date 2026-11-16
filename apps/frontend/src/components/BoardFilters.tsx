@@ -2,27 +2,33 @@
 
 import { Search, X } from 'lucide-react';
 import type { Member } from '@/lib/members';
+import type { Label } from '@/lib/labels';
 
 export interface BoardFilterValues {
   q: string;
   priority: '' | 'low' | 'medium' | 'high' | 'urgent';
   /** '' = anyone, 'me', 'none' = unassigned, or a member id. */
   assignee: string;
+  /** '' = any, or a label id. */
+  label: string;
 }
 
-export const EMPTY_BOARD_FILTERS: BoardFilterValues = { q: '', priority: '', assignee: '' };
+export const EMPTY_BOARD_FILTERS: BoardFilterValues = { q: '', priority: '', assignee: '', label: '' };
 
-export const isFiltering = (f: BoardFilterValues) => f.q.trim() !== '' || f.priority !== '' || f.assignee !== '';
+export const isFiltering = (f: BoardFilterValues) =>
+  f.q.trim() !== '' || f.priority !== '' || f.assignee !== '' || f.label !== '';
 
 /** Search, priority and assignee filters above the board. */
 export default function BoardFilters({
   value,
   onChange,
   members,
+  labels,
 }: {
   value: BoardFilterValues;
   onChange: (next: BoardFilterValues) => void;
   members: Member[];
+  labels: Label[];
 }) {
   const set = (patch: Partial<BoardFilterValues>) => onChange({ ...value, ...patch });
 
@@ -69,6 +75,22 @@ export default function BoardFilters({
           </option>
         ))}
       </select>
+
+      {labels.length > 0 && (
+        <select
+          aria-label="Filter by label"
+          value={value.label}
+          onChange={(e) => set({ label: e.target.value })}
+          className="input-field w-44"
+        >
+          <option value="">Any label</option>
+          {labels.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      )}
 
       {isFiltering(value) && (
         <button

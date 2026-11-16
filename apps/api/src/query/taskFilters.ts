@@ -12,6 +12,8 @@ export const taskFilterQuerySchema = {
   priority: { type: 'array', items: { type: 'string', enum: [...TASK_PRIORITIES] }, maxItems: TASK_PRIORITIES.length, uniqueItems: true },
   // `me` = the caller, `none` = unassigned, or a user id.
   assignee: { anyOf: [{ type: 'string', enum: ['me', 'none'] }, { type: 'string', format: 'uuid' }] },
+  // Tasks with ANY of these labels.
+  label: { type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: 10, uniqueItems: true },
   due_after: { type: 'string', format: 'date-time' },
   due_before: { type: 'string', format: 'date-time' },
   q: searchQuerySchema,
@@ -21,13 +23,14 @@ export interface TaskFilters {
   status?: string[];
   priority?: string[];
   assignee?: string;
+  label?: string[];
   due_after?: string;
   due_before?: string;
   q?: string;
 }
 
 export const hasTaskFilters = (f: TaskFilters) =>
-  Boolean(f.status?.length || f.priority?.length || f.assignee || f.due_after || f.due_before || f.q);
+  Boolean(f.status?.length || f.priority?.length || f.assignee || f.label?.length || f.due_after || f.due_before || f.q);
 
 /** Add the filters as conditions on the tasks table aliased `t`. Values are always bind parameters. */
 export function applyTaskFilters(where: Conditions, filters: TaskFilters, callerId: string): Conditions {
@@ -37,6 +40,13 @@ export function applyTaskFilters(where: Conditions, filters: TaskFilters, caller
   if (filters.assignee === 'none') where.add(() => 't.assignee_id IS NULL');
   else if (filters.assignee === 'me') where.add((p) => `t.assignee_id = ${p(callerId)}`);
   else if (filters.assignee) where.add((p) => `t.assignee_id = ${p(filters.assignee)}`);
+
+  // org_id as well: a label id from another organization can never match.
+  if (filters.label?.length) {
+    where.add(
+      (p) => `EXISTS (SELECT 1 FROM task_labels tl WHERE tl.task_id = t.id AND tl.org_id = t.org_id AND tl.label_id = ANY(${p(filters.label)}::uuid[]))`
+    );
+  }
 
   // Tasks without a due date never match a due-date range.
   if (filters.due_after) where.add((p) => `t.due_date >= ${p(filters.due_after)}::timestamptz`);

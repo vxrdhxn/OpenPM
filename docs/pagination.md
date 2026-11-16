@@ -32,6 +32,7 @@ or `archived`. Only the plain first page (no filters, default limit) is cached.
 | `status` | `todo`, `in_progress`, `in_review`, `done` (repeat for several) |
 | `priority` | `low`, `medium`, `high`, `urgent` (repeat for several) |
 | `assignee` | `me`, `none` (unassigned) or a user id |
+| `label` | a label id (repeat for "any of these", up to 10) |
 | `due_after`, `due_before` | ISO 8601 date-times; `due_after` is inclusive, `due_before` exclusive. Tasks without a due date never match a range. |
 | `q` | text in the title or description (max 100 characters) |
 | `sort` | `created_at` (default), `updated_at`, `due_date`, `priority` (urgent highest) |

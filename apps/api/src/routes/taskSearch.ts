@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
 import { Conditions, decodeCursor, paginationQuerySchema, toPage } from '../query/pagination';
+import { TASK_LABELS_COLUMN } from '../query/taskLabels';
 import {
   applyTaskFilters,
   taskFilterQuerySchema,
@@ -63,7 +64,7 @@ const taskSearchRoutes: FastifyPluginAsync = async (fastify) => {
 
     const rows = await db.query(
       `SELECT t.id, t.project_id, p.name AS project_name, t.title, t.status, t.priority,
-              t.assignee_id, u.name AS assignee_name, t.due_date, t.created_at, t.updated_at,
+              t.assignee_id, u.name AS assignee_name, t.due_date, t.created_at, t.updated_at, ${TASK_LABELS_COLUMN},
               (${expr})::text AS sort_key
          FROM tasks t
          JOIN projects p ON p.id = t.project_id AND p.org_id = t.org_id

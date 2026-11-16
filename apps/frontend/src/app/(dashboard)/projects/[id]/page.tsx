@@ -10,6 +10,8 @@ import TaskDetailModal, { CurrentUser } from '@/components/TaskDetailModal';
 import BoardFilters, { EMPTY_BOARD_FILTERS, isFiltering, type BoardFilterValues } from '@/components/BoardFilters';
 import { buildQuery } from '@/lib/query';
 import type { Member } from '@/lib/members';
+import { listLabels, type Label } from '@/lib/labels';
+import LabelChip from '@/components/LabelChip';
 
 const COLUMNS = [
   { id: 'todo', title: 'To Do', color: 'bg-slate-200 dark:bg-slate-800' },
@@ -58,6 +60,20 @@ export default function KanbanBoard() {
     api.get('/members').then(setMembers).catch(() => setMembers([]));
   }, []);
 
+  // The organization's labels, for the filter and the task dialog's picker.
+  const [orgLabels, setOrgLabels] = useState<Label[]>([]);
+  const fetchLabels = useCallback(
+    () => listLabels().then(setOrgLabels).catch(() => setOrgLabels([])),
+    []
+  );
+  useEffect(() => {
+    fetchLabels();
+  }, [fetchLabels]);
+  // If the label being filtered on is deleted, drop that filter (adjusting state during render).
+  if (filters.label && !orgLabels.some((l) => l.id === filters.label)) {
+    setFilters({ ...filters, label: '' });
+  }
+
   // Close the dialog if its task disappeared (adjusting state during render, not in an effect).
   if (selectedTaskId && !selectedTask) setSelectedTaskId(null);
 
@@ -69,6 +85,7 @@ export default function KanbanBoard() {
             q: debouncedQ,
             priority: filters.priority ? [filters.priority] : undefined,
             assignee: filters.assignee,
+            label: filters.label ? [filters.label] : undefined,
           })}`
         )
         .then((data) => {
@@ -81,7 +98,7 @@ export default function KanbanBoard() {
           });
         })
         .catch((e) => console.error(e)),
-    [params.id, debouncedQ, filters.priority, filters.assignee]
+    [params.id, debouncedQ, filters.priority, filters.assignee, filters.label]
   );
 
   const fetchProject = useCallback(
@@ -106,6 +123,13 @@ export default function KanbanBoard() {
   useEffect(() => {
     if (!lastMessage) return;
 
+    // A label was created, renamed, recolored or deleted somewhere in the organization.
+    if (lastMessage.type === 'labels_changed') {
+      fetchLabels();
+      fetchTasks();
+      return;
+    }
+
     if (lastMessage.project_id === params.id) {
       if (
         lastMessage.type === 'task_created' ||
@@ -116,7 +140,7 @@ export default function KanbanBoard() {
         fetchTasks();
       }
     }
-  }, [lastMessage, params.id, fetchTasks]);
+  }, [lastMessage, params.id, fetchTasks, fetchLabels]);
 
   // Events published while the socket was down are not replayed, so catch up after a reconnect.
   // (Epoch 1 is the first connect, when the initial fetch above already ran.)
@@ -200,7 +224,7 @@ export default function KanbanBoard() {
         </button>
       </div>
 
-      <BoardFilters value={filters} onChange={setFilters} members={members} />
+      <BoardFilters value={filters} onChange={setFilters} members={members} labels={orgLabels} />
       {isFiltering(filters) && (
         <p className="px-8 pt-2 text-xs text-slate-500">Showing matching tasks only.</p>
       )}
@@ -247,6 +271,13 @@ export default function KanbanBoard() {
                                 </div>
                                 <div className="flex-1">
                                   <h4 className="font-medium text-slate-900 dark:text-slate-100">{task.title}</h4>
+                                  {task.labels?.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-2">
+                                      {task.labels.map((l: Label) => (
+                                        <LabelChip key={l.id} label={l} />
+                                      ))}
+                                    </div>
+                                  )}
                                   <div className="flex items-center justify-between mt-3">
                                     <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
                                       task.priority === 'high' || task.priority === 'urgent' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
@@ -282,6 +313,7 @@ export default function KanbanBoard() {
           projectId={params.id}
           me={me}
           lastMessage={lastMessage}
+          orgLabels={orgLabels}
           onClose={() => setSelectedTaskId(null)}
         />
       )}
