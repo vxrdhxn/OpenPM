@@ -69,6 +69,12 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       expect(init[0].command).toEqual(['node', 'apps/api/dist/db/migrate.js', 'up']);
     });
 
+    it('keeps dependency checks out of the API liveness probe (an outage must not restart every pod)', () => {
+      const api = deployment(objects, 'api')!.spec.template.spec.containers[0];
+      expect(api.livenessProbe.httpGet.path).toBe('/health/live');
+      expect(api.readinessProbe.httpGet.path).toBe('/health');
+    });
+
     it('gives the frontend no runtime NEXT_PUBLIC_* (they are build-time only)', () => {
       const env = deployment(objects, 'frontend')!.spec.template.spec.containers[0].env ?? [];
       expect(env.map((e: { name: string }) => e.name).filter((n: string) => n.startsWith('NEXT_PUBLIC_'))).toEqual([]);

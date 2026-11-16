@@ -107,9 +107,11 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 10
+          # Liveness checks only the process: a database or Redis outage must not restart every pod.
+          # Readiness uses /health (503 without the database; Redis down is "degraded", still ready).
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: {{ .Values.api.port | default 3000 }}
             periodSeconds: 10
             timeoutSeconds: 5

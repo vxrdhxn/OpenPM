@@ -8,18 +8,31 @@ export const jobs: Array<{ name: string; data: Record<string, any>; opts?: Recor
 
 const store = new Map<string, unknown>();
 
+/**
+ * Set to simulate a Redis outage. The fake then behaves as cache/redis.ts promises to when Redis is
+ * unavailable (tested there): reads miss, writes are dropped, nothing throws, and ping is false.
+ */
+export const redisOutage = { active: false };
+
 export const fakeCache = {
   async get(key: string) {
+    if (redisOutage.active) return null;
     return store.has(key) ? structuredClone(store.get(key)) : null;
   },
   async set(key: string, value: unknown, _ttlSeconds?: number) {
+    if (redisOutage.active) return;
     store.set(key, structuredClone(value));
   },
   async del(key: string) {
+    if (redisOutage.active) return;
     store.delete(key);
   },
   async publish(channel: string, message: unknown) {
+    if (redisOutage.active) return;
     published.push({ channel, message });
+  },
+  async ping() {
+    return !redisOutage.active;
   },
   async subscribe() {
     return () => {};

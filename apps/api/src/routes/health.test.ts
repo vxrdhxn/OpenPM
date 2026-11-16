@@ -1,24 +1,62 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../cache/redis', () => ({
-  cache: {
-    get: vi.fn(),
-    set: vi.fn(),
-    del: vi.fn(),
-    publish: vi.fn(),
-    subscribe: vi.fn(),
-  },
+const { cache, db } = vi.hoisted(() => ({
+  cache: { ping: vi.fn() },
+  db: { query: vi.fn() },
 }));
+vi.mock('../cache/redis', () => ({ cache }));
+vi.mock('../db/client', () => ({ db }));
+
 import fastify from 'fastify';
 import healthRoutes from './health';
 
-describe('Health Route', () => {
-  it('should be configured to return health status', async () => {
-    const app = fastify();
+describe('health routes', () => {
+  async function get(url: string) {
+    const app = fastify({ logger: false });
     await app.register(healthRoutes);
-    // Note: A full integration test would call app.inject({ method: 'GET', url: '/health' })
-    // but that requires DB and Redis to be running or mocked.
-    // For now, this verifies the test suite runs successfully.
-    expect(app.hasRoute({ method: 'GET', url: '/health' })).toBe(true);
+    const res = await app.inject({ method: 'GET', url });
+    await app.close();
+    return res;
+  }
+
+  beforeEach(() => {
+    db.query.mockReset().mockResolvedValue([{ '?column?': 1 }]);
+    cache.ping.mockReset().mockResolvedValue(true);
+  });
+
+  it('is ok when the database and Redis are up', async () => {
+    const res = await get('/health');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: 'ok', db: 'ok', redis: 'ok' });
+  });
+
+  it('stays ready (200, degraded) when only Redis is down', async () => {
+    cache.ping.mockResolvedValue(false);
+
+    const res = await get('/health');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: 'degraded', db: 'ok', redis: 'error' });
+  });
+
+  it('is not ready (503) when the database is down', async () => {
+    db.query.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const res = await get('/health');
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ status: 'error', db: 'error' });
+  });
+
+  it('liveness checks no dependency', async () => {
+    db.query.mockRejectedValue(new Error('ECONNREFUSED'));
+    cache.ping.mockResolvedValue(false);
+
+    const res = await get('/health/live');
+
+    expect(res.statusCode).toBe(200);
+    expect(db.query).not.toHaveBeenCalled();
+    expect(cache.ping).not.toHaveBeenCalled();
   });
 });

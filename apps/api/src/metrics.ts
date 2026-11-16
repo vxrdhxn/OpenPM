@@ -65,3 +65,13 @@ export const redisErrorsTotal = new client.Counter({
   help: 'Redis connection errors',
   labelNames: ['client'],
 });
+
+/**
+ * Cache operations skipped because Redis was unavailable; the request carried on without the cache
+ * (reads went to the database). operation: get | set | del | publish; reason: unavailable | error.
+ */
+export const cacheBypassedTotal = new client.Counter({
+  name: 'cache_bypassed_total',
+  help: 'Cache operations skipped because Redis was unavailable',
+  labelNames: ['operation', 'reason'],
+});

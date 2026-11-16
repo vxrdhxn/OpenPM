@@ -51,6 +51,13 @@ Log retention is not defined by the application: set it in your log platform.
 | API | `GET :3000/metrics` | Unauthenticated. The ingress routes only `/api` and `/ws`, so it is not exposed externally; keep it that way. |
 | Worker | `GET :9100/metrics` (`METRICS_PORT`) | Also serves `/healthz`. Cluster-internal; the NetworkPolicy admits only Prometheus. |
 
+### Health endpoints (API)
+
+| Endpoint | Probe | Answers |
+|---|---|---|
+| `GET /health/live` | liveness | 200 while the process runs. Checks no dependency, so an outage never restarts every pod at once. |
+| `GET /health` | readiness, startup, Compose | 503 without Postgres. Without Redis: 200 with `"status": "degraded"`, `"redis": "error"`. The API keeps working from Postgres; the cache and live updates are off until Redis is back. |
+
 Label values come from small fixed sets, so cardinality is bounded (no ids, emails or SQL).
 
 ### API
@@ -66,6 +73,7 @@ Label values come from small fixed sets, so cardinality is bounded (no ids, emai
 | `db_query_duration_seconds` | `outcome` | Queries through `db.query` (`ok`/`error`). Transactions are not included. |
 | `db_pool_connections` | `state` | `total`, `idle`, `waiting`. |
 | `redis_errors_total` | `client` | `main`, `subscriber`. |
+| `cache_bypassed_total` | `operation`, `reason` | Cache commands skipped because Redis was unavailable (`reason`: `unavailable` = not connected, `error` = failed or slower than 250ms). The request carried on without the cache: reads went to Postgres. A steady rate means the API is running degraded. |
 | `nodejs_*`, `process_*` | | Default Node.js process metrics. |
 
 ### Worker
