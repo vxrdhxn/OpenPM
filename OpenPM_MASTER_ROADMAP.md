@@ -211,7 +211,7 @@ Review/finalize:
 - [ ] Select only required fields where useful.
 - [x] Review transaction boundaries. — `withTransaction`
 - [x] Use transactions for atomic multi-step writes.
-- [ ] Profile slow queries.
+- [x] Profile slow queries. — `EXPLAIN ANALYZE` on 50,000 tasks (`docs/load-testing.md`)
 - [x] Add indexes based on evidence. — derived from the routes' query patterns, not measured
 
 ## Database security
@@ -317,7 +317,7 @@ Actions:
 - [x] Paginate results. — keyset cursors, `{ items, next_cursor }` (`docs/pagination.md`)
 - [x] Limit maximum page size. — 100; board capped at 1000 tasks with `X-Truncated`
 - [x] Handle empty results. — "No matching projects" state
-- [ ] Test search performance. — *partial:* indexes for every org-scoped sort (migration 014); `ILIKE '%q%'` is a scan within the org and has not been measured
+- [x] Test search performance. — rare-term search 122 ms -> 0.5 ms with `pg_trgm` indexes (migration 019)
 - [x] Prevent expensive/abusive query parameters. — bounded `limit`/`q`, validated cursors, unknown parameters rejected
 
 ---
@@ -416,7 +416,7 @@ For every event:
 - [x] Reconnection. — exponential backoff with jitter
 - [x] Heartbeat/ping-pong.
 - [x] Stale connection cleanup. — missed heartbeat or JWT expiry closes the socket
-- [ ] Connection limits.
+- [ ] Connection limits. — *partial:* 1,000 concurrent sockets tested (8% CPU, 96 MB); no per-user or per-pod cap
 - [ ] Backpressure strategy.
 - [ ] Duplicate-event handling.
 - [ ] Ordering strategy where needed.
@@ -433,7 +433,7 @@ For every event:
 - [x] Define invalidation. — deleted on every write
 - [ ] Prevent stale authorization data.
 - [x] Avoid unnecessary sensitive-data caching.
-- [x] Gracefully handle Redis outages. — cache ops fail fast (no offline queue, 250ms deadline) and fall back to Postgres; missed invalidations retried on reconnect; `cache_bypassed_total` (H.2). Not yet exercised against a real Redis outage
+- [x] Gracefully handle Redis outages. — cache ops fail fast and fall back to Postgres; missed invalidations retried on reconnect (H.2). Verified against a real Redis outage, job enqueueing included (Phase 9)
 
 ## Pub/Sub
 
@@ -476,7 +476,7 @@ Worker reliability:
 - [x] Job ID logging.
 - [x] Processing-duration metrics.
 - [x] Failure metrics.
-- [ ] Restart behavior tests.
+- [x] Restart behavior tests. — worker killed mid-queue: 3,000/3,000 jobs, stalled jobs re-run
 
 Operational controls:
 
@@ -831,14 +831,14 @@ Audit event
 
 ## Load testing
 
-- [ ] Authentication load.
-- [ ] Task-list load.
-- [ ] Task creation load.
-- [ ] Concurrent WebSockets.
-- [ ] Redis/pub-sub load.
-- [ ] Worker throughput.
-- [ ] Database performance.
-- [ ] Establish performance baselines.
+- [x] Authentication load. — 2 logins/s alongside the mix; found and fixed bcrypt starving the libuv pool (`docs/load-testing.md`)
+- [x] Task-list load. — boards, task search, dashboard, activity (`load/k6/api.js`)
+- [x] Task creation load. — writes at 5-10/s; 2,000 creates at 175/s for the worker test
+- [x] Concurrent WebSockets. — 1,000 sockets, every event delivered, p95 80 ms
+- [x] Redis/pub-sub load. — 70,000 events fanned out through Redis to 1,000 sockets
+- [x] Worker throughput. — 2,000 jobs in 13.8 s (no email provider)
+- [x] Database performance. — 50,000 tasks seeded; slow queries fixed (migration 019)
+- [x] Establish performance baselines. — one API process: 0 errors, reads p95 97 ms at 40 req/s; knee 40-60 req/s on a shared 4-vCPU box
 
 ---
 
@@ -882,11 +882,11 @@ Audit event
 
 ## Backend
 
-- [ ] Profile slow endpoints.
-- [ ] Optimize DB queries.
+- [x] Profile slow endpoints. — per-endpoint isolation (`load/k6/endpoint.js`): the board was the outlier
+- [x] Optimize DB queries. — board per column, search trigrams, dashboard progress
 - [x] Add evidence-based indexes.
 - [x] Cache appropriate reads.
-- [ ] Avoid unnecessary serialization.
+- [ ] Avoid unnecessary serialization. — *partial:* boards bounded to 400 tasks; cached responses are still parsed and re-serialized
 - [x] Request timeouts.
 
 ## Frontend
@@ -900,11 +900,11 @@ Audit event
 
 ## Database
 
-- [ ] Analyze slow queries.
-- [ ] Use `EXPLAIN` where appropriate.
+- [x] Analyze slow queries.
+- [x] Use `EXPLAIN` where appropriate.
 - [ ] Review indexes.
-- [ ] Review connection pooling.
-- [ ] Test under realistic load.
+- [x] Review connection pooling. — exhaustion answered 503; 2 min idle timeout; bcrypt kept off the pool's DNS threads
+- [x] Test under realistic load. — Compose, single machine (a real cluster is G.5)
 
 ---
 
@@ -912,14 +912,14 @@ Audit event
 
 Test:
 
-- [ ] PostgreSQL unavailable.
-- [ ] Redis unavailable.
-- [ ] Redis reconnect.
-- [ ] Worker crash.
-- [ ] API restart.
-- [ ] WebSocket disconnect.
-- [ ] DB connection exhaustion.
-- [ ] Queue backlog.
+- [x] PostgreSQL unavailable. — 503 + Retry-After, API and sockets stay up, recovers by itself (it used to crash)
+- [x] Redis unavailable. — reads served from Postgres, `/health` degraded, task creation succeeds (it used to hang)
+- [x] Redis reconnect. — cache, pub/sub and queue resume without a restart
+- [x] Worker crash. — `docker kill` mid-queue; nothing lost
+- [x] API restart. — about 2 s unavailable; sockets closed with 1001 and reconnected
+- [x] WebSocket disconnect. — clients reconnect after a restart (backoff)
+- [x] DB connection exhaustion. — 503 + Retry-After, `overload_rejections_total`, alert `OpenPMApiOverloaded`
+- [x] Queue backlog. — 3,000 queued jobs drained after a worker restart
 - [x] Invalid job. — malformed payload fails without retries (live test)
 - [ ] Partial deployment failure.
 - [ ] Kubernetes pod restart.
@@ -927,10 +927,10 @@ Test:
 Define:
 
 - [x] Retry behavior. — background jobs: `docs/jobs.md`
-- [ ] Timeout behavior.
-- [ ] Fallback behavior.
-- [ ] User-visible failure behavior.
-- [ ] Recovery procedures.
+- [x] Timeout behavior. — request 30 s, statement 10 s, pool 2 s (503), enqueue 2 s, cache 250 ms
+- [x] Fallback behavior. — cache -> Postgres; failed enqueue -> request still succeeds, counted
+- [ ] User-visible failure behavior. — *partial:* the API answers 503 with a retry hint; the frontend does not yet show a dedicated "try again" state
+- [ ] Recovery procedures. — *partial:* observed recovery documented (`docs/load-testing.md`); no operator runbook
 
 ---
 
@@ -1108,11 +1108,11 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Gate 5 — Reliability
 
-- [ ] DB failure recovery tested.
-- [ ] Redis recovery tested.
-- [ ] Worker restart tested.
-- [ ] API restart tested.
-- [ ] WebSocket reconnect tested.
+- [x] DB failure recovery tested. — Compose (Phase 9)
+- [x] Redis recovery tested. — Compose (Phase 9)
+- [x] Worker restart tested. — killed mid-queue, nothing lost
+- [x] API restart tested. — sockets 1001 + reconnect
+- [x] WebSocket reconnect tested.
 - [ ] Backup restore tested.
 - [x] Rollback tested. — `helm rollback` on kind
 
@@ -1208,12 +1208,12 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Phase 9 — Performance & Reliability
 
-- [ ] Load tests.
-- [ ] Database optimization.
-- [ ] Redis optimization.
-- [ ] WebSocket load.
-- [ ] Worker throughput.
-- [ ] Failure testing.
+- [x] Load tests.
+- [x] Database optimization.
+- [x] Redis optimization. — pub/sub fan-out to 1,000 sockets at 8% CPU; nothing to optimize yet
+- [x] WebSocket load.
+- [x] Worker throughput.
+- [x] Failure testing.
 
 ## Phase 10 — Product Polish
 
@@ -1314,7 +1314,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Search/filtering      | 🟢     | Keyset pagination on projects and the new org-wide task search; search, status/priority/assignee/due filters and sorting; board filters with a 1000-task cap (`docs/pagination.md`). Not measured under load; no label filter yet. |
 | Dashboard             | 🟢     | Landing page: KPI tiles, my tasks, upcoming deadlines, recently updated, project progress meters and the activity feed, each section loading on its own (`docs/dashboard.md`). Not reviewed in a browser yet. |
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
-| Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. With Redis down the API serves from Postgres, stays ready (`/health` "degraded"), and liveness no longer depends on it (H.2). Not tested against a live outage; job enqueueing during an outage unverified. No eviction policy. |
+| Redis                 | 🟢     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod; pub/sub fanned out to 1,000 sockets at 8% CPU. A live outage was tested: reads served from Postgres, `/health` degraded, writes succeed (failed job enqueues counted), recovery automatic (Phase 9). No eviction policy. |
 | BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
 | Notifications         | 🟢     | In-app: assignment, mention, comment, status change; badge with live updates over one shared socket; mark read / all read (`docs/notifications.md`). No due-date reminders, preferences or retention policy. |
 | Audit logging         | 🟡     | `activity_log` covers projects, tasks, comments, labels, invites, membership changes and password resets; product activity is readable via `GET /api/activity`. Login events are not recorded, there is no `request_id` column, and there is no admin view of account events. |
@@ -1326,10 +1326,10 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Helm                  | 🟢     | Install, upgrade and rollback tested on kind; CI renders three value sets and checks the objects (`tests/helm`). No `values.schema.json`; `values.yaml` still ships dev secrets. |
 | ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
 | Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Run against live Prometheus/Grafana with real traffic in Compose (G.3): every target up, an alert fired and cleared, every dashboard query checked. No log retention policy. |
-| Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec, no load tests (Phase 9; the README no longer claims a k6 script). |
+| Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec. k6 load tests and failure tests run against Compose (`docs/load-testing.md`); not in CI. |
 | CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + blocking Trivy; actionlint clean; green on GitHub. CodeQL in its own workflow. No release pipeline; branch protection documented but not yet enabled. |
-| Performance           | ⬜     | Indexes and caching only; nothing measured. |
-| Reliability           | ⬜     | No failure testing. |
+| Performance           | 🟡     | Measured on a shared 4-vCPU box with 50,000 tasks (`docs/load-testing.md`): one API process serves 40 req/s of mixed traffic with 0 errors and reads p95 97 ms; boards, search and the dashboard fixed by evidence; 1,000 WebSockets; 2,000 jobs in 13.8 s. Not measured on a real cluster; no soak test. |
+| Reliability           | 🟢     | Failure-tested in Compose: Postgres down (503, no crash), Redis down (degraded, writes succeed), worker killed mid-queue (nothing lost), API restart (1001 + reconnect), pool exhaustion (503 + alert). Not tested on a cluster; no operator runbook. |
 | Backup/restore        | ⬜     | |
 | Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
 | UX polish             | ⬜     | |

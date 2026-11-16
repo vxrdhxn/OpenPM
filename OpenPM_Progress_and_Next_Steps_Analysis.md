@@ -191,13 +191,16 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Load tests and failure testing (Phase 9) |
+| **API Backend & RBAC** | 🟢 Solid | Load-tested and failure-tested (Phase 9); next: a real cluster |
 | **Organizations & Invites** | 🟢 Solid | Ownership transfer, org deletion |
 | **Authentication** | 🟢 Solid | Require the current password to change it; verify-by-email sign-up |
-| **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
+| **Background Worker** | 🟢 Solid | Crash-tested (Phase 9); a transactional outbox for guaranteed emails |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
 | **Kubernetes & DevOps** | 🟢 Works on kind | ArgoCD, Ingress and HPA (G.5) |
 | **Observability** | 🟢 Verified locally | Run on a cluster with the Prometheus Operator (G.4) |
+
+### Phase 9: Performance and reliability (done)
+- [x] k6 load tests, a 50,000-task seed and failure tests against Compose (`docs/load-testing.md`). Found and fixed: boards that did not scale with project size (per-column paging: 20 boards/s from p95 23 s to 134 ms), logins starving the libuv pool (46% of all requests failed at 2 logins/s), login timing enumeration, slow text search and dashboard queries, a Postgres restart crashing the API, task creation hanging while Redis was down, overload reported as 500, and sockets closing without a code. Baseline: one API process serves 40 req/s of mixed traffic with 0 errors on a shared 4-vCPU box; 1,000 WebSockets with every event delivered; 2,000 jobs in 13.8 s. All failure tests recover on their own. New alerts: `OpenPMApiOverloaded`, `OpenPMJobsNotQueued`.
 
 ### Recommended Immediate Action
 1. **Repo settings (admin):** enable branch protection on `main`, review the first CodeQL alerts and make them merge-blocking (see `docs/ci.md`).
