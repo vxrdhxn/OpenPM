@@ -32,12 +32,12 @@ export function proxy(request: NextRequest) {
 
   // If trying to access login/register while authenticated, redirect to dashboard
   if (token && isPublicPath) {
-    return NextResponse.redirect(new URL('/projects', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Redirect root to projects dashboard if authenticated
+  // Redirect root to the dashboard if authenticated
   if (pathname === '/' && token) {
-    return NextResponse.redirect(new URL('/projects', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   
   // Redirect root to login if not authenticated

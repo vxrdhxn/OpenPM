@@ -286,7 +286,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         );
 
         const res = await client.query(
-          'DELETE FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 RETURNING id',
+          'DELETE FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 RETURNING id, title',
           [taskId, projectId, org_id]
         );
 
@@ -294,7 +294,8 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
           throw new Error('NOT_FOUND');
         }
 
-        await logActivity(client, org_id, user_id, taskId, 'deleted', {});
+        // The title is kept so the activity feed can still say what was deleted.
+        await logActivity(client, org_id, user_id, taskId, 'deleted', { title: res.rows[0].title });
         return attachments.rows.map((r: { storage_key: string }) => r.storage_key);
       });
 

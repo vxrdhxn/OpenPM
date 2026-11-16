@@ -55,7 +55,7 @@ function AcceptInviteForm() {
     setError('');
     try {
       await api.post('/invites/accept', { token, name, password });
-      router.push('/projects');
+      router.push('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not accept the invitation.');
       setSubmitting(false);

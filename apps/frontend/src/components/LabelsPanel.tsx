@@ -107,7 +107,7 @@ export default function LabelsPanel() {
               </option>
             ))}
           </select>
-          <button type="submit" disabled={saving || !name.trim()} className="btn-primary px-4 disabled:opacity-50">
+          <button type="submit" disabled={saving || !name.trim()} className="btn-compact px-4">
             Add
           </button>
         </form>

@@ -169,7 +169,7 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Pr
                         className="input-field text-sm"
                       />
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={saveEdit} className="btn-primary text-sm px-3 py-1">
+                        <button type="button" onClick={saveEdit} className="btn-compact">
                           Save
                         </button>
                         <button type="button" onClick={() => setEditing(null)} className="text-sm text-slate-600 dark:text-slate-300">
@@ -206,7 +206,7 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage }: Pr
                   type="button"
                   onClick={submit}
                   disabled={posting || !draft.trim() || draft.length > MAX_COMMENT_LENGTH}
-                  className="btn-primary text-sm px-3 py-1.5 ml-auto disabled:opacity-50 flex items-center gap-1"
+                  className="btn-compact ml-auto"
                 >
                   {posting && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
                   Comment

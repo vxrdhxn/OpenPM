@@ -227,7 +227,7 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/:id', {
     preHandler: fastify.requireRole('admin')
   }, async (request, reply) => {
-    const { org_id } = request.user;
+    const { org_id, user_id } = request.user;
     const { id } = request.params as any;
 
     try {
@@ -243,10 +243,12 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
           [id, org_id]
         );
 
-        const res = await client.query('DELETE FROM projects WHERE id = $1 AND org_id = $2 RETURNING id', [id, org_id]);
+        const res = await client.query('DELETE FROM projects WHERE id = $1 AND org_id = $2 RETURNING id, name', [id, org_id]);
         if (res.rows.length === 0) {
           throw new Error('NOT_FOUND');
         }
+        // Audit trail (activity_log rows are not tied to the project, so this survives the delete).
+        await logActivity(client, org_id, user_id, id, 'deleted', { name: res.rows[0].name });
 
         return attachments.rows.map((r: { storage_key: string }) => r.storage_key);
       });

@@ -30,7 +30,7 @@ export default function Register() {
 
     try {
       await api.post('/auth/register', formData);
-      router.push('/projects');
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {

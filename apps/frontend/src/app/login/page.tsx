@@ -20,7 +20,7 @@ export default function Login() {
 
     try {
       await api.post('/auth/login', { email, password });
-      router.push('/projects');
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {

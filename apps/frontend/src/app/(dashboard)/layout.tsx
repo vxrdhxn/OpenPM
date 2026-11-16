@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { LayoutDashboard, LogOut, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, LogOut, CheckSquare, FolderKanban } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null);
@@ -34,15 +34,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 px-4 space-y-2">
-          <Link 
-            href="/projects" 
+          <Link
+            href="/dashboard"
             className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-              pathname.includes('/projects') || pathname === '/'
-              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300 font-medium' 
+              pathname.startsWith('/dashboard') || pathname === '/'
+              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300 font-medium'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <LayoutDashboard className="w-5 h-5" />
+            Dashboard
+          </Link>
+          <Link 
+            href="/projects" 
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              pathname.includes('/projects')
+              ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300 font-medium' 
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <FolderKanban className="w-5 h-5" />
             Projects
           </Link>
           <div className="pt-4 pb-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -58,7 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           >
             Profile
           </Link>
-          {user?.role === 'admin' && (
+          {(user?.role === 'admin' || user?.role === 'owner') && (
             <Link 
               href="/settings/organization" 
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
