@@ -99,6 +99,10 @@ api:
   # apply migrations another way (e.g. a CI job running `node apps/api/dist/db/migrate.js up`).
   migrations:
     enabled: true
+  # Extra environment variables for the API container, e.g.
+  #   - name: BCRYPT_CONCURRENCY
+  #     value: "4"
+  extraEnv: []
   resources:
     limits:
       cpu: 500m
@@ -118,6 +122,8 @@ api:
 # Worker Application Service
 worker:
   replicaCount: 1
+  # Extra environment variables for the worker container (e.g. WORKER_CONCURRENCY).
+  extraEnv: []
   image:
     repository: "openpm-worker"
     tag: "latest"

@@ -90,6 +90,14 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
     });
   });
 
+  it('appends extraEnv to the API and worker containers', () => {
+    const objects = render('--set', 'api.extraEnv[0].name=BCRYPT_CONCURRENCY', '--set-string', 'api.extraEnv[0].value=4', '--set', 'worker.extraEnv[0].name=WORKER_CONCURRENCY', '--set-string', 'worker.extraEnv[0].value=10');
+    const env = (c: string) => deployment(objects, c)!.spec.template.spec.containers[0].env as Array<{ name: string; value?: string }>;
+    expect(env('api')).toContainEqual({ name: 'BCRYPT_CONCURRENCY', value: '4' });
+    expect(env('worker')).toContainEqual({ name: 'WORKER_CONCURRENCY', value: '10' });
+    expect(env('api').map((e) => e.name)).toContain('JWT_SECRET'); // the chart's own env is kept
+  });
+
   it('runs the in-chart Postgres as its own non-root user', () => {
     const pg = deployment(render(), 'postgres')!.spec.template.spec;
     expect(pg.securityContext).toMatchObject({ runAsNonRoot: true, runAsUser: 70, fsGroup: 70 });
