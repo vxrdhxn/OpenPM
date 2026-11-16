@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY apps/frontend/package.json ./apps/frontend/
 COPY tsconfig.base.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source
 COPY apps/frontend/ ./apps/frontend/
@@ -30,6 +30,10 @@ WORKDIR /app
 
 # Use non-root user for security (Requirement)
 RUN addgroup -S appgroup -g 1001 && adduser -S appuser -G appgroup -u 1001
+
+# The app runs with plain `node`; drop the package managers bundled in the base image so their
+# dependencies (which Trivy flags) are not shipped.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \n    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \n    /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 # Copy standalone build output
 COPY --from=builder /app/apps/frontend/.next/standalone ./

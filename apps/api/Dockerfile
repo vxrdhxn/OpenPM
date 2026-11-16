@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY apps/api/package.json ./apps/api/
 COPY tsconfig.base.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source
 COPY apps/api/ ./apps/api/
@@ -22,7 +22,10 @@ RUN addgroup -S appgroup -g 1001 && adduser -S appuser -G appgroup -u 1001
 
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/apps/api/package.json ./apps/api/
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
+# The app runs with plain `node`; drop the package managers bundled in the base image so their
+# dependencies (which Trivy flags) are not shipped.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \n    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \n    /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
