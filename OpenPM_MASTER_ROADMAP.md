@@ -433,7 +433,7 @@ For every event:
 - [x] Define invalidation. — deleted on every write
 - [ ] Prevent stale authorization data.
 - [x] Avoid unnecessary sensitive-data caching.
-- [ ] Gracefully handle Redis outages. — *partial:* connection errors are logged and counted, but a failed cache read still fails the request
+- [x] Gracefully handle Redis outages. — cache ops fail fast (no offline queue, 250ms deadline) and fall back to Postgres; missed invalidations retried on reconnect; `cache_bypassed_total` (H.2). Not yet exercised against a real Redis outage
 
 ## Pub/Sub
 
@@ -1314,7 +1314,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Search/filtering      | ⬜     | No search, filters or pagination. |
 | Dashboard             | ⬜     | |
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
-| Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. A Redis outage still fails cached reads. No eviction policy. |
+| Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. With Redis down the API serves from Postgres, stays ready (`/health` "degraded"), and liveness no longer depends on it (H.2). Not tested against a live outage; job enqueueing during an outage unverified. No eviction policy. |
 | BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
 | Notifications         | ⬜     | Only the assignment email on task creation. |
 | Audit logging         | 🟡     | `activity_log` covers project/task create/update and task delete. Project delete, auth and membership events are not recorded, there is no `request_id` column, and no endpoint reads the log. |
