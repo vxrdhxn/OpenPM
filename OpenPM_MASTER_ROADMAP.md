@@ -187,7 +187,7 @@ Review/finalize:
 - [x] Status.
 - [x] Priority.
 - [ ] Labels/tags.
-- [ ] Comments.
+- [x] Comments. — `task_comments` (migration 015)
 - [x] Attachments.
 - [x] Activity/audit events. — `activity_log`
 - [ ] Notifications.
@@ -293,14 +293,14 @@ Actions:
 
 # 9. Comments
 
-- [ ] Create comment.
-- [ ] Edit own comment.
-- [ ] Delete own comment.
-- [ ] Enforce comment ownership.
-- [ ] Timestamp comments.
-- [ ] Add mentions if supported.
-- [ ] Generate comment activity events.
-- [ ] Sanitize rich text/HTML if supported.
+- [x] Create comment. — members and above; plain text, 1-10,000 characters (`docs/comments.md`)
+- [x] Edit own comment. — author only; sets `edited_at`
+- [x] Delete own comment. — author, or an admin as moderation
+- [x] Enforce comment ownership. — server-side, scoped to task → project → org
+- [x] Timestamp comments.
+- [ ] Add mentions if supported. — not supported yet (comes with notifications)
+- [x] Generate comment activity events. — `activity_log` (no text) and live `comment_*` events
+- [x] Sanitize rich text/HTML if supported. — n/a: plain text, rendered as text, never as HTML
 
 ---
 
@@ -353,7 +353,7 @@ Actions:
 - [ ] Labels.
 - [ ] Due date.
 - [ ] Description editor.
-- [ ] Comments.
+- [x] Comments. — Comments section in the task dialog
 - [ ] Activity.
 - [ ] Safe optimistic updates where appropriate.
 - [ ] Error recovery.
@@ -566,7 +566,7 @@ metadata
 - [x] Safe error responses. — 5xx bodies are generic; details only in the log
 - [ ] OpenAPI documentation. — *partial:* Swagger UI in non-production only; routes lack response schemas
 - [ ] Authentication documentation.
-- [ ] WebSocket event documentation.
+- [ ] WebSocket event documentation. — *partial:* comment events in `docs/comments.md`; task events not yet documented
 
 ---
 
@@ -781,7 +781,7 @@ Track:
 - [x] RBAC. — route-level and against real Postgres
 - [x] Project CRUD. — route-level and against real Postgres
 - [x] Task CRUD. — route-level and against real Postgres
-- [ ] Comments.
+- [x] Comments. — `comments.int.test.ts` (real Postgres)
 - [ ] Notifications.
 - [ ] Redis.
 - [ ] Workers.
@@ -1145,7 +1145,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] Memberships. — list, role change, remove, leave (no ownership transfer yet)
 - [ ] Projects. — *partial:* CRUD/archive done; no project members or settings
 - [ ] Tasks. — *partial:* everything except labels
-- [ ] Comments.
+- [x] Comments.
 - [ ] Labels.
 - [x] Search/filtering. — projects and tasks; label filter waits for labels
 - [ ] Dashboard.
@@ -1154,7 +1154,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] WebSockets.
 - [x] Real-time task updates.
-- [ ] Real-time comments.
+- [x] Real-time comments. — `comment_created/updated/deleted` on the org channel
 - [ ] Notifications.
 - [x] Redis pub/sub.
 - [x] Reconnection handling.
@@ -1306,11 +1306,11 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Sessions are revocable (H.3): logout, password change and reset end every session, WebSockets included, and each request uses the current role. Register no longer says which field conflicted. Remaining: changing the password does not ask for the current one; register can still be told apart from success without email verification. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
-| Database              | 🟡     | 14 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications or project-member tables. No backups. |
+| Database              | 🟡     | 15 reversible migrations, FKs, indexes and transactions. No labels, notifications or project-member tables. No backups. |
 | Organizations         | 🟡     | Create on register; invite, accept, revoke (F.1); member list, role change, remove and leave with rank rules, a last-admin guard and an audit trail (`docs/members.md`). No ownership transfer, reactivation or org deletion; register creates an admin, not an owner. |
 | Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
 | Tasks                 | 🟡     | All core fields and actions, Kanban board, activity log. No labels, no archive. |
-| Comments              | ⬜     | No table, routes or UI. |
+| Comments              | 🟢     | Post, edit (author), delete (author or admin), newest-first pagination, live events, audit without text, plain-text rendering (`docs/comments.md`). No mentions. |
 | Search/filtering      | 🟢     | Keyset pagination on projects and the new org-wide task search; search, status/priority/assignee/due filters and sorting; board filters with a 1000-task cap (`docs/pagination.md`). Not measured under load; no label filter yet. |
 | Dashboard             | ⬜     | |
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
