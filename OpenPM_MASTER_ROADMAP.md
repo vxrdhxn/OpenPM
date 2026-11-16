@@ -206,8 +206,8 @@ Review/finalize:
 ## Query quality
 
 - [ ] Find N+1 queries.
-- [ ] Add pagination to collections.
-- [ ] Prevent unbounded queries.
+- [ ] Add pagination to collections. — *partial:* projects and task search; members, invites and attachments are bounded by org/task size, not paged
+- [x] Prevent unbounded queries. — page size ≤ 100, board ≤ 1000 tasks
 - [ ] Select only required fields where useful.
 - [x] Review transaction boundaries. — `withTransaction`
 - [x] Use transactions for atomic multi-step writes.
@@ -306,19 +306,19 @@ Actions:
 
 # 10. Search, Filtering & Pagination
 
-- [ ] Search projects.
-- [ ] Search tasks.
-- [ ] Filter by status.
-- [ ] Filter by priority.
-- [ ] Filter by assignee.
-- [ ] Filter by label.
-- [ ] Filter by due date.
-- [ ] Sort results.
-- [ ] Paginate results.
-- [ ] Limit maximum page size.
-- [ ] Handle empty results.
-- [ ] Test search performance.
-- [ ] Prevent expensive/abusive query parameters.
+- [x] Search projects. — `GET /api/projects?q=` (name, literal wildcards); search box on the projects page
+- [x] Search tasks. — `q` on `GET /api/tasks` and the board (title + description)
+- [x] Filter by status. — projects (`active`/`archived`) and tasks
+- [x] Filter by priority.
+- [x] Filter by assignee. — `me`, `none` or a user id; board filter bar
+- [ ] Filter by label. — labels do not exist yet
+- [x] Filter by due date. — `due_after` / `due_before`
+- [x] Sort results. — tasks: created, updated, due date (undated last), priority
+- [x] Paginate results. — keyset cursors, `{ items, next_cursor }` (`docs/pagination.md`)
+- [x] Limit maximum page size. — 100; board capped at 1000 tasks with `X-Truncated`
+- [x] Handle empty results. — "No matching projects" state
+- [ ] Test search performance. — *partial:* indexes for every org-scoped sort (migration 014); `ILIKE '%q%'` is a scan within the org and has not been measured
+- [x] Prevent expensive/abusive query parameters. — bounded `limit`/`q`, validated cursors, unknown parameters rejected
 
 ---
 
@@ -550,12 +550,12 @@ metadata
 - [x] Consistent endpoint naming.
 - [x] Consistent HTTP status codes.
 - [x] Consistent error structure. — `{ error }` (H.1)
-- [ ] Consistent pagination.
-- [ ] Consistent filtering.
+- [x] Consistent pagination. — one helper for every paged endpoint
+- [x] Consistent filtering. — shared task filters for the board and search
 - [ ] Consistent validation.
 - [x] Consistent authorization.
 - [x] Validate path parameters. — every `:id`/`:*Id` must be a UUID (`plugins/uuidParams.ts`)
-- [ ] Validate query parameters.
+- [x] Validate query parameters. — JSON schema, unknown keys rejected
 - [x] Validate request bodies. — JSON schema, unknown keys rejected on PATCH
 - [ ] Validate WebSocket payloads.
 - [x] Request body size limits. — 1 MB
@@ -1147,7 +1147,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [ ] Tasks. — *partial:* everything except labels
 - [ ] Comments.
 - [ ] Labels.
-- [ ] Search/filtering.
+- [x] Search/filtering. — projects and tasks; label filter waits for labels
 - [ ] Dashboard.
 
 ## Phase 3 — Collaboration
@@ -1306,12 +1306,12 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Sessions are revocable (H.3): logout, password change and reset end every session, WebSockets included, and each request uses the current role. Register no longer says which field conflicted. Remaining: changing the password does not ask for the current one; register can still be told apart from success without email verification. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
 | Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
-| Database              | 🟡     | 9 reversible migrations, FKs, indexes and transactions. 13 migrations. No comments, labels, notifications or project-member tables. No pagination anywhere. No backups. |
+| Database              | 🟡     | 14 reversible migrations, FKs, indexes and transactions. No comments, labels, notifications or project-member tables. No backups. |
 | Organizations         | 🟡     | Create on register; invite, accept, revoke (F.1); member list, role change, remove and leave with rank rules, a last-admin guard and an audit trail (`docs/members.md`). No ownership transfer, reactivation or org deletion; register creates an admin, not an owner. |
 | Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
 | Tasks                 | 🟡     | All core fields and actions, Kanban board, activity log. No labels, no archive. |
 | Comments              | ⬜     | No table, routes or UI. |
-| Search/filtering      | ⬜     | No search, filters or pagination. |
+| Search/filtering      | 🟢     | Keyset pagination on projects and the new org-wide task search; search, status/priority/assignee/due filters and sorting; board filters with a 1000-task cap (`docs/pagination.md`). Not measured under load; no label filter yet. |
 | Dashboard             | ⬜     | |
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
 | Redis                 | 🟡     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod. With Redis down the API serves from Postgres, stays ready (`/health` "degraded"), and liveness no longer depends on it (H.2). Not tested against a live outage; job enqueueing during an outage unverified. No eviction policy. |

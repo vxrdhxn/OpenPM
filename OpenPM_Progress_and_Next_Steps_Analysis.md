@@ -83,7 +83,7 @@ What still stands between the project and production:
 | Gap | Detail |
 | :--- | :--- |
 | Member management | Done (I.1), except ownership transfer, reactivation and org deletion. |
-| Comments, labels, notifications, search, pagination | Not started. There are no tables for comments, labels or notifications. List endpoints return every row. |
+| Comments, labels, notifications | Not started. There are no tables for comments, labels or notifications. (Search and pagination: done, I.2.) |
 
 ### 3.2 Hardening (🟡 Medium)
 
@@ -176,7 +176,8 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 
 ### Phase I: Core product
 - [x] **I.1 Member management (done):** `/api/members` list, role change, remove and leave, with a Members panel in organization settings. You must outrank whom you change (owners may manage owners), cannot grant above your own role, and cannot change yourself; the last admin/owner cannot leave, and the organization row is locked so concurrent changes cannot break that. Removal deactivates the account (migration 013) instead of deleting it, since creators are referenced by NOT NULL keys and the activity log would cascade away: sessions and sockets end, tasks are unassigned, the email is freed for re-invites and the name stays in history. Audited in `activity_log`; rules in `docs/members.md`; `members.int.test.ts` against Postgres. Not done: ownership transfer, reactivation, org deletion.
-- [ ] Next: comments, labels, pagination and filtering, in-app notifications, and a dashboard.
+- [x] **I.2 Pagination and filtering (done):** keyset pagination (`{ items, next_cursor }`, limit ≤ 100, validated opaque cursors that keep Postgres' microsecond timestamps so no row is skipped) on `GET /api/projects` (name search, status) and a new org-wide `GET /api/tasks` (project, status, priority, assignee me/none/id, due range, text; sort by created/updated/due/priority). The board takes the same filters and is capped at 1000 tasks. Unknown query parameters are a 400. Projects page: search, status filter, Load more; board: filter bar. Migration 014 adds indexes. `docs/pagination.md`; `pagination.int.test.ts` against Postgres. Not measured under load.
+- [ ] Next: comments, labels, in-app notifications, and a dashboard.
 
 ---
 
@@ -185,7 +186,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Pagination and filtering (Phase I) |
+| **API Backend & RBAC** | 🟢 Solid | Comments (Phase I) |
 | **Organizations & Invites** | 🟢 Solid | Ownership transfer, org deletion |
 | **Authentication** | 🟢 Solid | Require the current password to change it; verify-by-email sign-up |
 | **Background Worker** | 🟢 Solid | Restart/crash tests under load (Phase 9) |
