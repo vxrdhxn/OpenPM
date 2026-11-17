@@ -180,6 +180,7 @@ there is no managed database on kind, and the Ingress had no TLS.
 | Backup drill, Kubernetes | `scripts/test-backup-restore.sh` with `PG_EXEC`/`MIGRATE_EXEC` on the in-chart Postgres: 14 tables, 29 rows and 19 migrations restored identically; the migrator found the copy up to date. |
 | Disaster recovery | Backup → `DELETE FROM projects` (cascading to the tasks) → API and worker scaled to 0 → `restore-db.sh --replace` → scaled back. The project and its 3 tasks were back, and the same user signed in through the Ingress. |
 | Backup drill, Compose | 12 MB dump: 14 tables, 230,307 rows and 19 migrations restored identically. |
+| Upgrading an install made with the old defaults | `openpm-dev` (Argo CD, running since G.5 on the published default credentials), following [deploying.md](deploying.md#upgrading-an-install-made-with-the-old-defaults): `ALTER USER` with a new Postgres password, a new `openpm-secrets` Secret (new JWT secret and Redis password), then the updated Application. Argo CD synced the new commit, pruned the chart's old Secret and ran the smoke test: Synced, Healthy. All 4 users and 901 tasks were intact. |
 
 ### Found and fixed
 
