@@ -20,4 +20,8 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ .Values.frontend.hpa.targetCPUUtilizationPercentage | default 80 }}
+  {{- with .Values.frontend.hpa.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}

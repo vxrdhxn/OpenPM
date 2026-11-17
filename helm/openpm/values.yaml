@@ -115,6 +115,12 @@ api:
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
+    # A new pod's start-up uses ~2x its CPU request for 10-20 s (measured on kind). Without a window
+    # the HPA scales up on every rollout if it happens to sample that spike. 60 s ignores spikes
+    # shorter than that; real load still scales up, ~1 min later. Scale-down keeps the 300 s default.
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 60
   pdb:
     enabled: true
     maxUnavailable: 1
@@ -161,6 +167,12 @@ frontend:
     minReplicas: 2
     maxReplicas: 5
     targetCPUUtilizationPercentage: 80
+    # A new pod's start-up uses ~2x its CPU request for 10-20 s (measured on kind). Without a window
+    # the HPA scales up on every rollout if it happens to sample that spike. 60 s ignores spikes
+    # shorter than that; real load still scales up, ~1 min later. Scale-down keeps the 300 s default.
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 60
   pdb:
     enabled: true
     maxUnavailable: 1

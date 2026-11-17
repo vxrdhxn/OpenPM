@@ -88,6 +88,13 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       const env = deployment(objects, 'frontend')!.spec.template.spec.containers[0].env ?? [];
       expect(env.map((e: { name: string }) => e.name).filter((n: string) => n.startsWith('NEXT_PUBLIC_'))).toEqual([]);
     });
+
+    it('does not let the start-up CPU spike of a rollout scale the API or frontend up', () => {
+      for (const c of ['api', 'frontend']) {
+        const hpa = objects.find((o) => o.kind === 'HorizontalPodAutoscaler' && o.metadata?.name === `openpm-${c}`)!;
+        expect(hpa.spec.behavior?.scaleUp?.stabilizationWindowSeconds).toBeGreaterThanOrEqual(60);
+      }
+    });
   });
 
   it('appends extraEnv to the API and worker containers', () => {
