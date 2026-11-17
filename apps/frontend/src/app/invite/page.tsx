@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckSquare } from 'lucide-react';
 import { api } from '@/lib/api';
+import { messageOf, useConfirm } from '@/components/ui/feedback';
 
 interface InviteDetails {
   email: string;
@@ -16,7 +17,8 @@ interface InviteDetails {
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'invalid'; message: string }
-  | { kind: 'ready'; invite: InviteDetails };
+  | { kind: 'ready'; invite: InviteDetails }
+  | { kind: 'declined'; orgName: string };
 
 const inputClass =
   'mt-1 block w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all dark:text-white disabled:opacity-60';
@@ -24,6 +26,7 @@ const inputClass =
 function AcceptInviteForm() {
   const token = useSearchParams().get('token');
   const router = useRouter();
+  const confirm = useConfirm();
 
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [name, setName] = useState('');
@@ -61,6 +64,34 @@ function AcceptInviteForm() {
       setSubmitting(false);
     }
   };
+
+  const decline = async (invite: InviteDetails) => {
+    const ok = await confirm({
+      title: `Decline the invitation to ${invite.org_name}?`,
+      message: 'The link stops working. The organization sees that you declined, and can invite you again later.',
+      confirmLabel: 'Decline',
+      destructive: true,
+    });
+    if (!ok) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      await api.post('/invites/decline', { token });
+      setState({ kind: 'declined', orgName: invite.org_name });
+    } catch (err) {
+      setError(messageOf(err, 'Could not decline the invitation.'));
+      setSubmitting(false);
+    }
+  };
+
+  if (state.kind === 'declined') {
+    return (
+      <div className="text-center space-y-4">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Invitation declined</h2>
+        <p className="text-slate-500 dark:text-slate-400">You won&apos;t join {state.orgName}. You can close this page.</p>
+      </div>
+    );
+  }
 
   const invalidMessage = !token
     ? 'This link is missing its invite token. Use the link from your invitation email.'
@@ -153,6 +184,18 @@ function AcceptInviteForm() {
           {submitting ? 'Creating your account…' : 'Accept invitation'}
         </button>
       </form>
+
+      <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+        Not for you?{' '}
+        <button
+          type="button"
+          onClick={() => decline(invite)}
+          disabled={submitting}
+          className="font-medium text-slate-700 dark:text-slate-200 underline hover:text-red-600 disabled:opacity-50"
+        >
+          Decline the invitation
+        </button>
+      </p>
     </div>
   );
 }

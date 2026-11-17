@@ -57,7 +57,7 @@ describe('Auth routes', () => {
   };
 
   describe('register', () => {
-    it('creates org and admin user in one transaction and sets an httpOnly cookie', async () => {
+    it('creates the org and its owner in one transaction and sets an httpOnly cookie', async () => {
       mockClient.query.mockImplementation(async (sql: string) => {
         if (sql.startsWith('INSERT INTO organizations')) return rows([{ id: 'org-1' }]);
         if (sql.startsWith('INSERT INTO users')) return rows([{ id: 'user-1' }]);
@@ -70,7 +70,7 @@ describe('Auth routes', () => {
       expect(app.jwt.verify(res.json().token)).toMatchObject({
         user_id: 'user-1',
         org_id: 'org-1',
-        role: 'admin',
+        role: 'owner',
         tv: 0,
       });
       expect(String(res.headers['set-cookie'])).toMatch(/auth_token=.*HttpOnly/i);

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Trash2, UserPlus, Mail, Shield } from 'lucide-react';
 import MembersPanel from '@/components/MembersPanel';
+import OrganizationPanel from '@/components/OrganizationPanel';
 import LabelsPanel from '@/components/LabelsPanel';
 import { messageOf, useConfirm, useToast } from '@/components/ui/feedback';
 
@@ -11,6 +12,7 @@ export default function OrganizationSettings() {
   const confirm = useConfirm();
   const toast = useToast();
   const [invites, setInvites] = useState<any[]>([]);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('member');
@@ -19,12 +21,14 @@ export default function OrganizationSettings() {
 
   const fetchInvites = useCallback(
     () =>
-      api
-        .get('/invites')
-        .then((data) => setInvites(data))
-        .catch((err) => console.error('Failed to fetch invites:', err))
+      Promise.all([api.get('/invites'), api.get('/auth/me')])
+        .then(([data, session]) => {
+          setInvites(data);
+          setMyRole(session.user.role);
+        })
+        .catch((err) => toast(messageOf(err, 'Could not load invites'), 'error'))
         .finally(() => setLoading(false)),
-    []
+    [toast]
   );
 
   useEffect(() => {
@@ -131,15 +135,16 @@ export default function OrganizationSettings() {
           </div>
         </div>
 
-        {/* Right Col: Members, then Pending Invites */}
+        {/* Right Col: the workspace, members, labels, then invites */}
         <div className="lg:col-span-2 space-y-8">
+          {myRole && <OrganizationPanel role={myRole} />}
           <MembersPanel />
           <LabelsPanel />
 
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Pending Invites</h2>
-              <p className="text-sm text-slate-500">Users who haven&apos;t accepted their invitation yet.</p>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Invites</h2>
+              <p className="text-sm text-slate-500">Invitations not accepted yet. Inviting someone who declined sends them a new link.</p>
             </div>
             
             {invites.length === 0 ? (
@@ -153,13 +158,19 @@ export default function OrganizationSettings() {
                     <div className="flex flex-col">
                       <span className="font-medium text-slate-900 dark:text-white">{invite.email}</span>
                       <span className="text-sm text-slate-500 capitalize flex items-center gap-2">
-                        {invite.role} • Expires {new Date(invite.expires_at).toLocaleDateString()}
+                        {invite.role} •{' '}
+                        {invite.declined_at ? (
+                          <span className="normal-case font-medium text-amber-700 dark:text-amber-400">Declined {new Date(invite.declined_at).toLocaleDateString()}</span>
+                        ) : (
+                          <>Expires {new Date(invite.expires_at).toLocaleDateString()}</>
+                        )}
                       </span>
                     </div>
                     <button
                       onClick={() => handleRevoke(invite.id)}
                       className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                       title="Revoke Invite"
+                      aria-label={`Revoke the invite for ${invite.email}`}
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>

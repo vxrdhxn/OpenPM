@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignableRoles, canManage, isLastManager, type Member } from './members';
+import { assignableRoles, canManage, canTransferOwnership, isLastManager, leaveBlockedReason, type Member } from './members';
 
 const m = (id: string, role: Member['role']): Member => ({ id, role, name: id, email: `${id}@x.test`, created_at: '' });
 
@@ -24,5 +24,20 @@ describe('member UI rules (mirror of the API policy)', () => {
     expect(isLastManager({ id: 'a', role: 'admin' }, [m('a', 'admin'), m('b', 'member')])).toBe(true);
     expect(isLastManager({ id: 'a', role: 'admin' }, [m('a', 'admin'), m('b', 'owner')])).toBe(false);
     expect(isLastManager({ id: 'b', role: 'member' }, [m('a', 'admin'), m('b', 'member')])).toBe(false);
+  });
+
+  it('keeps an owner: the last owner must transfer before leaving', () => {
+    const owner = m('o', 'owner');
+    expect(leaveBlockedReason(owner, [owner, m('a', 'admin')])).toMatch(/Transfer ownership/);
+    expect(leaveBlockedReason(owner, [owner, m('p', 'owner')])).toBeNull();
+    expect(leaveBlockedReason(m('a', 'admin'), [owner, m('a', 'admin')])).toBeNull();
+    expect(leaveBlockedReason(m('a', 'admin'), [m('a', 'admin')])).toMatch(/admin before leaving/);
+  });
+
+  it('lets only owners transfer ownership, to someone who is not already an owner', () => {
+    expect(canTransferOwnership({ id: 'o', role: 'owner' }, m('b', 'member'))).toBe(true);
+    expect(canTransferOwnership({ id: 'o', role: 'owner' }, m('o', 'owner'))).toBe(false);
+    expect(canTransferOwnership({ id: 'o', role: 'owner' }, m('p', 'owner'))).toBe(false);
+    expect(canTransferOwnership({ id: 'a', role: 'admin' }, m('b', 'member'))).toBe(false);
   });
 });

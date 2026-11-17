@@ -32,6 +32,7 @@ import commentRoutes from './routes/comments';
 import { labelRoutes, taskLabelRoutes } from './routes/labels';
 import { activityRoutes, dashboardRoutes } from './routes/dashboard';
 import notificationRoutes from './routes/notifications';
+import organizationRoutes from './routes/organization';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -178,6 +179,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   fastify.register(profileRoutes, { prefix: '/api/profile' });
   fastify.register(inviteRoutes, { prefix: '/api/invites' });
   fastify.register(memberRoutes, { prefix: '/api/members' });
+  fastify.register(organizationRoutes, { prefix: '/api/organization' });
   fastify.register(taskSearchRoutes, { prefix: '/api/tasks' });
   fastify.register(websocketRoutes);
 

@@ -18,11 +18,11 @@ describe('account flows (real Postgres)', () => {
   const login = (email: string, password: string) => post('/api/auth/login', { email, password });
 
   describe('register and login', () => {
-    it('creates the org and an admin, who can then log in', async () => {
+    it('creates the org and its owner, who can then log in', async () => {
       const admin = await registerOrg(app, 'first-password');
 
-      expect(admin.role).toBe('admin');
-      expect(await row('SELECT role, org_id FROM users WHERE id = $1', [admin.userId])).toEqual({ role: 'admin', org_id: admin.orgId });
+      expect(admin.role).toBe('owner');
+      expect(await row('SELECT role, org_id FROM users WHERE id = $1', [admin.userId])).toEqual({ role: 'owner', org_id: admin.orgId });
       expect((await login(admin.email, 'first-password')).statusCode).toBe(200);
       expect((await login(admin.email, 'wrong-password')).statusCode).toBe(401);
     });

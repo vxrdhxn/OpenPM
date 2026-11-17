@@ -199,7 +199,7 @@ Review/finalize:
 - [x] Unique constraints.
 - [x] Appropriate indexes. — migration 008
 - [ ] Intentional cascade behavior.
-- [ ] Consistent timestamps. — *partial:* `projects` and `organizations` have no `updated_at`
+- [ ] Consistent timestamps. — *partial:* `projects` has no `updated_at` (`organizations` got one in migration 020)
 - [ ] Optimistic concurrency where needed.
 - [x] Reproducible migrations. — numbered up/down SQL; `migrate`, `migrate:down`, `migrate:status`; run by Docker Compose
 
@@ -227,19 +227,19 @@ Review/finalize:
 
 # 6. Organizations & Memberships
 
-- [x] Create organization. — on registration
-- [ ] Organization settings.
+- [x] Create organization. — on registration; the creator is the owner (existing workspaces got one in migration 020)
+- [x] Organization settings. — `GET`/`PATCH /api/organization` (rename; the slug is fixed), Workspace panel
 - [x] Organization member list. — `GET /api/members` + Members panel
 - [x] Invite member. — admin-only; the worker emails a link (`invite_created` job); token stored as a SHA-256 hash
 - [x] Accept invitation. — public `POST /api/invites/lookup` + `/accept` and an `/invite` page; org, role and email come from the invite; verified on real Postgres via Compose
-- [ ] Reject/expire invitation. — *partial:* invites expire after 7 days and can be revoked; no reject flow
+- [x] Reject/expire invitation. — expire after 7 days, revoke, and decline (`POST /api/invites/decline`; shown to admins as declined)
 - [x] Remove member. — deactivates the account (sessions end, tasks unassigned, history kept, email freed)
 - [x] Change member role. — must outrank the target, cannot grant above own role (`security/memberPolicy.ts`)
-- [ ] Transfer ownership.
-- [x] Leave organization. — refused for the last admin/owner; org row locked against races
-- [ ] Delete organization with explicit confirmation.
-- [x] Audit membership changes. — `role_changed`, `removed`, `left` in `activity_log`
-- [x] Test every operation against cross-tenant access. — `members.int.test.ts` (real Postgres)
+- [x] Transfer ownership. — `POST /api/members/:id/transfer-ownership`: atomic, audited; every organization keeps an owner
+- [x] Leave organization. — refused for the last owner (and last admin); org row locked against races
+- [x] Delete organization with explicit confirmation. — owner only, slug typed out plus password; cascades, then deletes files (`docs/members.md`)
+- [x] Audit membership changes. — `role_changed`, `removed`, `left`, `ownership_transferred`; workspace `renamed`
+- [x] Test every operation against cross-tenant access. — `members.int.test.ts`, `organization.int.test.ts` (real Postgres); browser test for rename and delete
 
 ---
 
@@ -940,7 +940,7 @@ Define:
 - [x] Redis persistence strategy if needed. — not backed up by design: cache and queue refill; jobs queued at the moment of loss are lost (documented)
 - [x] Attachment backup strategy if applicable. — bucket versioning/replication (`docs/backup-restore.md`)
 - [ ] Data deletion policy.
-- [ ] Organization deletion policy.
+- [x] Organization deletion policy. — immediate and complete, owner-confirmed; recoverable only from a backup (`docs/members.md`)
 
 ---
 
@@ -951,7 +951,7 @@ Define:
 - [x] Do not log sensitive data.
 - [ ] Define retention periods.
 - [ ] Define account deletion.
-- [ ] Define organization deletion.
+- [x] Define organization deletion. — `docs/members.md`
 - [ ] Define export/deletion behavior if supported.
 
 ---
@@ -1135,8 +1135,8 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Phase 2 — Core Product
 
-- [ ] Organizations.
-- [x] Memberships. — list, role change, remove, leave (no ownership transfer yet)
+- [x] Organizations. — owners, settings, transfer, deletion, declinable invites
+- [x] Memberships. — list, role change, remove, leave, ownership transfer
 - [ ] Projects. — *partial:* CRUD/archive done; no project members or settings
 - [x] Tasks. — every field, including labels (no archive)
 - [x] Comments.
@@ -1302,8 +1302,8 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie; secrets required, published ones refused in production; algorithm confusion tested. Password reset end to end; sessions revocable everywhere (WebSockets included); the current role is read on every request. Remaining: changing the password does not ask for the current one; sign-up can reveal a taken email until it verifies by email; no MFA or lockout. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Roles in `docs/user-guide.md`; per-route permissions not documented. |
 | Multi-tenancy         | 🟢     | Every query scoped to the session's `org_id` (directly or after an org-scoped ownership check, reviewed in Phase 11); IDOR tests against real Postgres in CI. Gap: no shared data-access layer. |
-| Database              | 🟡     | 19 reversible migrations, FKs, indexes, transactions; backup/restore scripts and a tested drill. No project-member tables; `projects` and `organizations` have no `updated_at`; no least-privilege DB user. |
-| Organizations         | 🟡     | Create on register; invite, accept, revoke; member list, role change, remove and leave with rank rules and an audit trail. Register makes the creator an admin, not an owner. No ownership transfer, reactivation, org settings or org deletion. |
+| Database              | 🟡     | 20 reversible migrations, FKs, indexes, transactions; backup/restore scripts and a tested drill. No project-member tables; `projects` has no `updated_at`; no least-privilege DB user. |
+| Organizations         | 🟢     | The creator owns the workspace and every workspace keeps an owner; rename, ownership transfer, and deletion (slug + password, full cascade including files); invite, accept, decline, revoke; member list, role change, remove and leave with rank rules and an audit trail. No reactivation of removed members (re-invite) or multi-workspace membership. |
 | Projects              | 🟡     | Create, edit, archive/restore and delete from the UI, with file cleanup. No project members, settings or project-level permissions. |
 | Tasks                 | 🟢     | Every field editable in one dialog; labels, comments with @mentions, attachments, Kanban board with filters (labels included), keyboard moves, org-wide search, activity log. No task archive. |
 | Comments              | 🟢     | Post, edit, delete, mentions with notifications, pagination, live events, plain-text rendering (`docs/comments.md`). |

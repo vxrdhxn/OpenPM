@@ -41,8 +41,10 @@ describe('members (real Postgres)', () => {
     let member: Actor;
 
     beforeEach(async () => {
-      admin = await registerOrg(app);
-      member = await addUser(app, admin.orgId, 'member');
+      // Whoever signs up is the owner; these tests are about what an admin may do.
+      const owner = await registerOrg(app);
+      admin = await addUser(app, owner.orgId, 'admin');
+      member = await addUser(app, owner.orgId, 'member');
     });
 
     it('lets an admin promote and demote, takes effect at once, and is audited', async () => {
@@ -163,28 +165,34 @@ describe('members (real Postgres)', () => {
       expect(await row('SELECT user_id FROM activity_log WHERE entity_id = $1 AND action = $2', [member.userId, 'left'])).toEqual({ user_id: member.userId });
     });
 
-    it('stops the last admin from leaving, but lets an admin leave when another remains', async () => {
-      const admin = await registerOrg(app);
-      expect((await call(admin, 'POST', '/api/members/leave')).statusCode).toBe(409);
-      expect((await me(admin)).statusCode).toBe(200);
+    it('stops the last owner from leaving, but lets an admin leave while an owner remains', async () => {
+      const owner = await registerOrg(app);
+      expect((await call(owner, 'POST', '/api/members/leave')).statusCode).toBe(409);
+      expect((await me(owner)).statusCode).toBe(200);
 
-      const second = await addUser(app, admin.orgId, 'admin');
+      const admin = await addUser(app, owner.orgId, 'admin');
       expect((await call(admin, 'POST', '/api/members/leave')).statusCode).toBe(200);
-      expect((await me(second)).statusCode).toBe(200);
+      expect((await me(owner)).statusCode).toBe(200);
     });
 
-    it('serializes concurrent changes: two last admins leaving at once leaves one behind', async () => {
+    it('stops the last admin from leaving an organization that has no owner (created before owners)', async () => {
+      const owner = await registerOrg(app);
+      await db.query("UPDATE users SET role = 'admin' WHERE id = $1", [owner.userId]);
+      expect((await call(owner, 'POST', '/api/members/leave')).statusCode).toBe(409);
+    });
+
+    it('serializes concurrent changes: two last owners leaving at once leaves one behind', async () => {
       const a = await registerOrg(app);
-      const b = await addUser(app, a.orgId, 'admin');
+      const b = await addUser(app, a.orgId, 'owner');
 
       const results = await Promise.all([call(a, 'POST', '/api/members/leave'), call(b, 'POST', '/api/members/leave')]);
 
       expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409]);
-      const managers = await row<{ n: string }>(
-        "SELECT count(*) AS n FROM users WHERE org_id = $1 AND deactivated_at IS NULL AND role IN ('owner','admin')",
+      const owners = await row<{ n: string }>(
+        "SELECT count(*) AS n FROM users WHERE org_id = $1 AND deactivated_at IS NULL AND role = 'owner'",
         [a.orgId]
       );
-      expect(Number(managers!.n)).toBe(1);
+      expect(Number(owners!.n)).toBe(1);
     });
   });
 });

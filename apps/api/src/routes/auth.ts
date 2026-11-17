@@ -60,16 +60,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         );
         const orgId = orgRes.rows[0].id;
 
-        // Create user
+        // The person who creates a workspace owns it (only owners can transfer or delete it).
         const userRes = await client.query(
           'INSERT INTO users (org_id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-          [orgId, normalizedEmail, passwordHash, name, 'admin']
+          [orgId, normalizedEmail, passwordHash, name, 'owner']
         );
 
         return { orgId, userId: userRes.rows[0].id };
       });
 
-      const token = issueSession(fastify, reply, { user_id: userId, org_id: orgId, role: 'admin', tv: 0 });
+      const token = issueSession(fastify, reply, { user_id: userId, org_id: orgId, role: 'owner', tv: 0 });
 
       return reply.code(201).send({ token });
     } catch (err: any) {

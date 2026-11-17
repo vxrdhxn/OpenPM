@@ -9,8 +9,9 @@ import { enqueue } from '../jobs/enqueue';
 
 const INVITE_TTL_DAYS = 7;
 
-// Shape of an invite in every response. Never includes the token or its hash.
-const INVITE_COLUMNS = 'id, email, role, expires_at, created_at';
+// Shape of an invite in every response. Never includes the token or its hash. declined_at is set
+// when the invitee declined (the link no longer works; inviting them again resets it).
+const INVITE_COLUMNS = 'id, email, role, expires_at, created_at, declined_at';
 
 const tokenProperty = { type: 'string', pattern: TOKEN_PATTERN } as const;
 
@@ -66,7 +67,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
           const res = await client.query(
             `INSERT INTO organization_invites (org_id, email, token_hash, role, expires_at)
              VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (org_id, email) DO UPDATE SET token_hash = $3, role = $4, expires_at = $5
+             ON CONFLICT (org_id, email) DO UPDATE SET token_hash = $3, role = $4, expires_at = $5, declined_at = NULL
              RETURNING ${INVITE_COLUMNS}`,
             [org_id, email, tokenHash, role, expiresAt]
           );
@@ -166,7 +167,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
       `SELECT i.email, i.role, i.expires_at, o.name AS org_name
          FROM organization_invites i
          JOIN organizations o ON o.id = i.org_id
-        WHERE i.token_hash = $1 AND i.expires_at > NOW()`,
+        WHERE i.token_hash = $1 AND i.expires_at > NOW() AND i.declined_at IS NULL`,
       [hashToken(token)]
     );
 
@@ -175,6 +176,33 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.send(res[0]);
+  });
+
+  // POST /decline — the invitee says no. The link stops working; the invite stays, marked, so the
+  // organization's admins see the answer instead of a link that is never used.
+  fastify.post('/decline', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: { token: tokenProperty },
+        additionalProperties: false
+      }
+    }
+  }, async (request, reply) => {
+    const { token } = request.body as { token: string };
+
+    const res = await db.query(
+      `UPDATE organization_invites SET declined_at = NOW()
+        WHERE token_hash = $1 AND expires_at > NOW() AND declined_at IS NULL
+        RETURNING id`,
+      [hashToken(token)]
+    );
+    if (res.length === 0) {
+      return reply.code(404).send({ error: 'Invite not found or expired' });
+    }
+    return reply.code(204).send();
   });
 
   // POST /accept — create the invitee's account in the inviting organization and sign them in.
@@ -202,7 +230,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
         const inviteRes = await client.query(
           `SELECT id, org_id, email, role
              FROM organization_invites
-            WHERE token_hash = $1 AND expires_at > NOW()
+            WHERE token_hash = $1 AND expires_at > NOW() AND declined_at IS NULL
             FOR UPDATE`,
           [hashToken(token)]
         );

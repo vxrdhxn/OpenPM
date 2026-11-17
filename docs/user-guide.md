@@ -3,7 +3,7 @@
 ## Getting started
 
 1. **Create a workspace** at `/register`: your company name, a workspace slug (the short name in
-   links, lowercase), and your own account. You become its admin.
+   links, lowercase), and your own account. You become its owner.
 2. The dashboard welcomes a new workspace with three steps. **Create your first project**: a project
    holds a board of tasks for one piece of work.
 3. **Invite your team** from Settings → Organization. Each invite has a role, and the invite link
@@ -16,7 +16,7 @@
 | Viewer | See projects, tasks, comments and attachments. |
 | Member | Everything a viewer can, plus create and edit projects and tasks, comment, attach files, and create, rename and apply labels. |
 | Admin | Everything a member can, plus delete projects, tasks and labels, and invite and manage members. |
-| Owner | Everything an admin can, plus manage other admins and owners. |
+| Owner | Everything an admin can, plus manage other admins and owners, transfer ownership and delete the workspace. Every workspace has at least one. |
 
 ## Working with tasks
 
@@ -31,6 +31,19 @@
 - **Find tasks** with the search box and the priority, assignee and label filters above the board.
 
 A task's due date is the end of that day in your time zone. It counts as overdue from the next day.
+
+## Your workspace
+
+Settings → Organization (admins and owners):
+
+- **Rename** the workspace. Its slug stays the same.
+- **Transfer ownership** (owners): the crown next to a member makes them the owner, and you become an
+  admin. A workspace always has an owner, so the last owner transfers ownership before leaving.
+- **Delete the workspace** (owners): type its slug and your password. Everything in it is deleted
+  and everyone is signed out. This cannot be undone.
+
+Someone who receives an invitation they don't want can **decline** it from the invitation page.
+Admins see it marked declined and can invite them again later.
 
 ## Projects
 

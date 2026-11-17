@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { LogOut, UserMinus, Users } from 'lucide-react';
+import { Crown, LogOut, UserMinus, Users } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useConfirm } from '@/components/ui/feedback';
-import { assignableRoles, canManage, isLastManager, type Member, type Role } from '@/lib/members';
+import { useConfirm, useToast } from '@/components/ui/feedback';
+import { assignableRoles, canManage, canTransferOwnership, leaveBlockedReason, type Member, type Role } from '@/lib/members';
 
 interface Me {
   user_id: string;
@@ -17,6 +17,7 @@ interface Me {
  */
 export default function MembersPanel() {
   const confirm = useConfirm();
+  const toast = useToast();
   const [members, setMembers] = useState<Member[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,6 +70,27 @@ export default function MembersPanel() {
     }
   };
 
+  const transfer = async (member: Member) => {
+    const ok = await confirm({
+      title: `Make ${member.name} the owner?`,
+      message: 'They can then manage everyone and delete the organization. You become an admin, and only an owner can make you an owner again.',
+      confirmLabel: 'Transfer ownership',
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(member.id);
+    setError('');
+    try {
+      await api.post(`/members/${member.id}/transfer-ownership`, {});
+      toast(`${member.name} is now the owner`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not transfer ownership');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const leave = async () => {
     if (!(await confirm({ title: 'Leave this organization?', message: 'You will be signed out and lose access to its projects.', confirmLabel: 'Leave', destructive: true }))) return;
     setBusy('leave');
@@ -89,7 +111,7 @@ export default function MembersPanel() {
   }
 
   const actor = me ? { id: me.user_id, role: me.role } : null;
-  const lastManager = actor ? isLastManager(actor, members) : false;
+  const leaveBlocked = actor ? leaveBlockedReason(actor, members) : null;
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -102,12 +124,13 @@ export default function MembersPanel() {
           <p className="text-sm text-slate-500">
             {members.length} {members.length === 1 ? 'person' : 'people'} in this organization.
           </p>
+          {leaveBlocked && <p className="text-xs text-slate-500 mt-1">To leave: {leaveBlocked.charAt(0).toLowerCase() + leaveBlocked.slice(1)}.</p>}
         </div>
         {actor && (
           <button
             onClick={leave}
-            disabled={busy !== null || lastManager}
-            title={lastManager ? 'Make another member an admin before leaving' : 'Leave this organization'}
+            disabled={busy !== null || leaveBlocked !== null}
+            title={leaveBlocked ?? 'Leave this organization'}
             className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <LogOut className="w-4 h-4" />
@@ -153,6 +176,18 @@ export default function MembersPanel() {
                   </select>
                 ) : (
                   <span className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 capitalize">{member.role}</span>
+                )}
+
+                {actor && canTransferOwnership(actor, member) && (
+                  <button
+                    onClick={() => transfer(member)}
+                    disabled={busy !== null}
+                    aria-label={`Make ${member.name} the owner`}
+                    title="Transfer ownership"
+                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <Crown className="w-5 h-5" />
+                  </button>
                 )}
 
                 {manageable && (

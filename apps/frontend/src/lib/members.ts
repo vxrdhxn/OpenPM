@@ -35,3 +35,20 @@ export function assignableRoles(actorRole: string): Role[] {
 export function isLastManager(me: { id: string; role: string }, members: Member[]): boolean {
   return isManager(me.role) && !members.some((m) => m.id !== me.id && isManager(m.role));
 }
+
+/** Every organization keeps an owner: the last one must transfer ownership before leaving. */
+export function isLastOwner(me: { id: string; role: string }, members: Member[]): boolean {
+  return me.role === 'owner' && !members.some((m) => m.id !== me.id && m.role === 'owner');
+}
+
+/** Only an owner can hand ownership to someone else (they become an admin). */
+export function canTransferOwnership(actor: { id: string; role: string }, target: { id: string; role: string }): boolean {
+  return actor.role === 'owner' && actor.id !== target.id && target.role !== 'owner';
+}
+
+/** Why Leave is unavailable, or null when it is allowed. */
+export function leaveBlockedReason(me: { id: string; role: string }, members: Member[]): string | null {
+  if (isLastOwner(me, members)) return 'Transfer ownership to another member before leaving';
+  if (isLastManager(me, members)) return 'Make another member an admin before leaving';
+  return null;
+}

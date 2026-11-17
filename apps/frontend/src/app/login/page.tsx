@@ -1,10 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { Loader2, KanbanSquare } from 'lucide-react';
+
+/** After a workspace is deleted, its owner lands here: say what happened. */
+function DeletedNotice() {
+  if (useSearchParams().get('deleted') !== '1') return null;
+  return (
+    <p role="status" className="mb-6 p-3 rounded-lg text-sm bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 text-center">
+      The workspace was deleted, and everyone in it was signed out.
+    </p>
+  );
+}
 
 export default function Login() {
   const router = useRouter();
@@ -45,6 +55,10 @@ export default function Login() {
           <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2">Sign in to your account to continue</p>
         </div>
+
+        <Suspense fallback={null}>
+          <DeletedNotice />
+        </Suspense>
 
         <form onSubmit={handleLogin} className="glass-panel p-8 rounded-2xl space-y-6">
           {error && (
