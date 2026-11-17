@@ -3,7 +3,7 @@
 ## Getting started
 
 1. **Create a workspace** at `/register`: your company name, a workspace slug (the short name in
-   links, lowercase), and your own account. You become its owner.
+   links, lowercase), and your own account. You become its admin.
 2. The dashboard welcomes a new workspace with three steps. **Create your first project**: a project
    holds a board of tasks for one piece of work.
 3. **Invite your team** from Settings → Organization. Each invite has a role, and the invite link

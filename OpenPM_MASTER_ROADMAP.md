@@ -4,7 +4,7 @@
 >
 > **Goal:** Build OpenPM into a polished, secure, reliable, observable, self-hostable, Kubernetes-native project-management platform without sacrificing engineering quality for speed.
 >
-> **Last audited against the code:** 2026-11-15 (commit `c0c3cbc`). A box is ticked only when the code exists and is covered by tests or CI. Items marked *partial* exist but are incomplete. "Mocked DB" means the tests use a fake database, not a live Postgres. Nothing has been deployed to a cluster yet, so every deployment, restore and failure test is still open. The summary is in section 36.
+> **Last audited against the code:** 2026-11-17, after the v0.1.0 release (commit `d7fa018`). A box is ticked only when the code exists and is covered by tests or CI, or the procedure has been rehearsed. Items marked *partial* exist but are incomplete; "not applicable" items are ticked with the reason. Process checklists (Definition of Done, agent rules) and outlines (threat list) are plain bullets, not tasks. "Mocked DB" means the tests use a fake database, not a live Postgres. Deployment, upgrade, rollback, restore and failure tests have run on a local kind cluster and Compose, not on a cloud cluster. The summary is in section 36.
 
 ---
 
@@ -23,20 +23,20 @@
 
 ### Definition of Done
 
-A feature is **DONE** only when:
+A checklist applied to every change (not tracked here). A feature is **DONE** only when:
 
-- [ ] Implementation is complete.
-- [ ] Input validation exists.
-- [ ] Authentication/authorization is enforced.
-- [ ] Tenant isolation is verified.
-- [ ] Error handling is deliberate.
-- [ ] Relevant unit/integration tests pass.
-- [ ] Edge cases are covered.
-- [ ] Logs/metrics are appropriate.
-- [ ] Documentation is updated where necessary.
-- [ ] No security regression is introduced.
-- [ ] CI passes.
-- [ ] Lint/typecheck/format checks pass.
+- Implementation is complete.
+- Input validation exists.
+- Authentication/authorization is enforced.
+- Tenant isolation is verified.
+- Error handling is deliberate.
+- Relevant unit/integration tests pass.
+- Edge cases are covered.
+- Logs/metrics are appropriate.
+- Documentation is updated where necessary.
+- No security regression is introduced.
+- CI passes.
+- Lint/typecheck/format checks pass.
 
 ---
 
@@ -112,10 +112,10 @@ npm test
 
 - [x] Verify JWT signatures correctly. — `@fastify/jwt`; invalid-token tests
 - [x] Validate expiration. — 24h `expiresIn`; expired-token tests (HTTP and WebSocket)
-- [ ] Validate issuer/audience where applicable.
+- [x] Validate issuer/audience where applicable. — not applicable: the API is the only issuer and the only audience
 - [x] Reject malformed tokens.
 - [x] Reject missing authentication.
-- [ ] Prevent JWT algorithm-confusion attacks.
+- [x] Prevent JWT algorithm-confusion attacks. — HMAC only (`@fastify/jwt` with a secret); unsigned, RS256 and HS512 tokens rejected (`auth.session.test.ts`)
 - [x] Keep signing keys/secrets outside source code. — `JWT_SECRET` required in production; a dev-only fallback key remains in `config.ts`
 - [x] Never log tokens. — credentials redacted in logs; tested
 - [x] Define access-token lifetime. — 24h, httpOnly SameSite=strict cookie
@@ -219,9 +219,9 @@ Review/finalize:
 - [x] Credentials from secrets. — Helm Secrets
 - [x] Database not publicly exposed. — ClusterIP + NetworkPolicy
 - [ ] Least-privilege DB user.
-- [ ] Automated backups in production.
-- [ ] Restore procedure documented and tested.
-- [ ] Migration/rollback strategy documented.
+- [ ] Automated backups in production. — *partial:* production expects a managed database with provider backups (`docs/backup-restore.md`); the in-chart Postgres has no backup job
+- [x] Restore procedure documented and tested. — `docs/backup-restore.md`; drill and disaster recovery on Compose and kind (`docs/rehearsal.md`)
+- [x] Migration/rollback strategy documented. — expand/contract, forward-only rollback (`docs/releasing.md`)
 
 ---
 
@@ -255,8 +255,8 @@ Review/finalize:
 - [x] Project activity. — `GET /api/activity?project_id=`
 - [x] Project statistics. — tasks by status per project (`GET /api/dashboard`)
 - [ ] Project-level authorization.
-- [ ] Project empty states.
-- [ ] Project loading/error states.
+- [x] Project empty states. — Phase 10
+- [x] Project loading/error states. — Phase 10 (load errors with retry, "Project not found")
 
 ---
 
@@ -286,7 +286,7 @@ Actions:
 - [x] Change priority.
 - [x] Add/remove labels. — `PUT .../tasks/:taskId/labels`
 - [x] Set/clear due date.
-- [ ] Archive/restore if supported.
+- [x] Archive/restore if supported. — not supported for tasks (projects can be archived)
 - [x] Audit important task actions. — `activity_log` for create/update/delete
 
 ---
@@ -402,13 +402,9 @@ member.added
 member.removed
 ```
 
-For every event:
+For every event, document its payload schema, authorization rules, sender, recipients and retry/ordering behavior.
 
-- [ ] Payload schema.
-- [ ] Authorization rules.
-- [ ] Sender.
-- [ ] Recipients.
-- [ ] Retry/ordering behavior.
+- [ ] Every event documented that way. — *partial:* comment and notification events in `docs/comments.md` and `docs/notifications.md`; task, project and member events are not
 - [x] Tenant isolation. — per-org Redis channel
 
 ## Reliability
@@ -431,7 +427,7 @@ For every event:
 - [x] Define cacheable data. — project list (5 min) and task board (60 s), org-scoped keys
 - [x] Define TTLs.
 - [x] Define invalidation. — deleted on every write
-- [ ] Prevent stale authorization data.
+- [x] Prevent stale authorization data. — every request reads the role and token version from Postgres; roles are never cached
 - [x] Avoid unnecessary sensitive-data caching.
 - [x] Gracefully handle Redis outages. — cache ops fail fast and fall back to Postgres; missed invalidations retried on reconnect (H.2). Verified against a real Redis outage, job enqueueing included (Phase 9)
 
@@ -450,7 +446,7 @@ For every event:
 - [x] No public exposure.
 - [x] Secrets managed securely. — Kubernetes Secrets
 - [x] Memory limits. — container resources
-- [ ] Intentional eviction policy.
+- [ ] Intentional eviction policy. — *partial:* Redis runs with its default (no memory limit, `noeviction`), which BullMQ needs, but it is not set explicitly
 
 ---
 
@@ -580,7 +576,7 @@ metadata
 - [x] No secrets in logs.
 - [x] `.env.example` contains placeholders only.
 - [x] Production secrets use Kubernetes Secrets or an external secret manager.
-- [ ] Rotation procedure documented.
+- [x] Rotation procedure documented. — `docs/deploying.md` (JWT secret, Postgres and Redis passwords); rehearsed on `openpm-dev`
 
 ## HTTP
 
@@ -595,8 +591,8 @@ metadata
 
 - [ ] Validate all external input. — *partial:* bodies and path params yes; WebSocket payloads no
 - [x] Prevent injection. — parameterized SQL, whitelisted column names
-- [ ] Sanitize rich text/HTML.
-- [ ] Validate URLs where accepted.
+- [x] Sanitize rich text/HTML. — not applicable: descriptions and comments are plain text, rendered escaped by React; no `dangerouslySetInnerHTML`
+- [x] Validate URLs where accepted. — not applicable: no endpoint accepts a URL
 - [x] Prevent path traversal. — random storage keys
 - [x] Secure file uploads. — see section 19
 
@@ -681,9 +677,9 @@ Review:
 ## Helm
 
 - [x] Validate templates. — `helm lint` + `helm template` for three value sets in CI
-- [ ] Validate values. — *partial:* `tests/helm/rendered.test.ts` checks rendered objects; no `values.schema.json`
+- [ ] Validate values. — *partial:* credentials are checked at render time and `tests/helm/rendered.test.ts` checks the objects; no `values.schema.json`
 - [x] Safe defaults.
-- [ ] No hardcoded secrets. — *partial:* `values.yaml` ships dev default secrets meant to be overridden
+- [x] No hardcoded secrets. — no default credentials; rendering fails without them; `secrets.existingSecret` (Phase 11)
 - [x] Production values documented. — `values.prod.yaml`
 - [x] Install tested. — kind, default values (`docs/rehearsal.md`)
 - [x] Upgrade tested. — kind; config-only changes roll pods
@@ -701,7 +697,7 @@ Review:
 - [x] No plaintext production secrets in Git. — `values.prod.yaml` holds placeholders only
 - [x] Rollback procedure documented. — `docs/releasing.md`
 - [x] Drift detection tested. — kind (G.5)
-- [ ] Clean-cluster deployment tested.
+- [x] Clean-cluster deployment tested. — new kind cluster (G.4), Argo CD on it (G.5), production values in a fresh namespace (Phase 11)
 
 ---
 
@@ -714,9 +710,9 @@ Review:
 - [x] Complete `.dockerignore`.
 - [x] Deterministic builds where practical. — `npm ci` in every stage (G.1)
 - [x] Vulnerability scanning. — Trivy in CI
-- [ ] Image versioning/tag strategy.
+- [x] Image versioning/tag strategy. — `X.Y.Z` plus `sha-<commit>`, never overwritten, production pinned by digest (`docs/releasing.md`)
 - [x] Environment configuration outside images.
-- [ ] Health checks. — *partial:* API and frontend; the worker image has none
+- [ ] Health checks. — *partial:* API and frontend images; the worker has a Kubernetes liveness probe and a Compose check, but no image `HEALTHCHECK`
 - [x] Correct signal handling.
 - [x] Graceful shutdown.
 
@@ -749,7 +745,7 @@ Track:
 - [x] Worker duration.
 - [x] Worker failures.
 - [x] Authentication failures.
-- [ ] Rate-limit events.
+- [ ] Rate-limit events. — *partial:* 429s are counted in `http_requests_total` by route; no dedicated metric or alert
 
 ## Prometheus/Grafana
 
@@ -783,7 +779,7 @@ Track:
 - [x] Task CRUD. — route-level and against real Postgres
 - [x] Comments. — `comments.int.test.ts` (real Postgres)
 - [x] Notifications. — `notifications.int.test.ts` (real Postgres)
-- [ ] Redis.
+- [ ] Redis. — *partial:* shared rate limits run against a real Redis (`rateLimitShared.int.test.ts`); cache and pub/sub are faked
 - [ ] Workers.
 
 ## Security
@@ -826,8 +822,8 @@ Notification
 Audit event
 ```
 
-- [ ] Automate this flow. — *partial:* Playwright is set up with a single login spec
-- [ ] Add failure-path tests.
+- [x] Automate this flow. — `journey.spec.ts` in CI (Phase 10)
+- [ ] Add failure-path tests. — *partial:* unsaved edits, unknown project and page; no browser tests of API errors
 
 ## Load testing
 
@@ -852,7 +848,7 @@ Audit event
 - [x] Unit tests.
 - [x] Integration tests. — Postgres service container
 - [x] Build.
-- [ ] Dependency audit.
+- [ ] Dependency audit. — *partial:* Dependabot, Trivy (blocking), `npm audit` clean; no `npm audit` gate on PRs
 - [x] Secret scanning.
 - [x] CodeQL. — `codeql.yml` (H.4)
 - [x] Container scan. — Trivy, blocking
@@ -929,20 +925,20 @@ Define:
 - [x] Retry behavior. — background jobs: `docs/jobs.md`
 - [x] Timeout behavior. — request 30 s, statement 10 s, pool 2 s (503), enqueue 2 s, cache 250 ms
 - [x] Fallback behavior. — cache -> Postgres; failed enqueue -> request still succeeds, counted
-- [ ] User-visible failure behavior. — *partial:* the API answers 503 with a retry hint; the frontend does not yet show a dedicated "try again" state
-- [ ] Recovery procedures. — *partial:* observed recovery documented (`docs/load-testing.md`); no operator runbook
+- [x] User-visible failure behavior. — load errors with retry, failed saves as toasts, offline banner (Phase 10)
+- [ ] Recovery procedures. — *partial:* restore (`docs/backup-restore.md`), rollback (`docs/releasing.md`), observed recovery (`docs/load-testing.md`); no incident runbook
 
 ---
 
 # 28. Backup, Recovery & Data Protection
 
-- [ ] PostgreSQL backup strategy.
-- [ ] Automated production backups.
+- [x] PostgreSQL backup strategy. — `docs/backup-restore.md`
+- [ ] Automated production backups. — *partial:* managed-database backups expected; no job for the in-chart Postgres
 - [ ] Backup retention.
-- [ ] Restore test.
-- [ ] Disaster-recovery procedure.
-- [ ] Redis persistence strategy if needed.
-- [ ] Attachment backup strategy if applicable.
+- [x] Restore test. — `scripts/test-backup-restore.sh`, run on Compose and kind
+- [x] Disaster-recovery procedure. — restore over the live database, rehearsed on kind
+- [x] Redis persistence strategy if needed. — not backed up by design: cache and queue refill; jobs queued at the moment of loss are lost (documented)
+- [x] Attachment backup strategy if applicable. — bucket versioning/replication (`docs/backup-restore.md`)
 - [ ] Data deletion policy.
 - [ ] Organization deletion policy.
 
@@ -978,28 +974,26 @@ Define:
 
 ## Threats
 
-- [ ] Account takeover.
-- [ ] JWT theft.
-- [ ] IDOR/BOLA.
-- [ ] Cross-tenant access.
-- [ ] Privilege escalation.
-- [ ] Malicious file upload.
-- [ ] Injection.
-- [ ] WebSocket abuse.
-- [ ] Queue poisoning.
-- [ ] Redis compromise.
-- [ ] Database compromise.
-- [ ] Secret leakage.
-- [ ] Denial of service.
-- [ ] Supply-chain compromise.
+- [ ] Threat model written. — *not started:* `docs/security-review.md` (v0.1.0) checks the main controls but is not a threat model. Outline:
 
-For every threat:
+Threats:
 
-- [ ] Impact.
-- [ ] Likelihood.
-- [ ] Mitigation.
-- [ ] Detection.
-- [ ] Security test.
+- Account takeover.
+- JWT theft.
+- IDOR/BOLA.
+- Cross-tenant access.
+- Privilege escalation.
+- Malicious file upload.
+- Injection.
+- WebSocket abuse.
+- Queue poisoning.
+- Redis compromise.
+- Database compromise.
+- Secret leakage.
+- Denial of service.
+- Supply-chain compromise.
+
+For every threat: impact, likelihood, mitigation, detection and a security test.
 
 ---
 
@@ -1012,8 +1006,8 @@ For every threat:
 - [x] Repository structure.
 - [x] Local setup.
 - [x] Environment variables.
-- [ ] Database migrations. — *partial:* how to run them is documented; rollback is not
-- [ ] Testing.
+- [x] Database migrations. — running them (README, CONTRIBUTING), rollback and compatibility (`docs/releasing.md`)
+- [x] Testing. — CONTRIBUTING, `docs/frontend-testing.md`, `docs/ci.md`
 - [ ] API development.
 - [ ] Worker development. — *partial:* `docs/jobs.md` covers jobs, retries and recovery
 - [ ] WebSocket architecture.
@@ -1025,9 +1019,9 @@ For every threat:
 - [x] Kubernetes deployment.
 - [x] Helm configuration.
 - [x] ArgoCD deployment.
-- [ ] Secret management.
-- [ ] Backup/restore.
-- [ ] Rollback.
+- [x] Secret management. — `docs/deploying.md`
+- [x] Backup/restore. — `docs/backup-restore.md`
+- [x] Rollback. — `docs/releasing.md`
 - [x] Monitoring. — `docs/observability.md`
 - [ ] Incident response.
 
@@ -1035,12 +1029,12 @@ For every threat:
 
 - [ ] Threat model.
 - [ ] Security architecture.
-- [ ] Authentication model.
-- [ ] Authorization model.
-- [ ] Tenant isolation model.
-- [ ] Secret management.
+- [ ] Authentication model. — *partial:* summarized in `docs/security-review.md`
+- [ ] Authorization model. — *partial:* roles in `docs/user-guide.md`, membership rules in `docs/members.md`
+- [ ] Tenant isolation model. — *partial:* summarized in `docs/security-review.md`
+- [x] Secret management. — `docs/deploying.md`
 - [x] Vulnerability reporting. — `SECURITY.md`
-- [ ] Security assumptions.
+- [ ] Security assumptions. — *partial:* known limits in `docs/security-review.md`
 
 ---
 
@@ -1084,7 +1078,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] Unit tests pass.
 - [x] Integration tests pass.
-- [ ] Critical E2E path passes.
+- [x] Critical E2E path passes. — Browser tests (Playwright) job in CI
 - [x] Security tests pass. — unit/route level
 
 ## Gate 3 — Security
@@ -1113,7 +1107,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] Worker restart tested. — killed mid-queue, nothing lost
 - [x] API restart tested. — sockets 1001 + reconnect
 - [x] WebSocket reconnect tested.
-- [ ] Backup restore tested.
+- [x] Backup restore tested. — Phase 11
 - [x] Rollback tested. — `helm rollback` on kind
 
 ## Gate 6 — UX
@@ -1175,7 +1169,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [ ] Input hardening.
 - [x] File security.
 - [ ] Audit logs.
-- [ ] Secret management.
+- [x] Secret management. — no default credentials, `existingSecret`, rotation documented
 
 ## Phase 6 — Kubernetes
 
@@ -1232,7 +1226,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] Backup/restore test. — `scripts/backup-db.sh`, `restore-db.sh`, `test-backup-restore.sh`; drill on Compose and Kubernetes plus a disaster recovery (`docs/backup-restore.md`, `docs/rehearsal.md`)
 - [x] Production deployment rehearsal. — `values.prod.yaml` with an existing Secret on kind: install, smoke test, Ingress, rate limits, restore (`docs/rehearsal.md`)
 - [x] Release checklist. — `docs/release-checklist.md`
-- [ ] Version/tag. — `v0.1.0` not tagged yet: publishes the GitHub Release and GHCR images
+- [x] Version/tag. — `v0.1.0` tagged 2026-11-17: images on GHCR and a GitHub Release; its deploy PR has to be opened by hand (Actions may not create PRs yet)
 - [x] Release notes. — `docs/release-notes/v0.1.0.md` (the release workflow puts it on the GitHub Release)
 
 ---
@@ -1282,58 +1276,60 @@ DO NOT:
 
 ### Agent rules
 
-- [ ] Give one scoped task at a time.
-- [ ] Give actual file paths.
-- [ ] Give existing schema/code context.
-- [ ] Ask the agent to inspect existing patterns first.
-- [ ] Require root-cause analysis before debugging.
-- [ ] Require tests with feature work.
-- [ ] Require security considerations for auth/data/infrastructure.
-- [ ] Do not allow broad refactors during feature work unless explicitly requested.
-- [ ] Review generated changes before merging.
-- [ ] Run CI after each logical group.
+How to brief an agent (guidance, not tracked here):
+
+- Give one scoped task at a time.
+- Give actual file paths.
+- Give existing schema/code context.
+- Ask the agent to inspect existing patterns first.
+- Require root-cause analysis before debugging.
+- Require tests with feature work.
+- Require security considerations for auth/data/infrastructure.
+- Do not allow broad refactors during feature work unless explicitly requested.
+- Review generated changes before merging.
+- Run CI after each logical group.
 
 ---
 
 # 36. Completion Tracking
 
-Audited 2026-11-15 against commit `c0c3cbc`.
+Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 
 | Area                  | Status | Notes |
 | --------------------- | ------ | ----- |
-| Repository foundation | 🟢     | Install/lint/build/test clean on Node 22. Dependencies upgraded (Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6) with npm audit clean. |
-| Architecture          | 🟡     | Central auth/role checks, request IDs, a shared error handler and a full graceful shutdown (HTTP, queue, Redis, pg pool) are in place (H.1). SQL and business logic still sit in route handlers. |
-| Authentication        | 🟡     | 24h JWT in an httpOnly cookie, production secret enforced, uniform login failures, bypass/expiry tests. Password reset works end to end (F.2): emailed single-use link, hashed tokens, 1h expiry, newest link only, rate-limited. Sessions are revocable (H.3): logout, password change and reset end every session, WebSockets included, and each request uses the current role. Register no longer says which field conflicted. Remaining: changing the password does not ask for the current one; register can still be told apart from success without email verification. |
-| Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Permissions are not yet documented. |
-| Multi-tenancy         | 🟢     | Every query is scoped to the JWT `org_id`; IDOR tests run against real Postgres in CI. The suite found and G.2 fixed cross-org task assignment. Gap: no shared data-access layer. |
-| Database              | 🟡     | 18 reversible migrations, FKs, indexes and transactions. No project-member tables. No backups. |
-| Organizations         | 🟡     | Create on register; invite, accept, revoke (F.1); member list, role change, remove and leave with rank rules, a last-admin guard and an audit trail (`docs/members.md`). No ownership transfer, reactivation or org deletion; register creates an admin, not an owner. |
-| Projects              | 🟡     | CRUD plus archive/restore (via `status`) with file cleanup. No project members, settings, activity view or stats. |
-| Tasks                 | 🟢     | All core fields and actions, labels, comments, Kanban board with filters, org-wide search, activity log. No archive. |
-| Comments              | 🟢     | Post, edit (author), delete (author or admin), newest-first pagination, live events, audit without text, plain-text rendering (`docs/comments.md`). No mentions. |
-| Search/filtering      | 🟢     | Keyset pagination on projects and the new org-wide task search; search, status/priority/assignee/due filters and sorting; board filters with a 1000-task cap (`docs/pagination.md`). Not measured under load; no label filter yet. |
-| Dashboard             | 🟢     | Landing page: KPI tiles, my tasks, upcoming deadlines, recently updated, project progress meters and the activity feed, each section loading on its own (`docs/dashboard.md`). Not reviewed in a browser yet. |
-| WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, JWT-expiry close, client backoff, metrics, all tested. Verified across two live API instances in a browser (G.3). Reconnect after an API restart not yet tested live. |
-| Redis                 | 🟢     | Org-scoped cache with TTLs and invalidation; one shared subscriber per pod; pub/sub fanned out to 1,000 sockets at 8% CPU. A live outage was tested: reads served from Postgres, `/health` degraded, writes succeed (failed job enqueues counted), recovery automatic (Phase 9). No eviction policy. |
-| BullMQ/Workers        | 🟢     | Three email jobs (task assignment, invite, password reset); 5 attempts with exponential backoff, permanent errors not retried, idempotent sends, payload validation, org-scoped lookups, concurrency 5, `retrying`/`failed` metrics and alerts (`docs/jobs.md`). Retry verified live through a Postgres outage. No restart/crash tests yet. |
-| Notifications         | 🟢     | In-app: assignment, mention, comment, status change; badge with live updates over one shared socket; mark read / all read (`docs/notifications.md`). No due-date reminders, preferences or retention policy. |
-| Audit logging         | 🟡     | `activity_log` covers projects, tasks, comments, labels, invites, membership changes and password resets; product activity is readable via `GET /api/activity`. Login events are not recorded, there is no `request_id` column, and there is no admin view of account events. |
-| API hardening         | 🟡     | Body schemas, UUID path params, 1 MB limit, rate limits, helmet, strict CORS, one `{ error }` shape with generic 5xx bodies, 30s request and 10s statement timeouts (H.1). Swagger is dev-only and routes lack response schemas. |
-| Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. CodeQL on TypeScript and workflows (H.4). No threat model, no rotation procedure. |
-| File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
-| Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`, `npm ci`. Runtime images ship no npm/yarn/corepack (their bundled deps failed Trivy). Trivy-clean and blocking in CI. No tag strategy. |
-| Kubernetes            | 🟢     | Installed and exercised on kind (G.4): app flow, NetworkPolicy enforcement, upgrades, rollback. Fixed on the way: invalid NetworkPolicies, Postgres crash loop, missing migrations, config changes not rolling pods. Argo CD sync and drift, a Traefik Ingress (HTTP and WebSockets) and HPA scaling verified on kind (G.5). Not yet tested: a real cloud cluster. |
-| Helm                  | 🟢     | Install, upgrade and rollback tested on kind; CI renders three value sets and checks the objects (`tests/helm`). No `values.schema.json`; `values.yaml` still ships dev secrets. |
-| ArgoCD                | 🟡     | App-of-apps with dev/prod. Dev auto-syncs with prune/self-heal; prod syncs manually. Dev synced on kind, drift reverted in ~2 s (G.5). |
-| Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Run against live Prometheus/Grafana with real traffic in Compose (G.3): every target up, an alert fired and cleared, every dashboard query checked. No log retention policy. |
-| Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec. k6 load tests and failure tests run against Compose (`docs/load-testing.md`); not in CI. |
-| CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + blocking Trivy; actionlint clean; green on GitHub. CodeQL in its own workflow. No release pipeline; branch protection documented but not yet enabled. |
-| Performance           | 🟡     | Measured on a shared 4-vCPU box with 50,000 tasks (`docs/load-testing.md`): one API process serves 40 req/s of mixed traffic with 0 errors and reads p95 97 ms; boards, search and the dashboard fixed by evidence; 1,000 WebSockets; 2,000 jobs in 13.8 s. Not measured on a real cluster; no soak test. |
-| Reliability           | 🟢     | Failure-tested in Compose: Postgres down (503, no crash), Redis down (degraded, writes succeed), worker killed mid-queue (nothing lost), API restart (1001 + reconnect), pool exhaustion (503 + alert). Not tested on a cluster; no operator runbook. |
-| Backup/restore        | ⬜     | |
-| Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
-| UX polish             | ⬜     | |
-| Production readiness  | 🟡     | Runs on Kubernetes (kind) with Argo CD, an Ingress controller and HPA verified (G.5). Remaining: a real cloud cluster, release pipeline, Phases 10–11. |
+| Repository foundation | 🟢     | Install/lint/build/test clean on Node 22. Dependencies current (Fastify 5, Next 16, React 19, Zod 4, Vitest 5, BullMQ 6); `npm audit` clean. |
+| Architecture          | 🟡     | Central auth/role checks, request IDs, a shared error handler, graceful shutdown; rate-limit state in Redis, shared by every pod. SQL and business logic still sit in route handlers; `as any` casts on request bodies; the worker reads `process.env` without validation. |
+| Authentication        | 🟡     | 24h JWT in an httpOnly cookie; secrets required, published ones refused in production; algorithm confusion tested. Password reset end to end; sessions revocable everywhere (WebSockets included); the current role is read on every request. Remaining: changing the password does not ask for the current one; sign-up can reveal a taken email until it verifies by email; no MFA or lockout. |
+| Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Roles in `docs/user-guide.md`; per-route permissions not documented. |
+| Multi-tenancy         | 🟢     | Every query scoped to the session's `org_id` (directly or after an org-scoped ownership check, reviewed in Phase 11); IDOR tests against real Postgres in CI. Gap: no shared data-access layer. |
+| Database              | 🟡     | 19 reversible migrations, FKs, indexes, transactions; backup/restore scripts and a tested drill. No project-member tables; `projects` and `organizations` have no `updated_at`; no least-privilege DB user. |
+| Organizations         | 🟡     | Create on register; invite, accept, revoke; member list, role change, remove and leave with rank rules and an audit trail. Register makes the creator an admin, not an owner. No ownership transfer, reactivation, org settings or org deletion. |
+| Projects              | 🟡     | Create, edit, archive/restore and delete from the UI, with file cleanup. No project members, settings or project-level permissions. |
+| Tasks                 | 🟢     | Every field editable in one dialog; labels, comments with @mentions, attachments, Kanban board with filters (labels included), keyboard moves, org-wide search, activity log. No task archive. |
+| Comments              | 🟢     | Post, edit, delete, mentions with notifications, pagination, live events, plain-text rendering (`docs/comments.md`). |
+| Search/filtering      | 🟢     | Keyset pagination on projects and task search; status, priority, assignee, label and due filters; measured on 50,000 tasks (`docs/load-testing.md`). |
+| Dashboard             | 🟢     | KPI tiles, my tasks, deadlines, recently updated, project progress, activity, and a first-run welcome; each section loads on its own. Covered by the browser tests. |
+| WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, expiry close, backoff; verified across two API instances and on kind through an Ingress. Payloads are not schema-validated; no per-user connection cap. |
+| Redis                 | 🟢     | Org-scoped cache, shared subscriber per pod, shared rate-limit counters; outage tested (reads from Postgres, writes succeed, rate limiting fails open). Eviction policy is the default, not set explicitly. |
+| BullMQ/Workers        | 🟢     | Three email jobs with retries, idempotent sends, payload validation, metrics and alerts (`docs/jobs.md`); retry verified through a Postgres outage. |
+| Notifications         | 🟢     | In-app: assignment, mention, comment, status change; live badge; mark read. No due-date reminders, preferences or retention policy. |
+| Audit logging         | 🟡     | `activity_log` covers projects, tasks, comments, labels, invites, membership and password resets; readable via `GET /api/activity`. Login events are not recorded; no admin view of account events. |
+| API hardening         | 🟡     | Body schemas, UUID params, 1 MB limit, rate limits per real client (`TRUST_PROXY`) shared across pods, helmet, strict CORS, one error shape, timeouts. Swagger is dev-only; routes lack response schemas. |
+| Security              | 🟡     | Pre-release review with 7 fixes (`docs/security-review.md`): no default credentials anywhere, published secrets refused, framing headers. gitleaks, Trivy (blocking), CodeQL, Dependabot. No threat model, no full CSP. |
+| File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download; verified against MinIO. Not covered: malware scanning, pending-upload reaper, retention. |
+| Docker                | 🟢     | Multi-stage, alpine, non-root, Trivy-clean; tag strategy `X.Y.Z` + `sha-<commit>`. Compose requires `JWT_SECRET` and keeps Postgres/Redis on localhost. The worker image has no `HEALTHCHECK` (Kubernetes probes it). |
+| Kubernetes            | 🟢     | Installed and exercised on kind: app flow, NetworkPolicies, upgrades, rollback, Argo CD, Ingress, HPA, a production-values install from an existing Secret, restore. Not tested: a cloud cluster, node drain (PDB), topology spread. |
+| Helm                  | 🟢     | No default credentials (render fails without them), `existingSecret`, digest pinning, smoke test hook; CI renders and checks three value sets. No `values.schema.json`. |
+| ArgoCD                | 🟢     | App-of-apps; dev auto-syncs with self-heal, prod syncs by hand; both read credentials from `openpm-secrets`. Dev upgraded off the old default credentials on kind. Prod not yet synced. |
+| Observability         | 🟢     | Structured logs, API/worker metrics, 2 dashboards, 18 tested alerts, run against live Prometheus/Grafana. No log retention policy, Redis latency metric or infrastructure dashboards. |
+| Testing               | 🟢     | Unit (649), repo (Helm, release scripts), integration against real Postgres and Redis (126), browser tests in CI (journey, keyboard, axe WCAG 2.1 AA, phone, headers). Cache and pub/sub faked in integration; no browser tests of API failures; load tests not in CI. |
+| CI/CD                 | 🟡     | 10 checks green; release workflow published v0.1.0 (images with SBOM and provenance, GitHub Release). Branch protection not enabled; Actions may not open the deploy PR yet; no `npm audit` gate. |
+| Performance           | 🟡     | Measured on Compose with 50,000 tasks and 1,000 WebSockets (`docs/load-testing.md`); HPA scaling on kind. Not measured on a real cluster; no soak test; no frontend bundle review. |
+| Reliability           | 🟢     | Failure-tested in Compose (Postgres, Redis, worker, API restarts, pool exhaustion); rollback and restore rehearsed on kind. No incident runbook; not tested on a cloud cluster. |
+| Backup/restore        | 🟢     | Scripts, a drill that compares every table, and a disaster recovery rehearsed (`docs/backup-restore.md`). No scheduled job for the in-chart Postgres; no retention policy. |
+| Documentation         | 🟢     | README, CONTRIBUTING, SECURITY, user guide, deploying, releasing, backup/restore, release checklist, security review, accessibility, testing and feature docs. Missing: threat model, per-route permissions, task/project WebSocket events, incident runbook, privacy/data policy. |
+| UX polish             | 🟢     | Phase 10: task and project editing, shared dialogs, toasts, error and empty states, phone layout, onboarding, WCAG 2.1 AA in CI. Open: screen-reader pass, account menu, undo, visual regression checks. |
+| Production readiness  | 🟡     | v0.1.0 released. To run it: merge the deploy PR, create `openpm-secrets` in `openpm-prod`, sync. Never run on a cloud cluster. |
 
 ### Status legend
 

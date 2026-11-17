@@ -296,7 +296,7 @@ OpenPM is designed to be self-hosted and open-source. Security is defence-in-dep
 - **API**: Rate limiting, Helmet security headers, strict CORS, 1MB body limit.
 - **Containers**: Non-root (UID 1001), multi-stage builds, minimal base images.
 - **Network**: Kubernetes NetworkPolicy with default deny-all.
-- **CI**: gitleaks secret scanning, Trivy image scanning (report-only until the dependency advisories are cleared), Helm lint. CodeQL and an `npm audit` gate are not set up yet. See [docs/ci.md](docs/ci.md).
+- **CI**: gitleaks secret scanning, Trivy image scanning (blocks fixable HIGH/CRITICAL findings), CodeQL, Helm lint and render checks. There is no `npm audit` gate yet (it reports 0 vulnerabilities). See [docs/ci.md](docs/ci.md).
 - **Dependencies**: Dependabot auto-updates for npm, Actions, and Docker.
 
 The pre-release review, what it fixed and the known limits: [`docs/security-review.md`](docs/security-review.md).

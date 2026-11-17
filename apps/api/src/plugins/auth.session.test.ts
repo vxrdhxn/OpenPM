@@ -39,6 +39,23 @@ describe('session verification (token_version)', () => {
     expect(vi.mocked(db.query).mock.calls[0]![1]).toEqual(['u1', 'o1']);
   });
 
+  it('rejects tokens that are unsigned or claim another algorithm (algorithm confusion)', async () => {
+    vi.mocked(db.query).mockResolvedValue([{ role: 'owner', token_version: 0 }]);
+    const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const claims = b64({ user_id: 'u1', org_id: 'o1', role: 'owner', exp: Math.floor(Date.now() / 1000) + 3600 });
+    const genuine = app.jwt.sign({ user_id: 'u1', org_id: 'o1', role: 'owner' });
+    const forged = [
+      `${b64({ alg: 'none', typ: 'JWT' })}.${claims}.`, // unsigned
+      `${b64({ alg: 'RS256', typ: 'JWT' })}.${claims}.${genuine.split('.')[2]}`, // asymmetric claim
+      `${b64({ alg: 'HS512', typ: 'JWT' })}.${claims}.${genuine.split('.')[2]}`, // another HMAC, reused signature
+    ];
+    for (const token of forged) {
+      const res = await app.inject({ method: 'GET', url: '/whoami', headers: { authorization: `Bearer ${token}` } });
+      expect(res.statusCode, token.split('.')[0]).toBe(401);
+    }
+    expect(vi.mocked(db.query)).not.toHaveBeenCalled(); // rejected before any session lookup
+  });
+
   it('rejects a token issued before the last revocation', async () => {
     vi.mocked(db.query).mockResolvedValue([{ role: 'admin', token_version: 3 }]);
 
