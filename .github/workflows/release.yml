@@ -222,12 +222,8 @@ jobs:
 
       - name: Pin production to the new images
         run: |
-          while read -r app image digest; do
-            APP="$app" IMAGE="$image" DIGEST="$digest" yq -i '
-              .[strenv(APP)].image.repository = strenv(IMAGE) |
-              .[strenv(APP)].image.tag = strenv(VERSION) |
-              .[strenv(APP)].image.digest = strenv(DIGEST)' helm/openpm/values.prod.yaml
-          done < images.txt
+          # Changes only the image lines; yq alone would also drop every blank line (scripts/pin-images.sh).
+          scripts/pin-images.sh helm/openpm/values.prod.yaml "$VERSION" < images.txt
           git diff
           # The PR may not run CI (see the checkout token above), so validate the change here.
           helm lint --strict helm/openpm -f helm/openpm/values.prod.yaml
