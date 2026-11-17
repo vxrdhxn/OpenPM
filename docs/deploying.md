@@ -1,0 +1,103 @@
+# Deploying OpenPM
+
+Two supported ways: **Docker Compose** on one machine, or the **Helm chart** on Kubernetes (by hand
+or through Argo CD). Releases, upgrades and rollback are in [releasing.md](releasing.md), backups in
+[backup-restore.md](backup-restore.md).
+
+## Credentials
+
+OpenPM ships no usable default credentials. Anyone who knows `JWT_SECRET` can sign in as any user
+of any workspace, so a value published in this repository is never accepted:
+
+- The **API** refuses to start with `NODE_ENV=production` if `JWT_SECRET` is missing or is one of
+  the example values from this repository.
+- The **Helm chart** refuses to render without a JWT secret of at least 32 characters, and without
+  passwords for the in-chart Postgres and Redis.
+- **Docker Compose** refuses to start without `JWT_SECRET` in `.env`.
+
+Generate secrets with `openssl rand -hex 32`.
+
+### Docker Compose
+
+```bash
+echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
+echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> .env     # before the first start
+echo "REDIS_PASSWORD=$(openssl rand -hex 16)" >> .env
+docker compose up -d --build
+```
+
+Postgres and Redis listen on `127.0.0.1` only. The API (`:3000`) and frontend (`:3001`) listen on
+every interface; put a TLS-terminating proxy in front of them for anything beyond a trusted network.
+
+### Kubernetes: an existing Secret (recommended)
+
+Create the Secret before the first install or sync, and point the chart at it. Credentials then
+never pass through Git or Helm values:
+
+```bash
+kubectl create namespace openpm
+kubectl -n openpm create secret generic openpm-secrets \
+  --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/openpm' \
+  --from-literal=REDIS_URL='redis://:PASSWORD@HOST:6379/0' \
+  --from-literal=RESEND_API_KEY='re_...'          # optional: outgoing email
+helm install openpm helm/openpm -n openpm -f helm/openpm/values.prod.yaml   # sets existingSecret
+```
+
+With the in-chart Postgres and Redis (`postgres.enabled`, `redis.enabled`), the Secret also needs
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` and `REDIS_PASSWORD`. `DATABASE_URL` and
+`REDIS_URL` must then point at the chart's services (`<release>-postgres:5432`,
+`<release>-redis:6379`) with the same passwords.
+
+Both Argo CD applications (`argocd/apps/`) read a Secret named `openpm-secrets` in their namespace.
+External Secrets or Sealed Secrets can create it; the chart only needs the keys above.
+
+The chart restarts pods when a Secret *it renders* changes. After changing an existing Secret,
+restart them yourself: `kubectl -n openpm rollout restart deploy`.
+
+### Kubernetes: values at install time
+
+For a quick evaluation, the chart can render the Secret itself:
+
+```bash
+helm install openpm helm/openpm -n openpm --create-namespace \
+  --set secrets.jwtSecret="$(openssl rand -hex 32)" \
+  --set secrets.postgres.password="$(openssl rand -hex 16)" \
+  --set secrets.redis.password="$(openssl rand -hex 16)"
+```
+
+Keep those values: every later `helm upgrade` needs the same ones (`--reuse-values` keeps them).
+
+## Behind a proxy
+
+Rate limits (100 requests a minute per client, stricter on sign-in, counted in Redis across all API
+pods) need the client's real address.
+The API believes `X-Forwarded-For` only from the proxies `TRUST_PROXY` names:
+
+| Setting | Meaning |
+| --- | --- |
+| unset (Compose default) | The API is reached directly; the header is ignored, so clients cannot fake their address. |
+| `1` (chart default, `api.trustProxy`) | One proxy in front, the Ingress controller. |
+| `2`, `3`, ... | One more for each proxy in front of the controller that appends to the header (e.g. a cloud L7 load balancer). |
+| `10.0.0.0/8,192.168.1.4` | Trust exactly these proxy addresses. |
+
+Too low: all users behind the proxy share one limit. Too high: clients can set their own address and
+dodge the limit.
+
+## Upgrading an install made with the old defaults
+
+Before v0.1.0 the chart and `docker-compose.yml` had built-in credentials. An install that used
+them has a publicly known JWT secret (and Postgres/Redis passwords); rotate them when upgrading:
+
+1. **JWT secret:** set a new one. Everyone is signed out once.
+2. **Postgres password:** `POSTGRES_PASSWORD` only applies when the data directory is first
+   created, so change it in the database too, then in the Secret or `.env`:
+
+   ```bash
+   kubectl -n openpm exec deploy/openpm-postgres -- \
+     psql -U openpm -d openpm -c "ALTER USER openpm PASSWORD 'NEW_PASSWORD'"
+   ```
+
+   With Compose: `docker compose exec postgres psql -U openpm -d openpm -c "ALTER USER ..."`.
+3. **Redis password:** Redis reads it at start, so updating the Secret or `.env` and restarting is
+   enough.

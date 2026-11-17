@@ -79,3 +79,52 @@ describe('config: attachment storage settings', () => {
     await expect(loadConfig({ S3_FORCE_PATH_STYLE: 'yes' })).rejects.toThrow('process.exit');
   });
 });
+
+describe('config: JWT secret', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+    vi.doUnmock('dotenv');
+  });
+
+  async function secretWith(env: Record<string, string | undefined>) {
+    vi.resetModules();
+    // config.ts loads the repository's .env, which would put a developer's JWT_SECRET back.
+    vi.doMock('dotenv', () => ({ default: { config: () => ({}) } }));
+    delete process.env.JWT_SECRET;
+    for (const [k, v] of Object.entries(env)) if (v !== undefined) process.env[k] = v;
+    const { getJwtSecret } = await import('./config.js');
+    return getJwtSecret;
+  }
+
+  it('uses the development key outside production', async () => {
+    expect((await secretWith({ NODE_ENV: 'development' }))()).toHaveLength(50);
+  });
+
+  it('requires a secret in production', async () => {
+    expect(await secretWith({ NODE_ENV: 'production' })).toThrow(/JWT_SECRET is required/);
+  });
+
+  it.each([
+    'super_secret_development_key_change_me_in_prod_123',
+    'some_super_secret_jwt_key_that_is_long_enough',
+    'change_me_to_something_super_secret_and_long_enough_32_chars',
+  ])('refuses the published example secret %s in production', async (published) => {
+    expect(await secretWith({ NODE_ENV: 'production', JWT_SECRET: published })).toThrow(/published in the OpenPM repository/);
+  });
+
+  it('accepts a real secret in production', async () => {
+    const real = 'only-for-this-test-a-real-one-comes-from-openssl-rand';
+    expect((await secretWith({ NODE_ENV: 'production', JWT_SECRET: real }))()).toBe(real);
+  });
+});
+
+describe('config: TRUST_PROXY', () => {
+  it('is off unless set, so clients reaching the API directly cannot pick their address', async () => {
+    const { trustProxySetting } = await import('./config.js');
+    expect(trustProxySetting(undefined)).toBe(false);
+    const oneHop = trustProxySetting('1') as (a: string, hop: number) => boolean;
+    expect([oneHop('10.0.0.5', 0), oneHop('10.0.0.6', 1)]).toEqual([true, false]);
+    expect(trustProxySetting('10.0.0.0/8, 192.168.1.4')).toEqual(['10.0.0.0/8', '192.168.1.4']);
+  });
+});

@@ -108,3 +108,11 @@ imagePullSecrets:
   {{- toYaml . | nindent 2 }}
 {{- end }}
 {{- end }}
+
+{{/*
+Name of the Secret holding credentials: secrets.existingSecret (created outside the chart, e.g. by
+External Secrets or kubectl) or the one this chart renders from secrets.* values.
+*/}}
+{{- define "openpm.secretName" -}}
+{{- .Values.secrets.existingSecret | default (printf "%s-secrets" (include "openpm.fullname" .)) -}}
+{{- end }}

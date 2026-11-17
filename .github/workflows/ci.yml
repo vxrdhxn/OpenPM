@@ -79,6 +79,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # Only for rate limits shared across API instances (rateLimitShared.int.test.ts); the other
+      # tests fake Redis. redis:7-alpine (7.4), pinned by digest.
+      redis:
+        image: redis@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -97,6 +108,7 @@ jobs:
         run: npm run test:integration
         env:
           TEST_DATABASE_URL: postgresql://openpm:openpm@localhost:5432/postgres
+          TEST_REDIS_URL: redis://localhost:6379/0
 
   e2e:
     name: Browser tests (Playwright)
@@ -118,6 +130,10 @@ jobs:
       # The e2e overlay lifts the per-address rate limit for the test client (see the file).
       - name: Start the API
         run: |
+          # Compose has no default JWT secret; later steps (logs) read the file too, so export it to them.
+          export JWT_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$JWT_SECRET"
+          echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
           docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build api
           for _ in $(seq 1 60); do curl -sf http://localhost:3000/health && exit 0; sleep 2; done
           echo "::error::API did not become healthy"; docker compose logs api migrate; exit 1
@@ -149,18 +165,22 @@ jobs:
           version: ${{ env.HELM_VERSION }}
 
       # --strict turns lint warnings into failures. Each variant exercises different template branches.
+      # The chart has no default credentials (it refuses to render without them), so the non-production
+      # variants get throwaway ones; production reads an existing Secret.
       - name: Lint (defaults, production values, monitoring on)
         run: |
-          helm lint --strict helm/openpm
+          CREDS="--set secrets.jwtSecret=ci-only-not-a-real-secret-0123456789abcdef --set secrets.postgres.password=ci --set secrets.redis.password=ci"
+          helm lint --strict helm/openpm $CREDS
           helm lint --strict helm/openpm -f helm/openpm/values.prod.yaml
-          helm lint --strict helm/openpm --set serviceMonitor.enabled=true --set grafana.dashboards.enabled=true --set prometheusRule.enabled=true
+          helm lint --strict helm/openpm $CREDS --set serviceMonitor.enabled=true --set grafana.dashboards.enabled=true --set prometheusRule.enabled=true
 
       # Lint doesn't catch everything; actually render each variant.
       - name: Render
         run: |
-          helm template openpm helm/openpm > /dev/null
+          CREDS="--set secrets.jwtSecret=ci-only-not-a-real-secret-0123456789abcdef --set secrets.postgres.password=ci --set secrets.redis.password=ci"
+          helm template openpm helm/openpm $CREDS > /dev/null
           helm template openpm helm/openpm -f helm/openpm/values.prod.yaml > /dev/null
-          helm template openpm helm/openpm \
+          helm template openpm helm/openpm $CREDS \
             --set serviceMonitor.enabled=true --set serviceMonitor.namespace=monitoring \
             --set grafana.dashboards.enabled=true \
             --set prometheusRule.enabled=true --set prometheusRule.namespace=monitoring > /dev/null

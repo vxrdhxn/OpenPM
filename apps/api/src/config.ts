@@ -25,11 +25,23 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'), // true for MinIO
   ATTACHMENT_MAX_BYTES: z.string().regex(/^\d+$/).default('10485760').transform(Number), // 10 MiB
+  // Reverse proxies in front of the API whose X-Forwarded-For to believe, so rate limits and logs see
+  // the real client address: a hop count ("1" behind one Ingress) or comma-separated IPs/CIDRs.
+  // Unset = the API is reached directly (Compose) and the header is ignored, so clients cannot fake it.
+  TRUST_PROXY: z.string().regex(/^(\d+|[0-9a-fA-F.:/]+(\s*,\s*[0-9a-fA-F.:/]+)*)$/, 'TRUST_PROXY must be a hop count or a list of IPs/CIDRs').optional(),
   // Load tests only: IPs/CIDRs exempt from rate limiting (security/rateLimitAllowlist.ts). Never in production.
   RATE_LIMIT_ALLOWLIST: z.string().optional(),
 });
 
 const DEV_JWT_SECRET = 'super_secret_development_key_change_me_in_prod_123';
+
+// Secrets that are (or were) published in this repository as examples or defaults. Anyone can sign
+// tokens with them, so production refuses them as if no secret were set.
+const PUBLISHED_JWT_SECRETS = new Set([
+  DEV_JWT_SECRET, // .env.example
+  'some_super_secret_jwt_key_that_is_long_enough', // docker-compose.yml before v0.1.0
+  'change_me_to_something_super_secret_and_long_enough_32_chars', // Helm values.yaml before v0.1.0
+]);
 
 // .env.example ships these optional settings blank (`S3_BUCKET=`), and a blank value is "unset",
 // not an invalid URL/size. Other variables keep strict semantics: a blank JWT_SECRET must still fail.
@@ -44,6 +56,7 @@ const BLANK_MEANS_UNSET = new Set([
   'S3_FORCE_PATH_STYLE',
   'ATTACHMENT_MAX_BYTES',
   'RATE_LIMIT_ALLOWLIST',
+  'TRUST_PROXY',
 ]);
 
 const env = Object.fromEntries(
@@ -60,15 +73,32 @@ if (!parsed.success) {
 export const config = parsed.data;
 
 /**
+ * Fastify's trustProxy option from TRUST_PROXY: false when unset, a list of trusted proxy addresses,
+ * or, for a hop count n, trust the n nearest hops (what Fastify does for a number; its types omit it).
+ */
+export function trustProxySetting(
+  value: string | undefined = config.TRUST_PROXY
+): false | string[] | ((address: string, hop: number) => boolean) {
+  if (!value) return false;
+  if (/^\d+$/.test(value)) {
+    const hops = Number(value);
+    return (_address, hop) => hop < hops;
+  }
+  return value.split(',').map((s) => s.trim());
+}
+
+/**
  * The secret used to sign tokens. Outside production a development key is used so the app runs out
  * of the box; in production a missing secret stops the API instead of silently signing tokens with
  * a key that is published in this repository. (Checked here, not at config load, so tools that only
  * need the database, such as migrations, do not need a signing secret.)
  */
 export function getJwtSecret(): string {
-  if (config.JWT_SECRET) return config.JWT_SECRET;
   if (config.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET is required when NODE_ENV=production');
+    if (!config.JWT_SECRET) throw new Error('JWT_SECRET is required when NODE_ENV=production');
+    if (PUBLISHED_JWT_SECRETS.has(config.JWT_SECRET)) {
+      throw new Error('JWT_SECRET is an example value published in the OpenPM repository; generate one with `openssl rand -hex 32`');
+    }
   }
-  return DEV_JWT_SECRET;
+  return config.JWT_SECRET ?? DEV_JWT_SECRET;
 }

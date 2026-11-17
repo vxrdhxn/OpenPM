@@ -14,6 +14,11 @@ spec:
     helm:
       valueFiles:
         - values.yaml
+      # Credentials come from a Secret created in openpm-dev before the first sync (never from Git):
+      # docs/deploying.md.
+      valuesObject:
+        secrets:
+          existingSecret: openpm-secrets
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: openpm-dev

@@ -52,12 +52,13 @@ spec:
                   key: APP_URL
             - name: EMAIL_FROM_ADDRESS
               value: {{ .Values.email.fromAddress | quote }}
-            {{- if .Values.secrets.resendApiKey }}
+            {{- if or .Values.secrets.resendApiKey .Values.secrets.existingSecret }}
             - name: RESEND_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: RESEND_API_KEY
+                  optional: true
             {{- end }}
             {{- if .Values.worker.metrics.enabled }}
             - name: METRICS_PORT
@@ -66,17 +67,17 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: DATABASE_URL
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: REDIS_URL
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: JWT_SECRET
             {{- with .Values.worker.extraEnv }}
             {{- toYaml . | nindent 12 }}

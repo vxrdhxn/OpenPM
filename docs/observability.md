@@ -72,7 +72,7 @@ Label values come from small fixed sets, so cardinality is bounded (no ids, emai
 | `auth_failures_total` | `reason` | `missing`, `expired`, `invalid`, `bad_credentials`. |
 | `db_query_duration_seconds` | `outcome` | Queries through `db.query` (`ok`/`error`). Transactions are not included. |
 | `db_pool_connections` | `state` | `total`, `idle`, `waiting`. |
-| `redis_errors_total` | `client` | `main`, `subscriber`. |
+| `redis_errors_total` | `client` | `main`, `subscriber`, `rate_limit` (shared rate-limit counters; while it fails, rate limiting is off). |
 | `overload_rejections_total` | `reason` | Requests answered 503 + `Retry-After` instead of served: `db_pool` (every database connection busy, the API is past its capacity) or `db_unavailable` (the database cannot be reached). See [load-testing.md](load-testing.md). |
 | `db_connection_errors_total` | | Idle database connections that broke (Postgres restart, failover, network) and were discarded; the pool reconnects. |
 | `jobs_enqueue_failed_total` | `job_name` | Background jobs that could not be queued (Redis down or slower than 2 s). The request still succeeded; that email was not sent. |

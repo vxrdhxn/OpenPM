@@ -41,7 +41,7 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: REDIS_PASSWORD
           livenessProbe:
             exec:

@@ -16,3 +16,12 @@ test('has title and login form', async ({ page }) => {
   await expect(page.locator('input[type="email"]')).toBeVisible();
   await expect(page.locator('input[type="password"]')).toBeVisible();
 });
+
+test('pages cannot be framed by other sites and do not advertise the server', async ({ page }) => {
+  const response = await page.goto('/login');
+  const headers = response!.headers();
+  expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
+  expect(headers['x-frame-options']).toBe('DENY');
+  expect(headers['x-content-type-options']).toBe('nosniff');
+  expect(headers['x-powered-by']).toBeUndefined();
+});

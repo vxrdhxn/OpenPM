@@ -34,15 +34,27 @@ securityContext:
       drop:
         - ALL
 
-# Core Secrets (Should be overridden in production)
+# Credentials. The chart has no defaults: installing without them fails with a message saying what
+# is missing. Either
+#   - set existingSecret to a Secret you create (keys below), so no credential is in Git or in Helm
+#     values; or
+#   - pass the values at install time: --set secrets.jwtSecret=$(openssl rand -hex 32) ...
+# existingSecret keys: JWT_SECRET, DATABASE_URL, REDIS_URL, RESEND_API_KEY (optional), plus
+# POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB when postgres.enabled and REDIS_PASSWORD when
+# redis.enabled. Pods restart on chart-rendered secret changes; after changing an existing Secret,
+# restart them yourself (kubectl rollout restart). docs/deploying.md has the commands.
 secrets:
-  jwtSecret: "change_me_to_something_super_secret_and_long_enough_32_chars"
+  existingSecret: ""
+  # At least 32 random characters. Signs every session: anyone who knows it can sign in as anyone.
+  jwtSecret: ""
   postgres:
+    # username and database are also used by the Postgres health probes; with existingSecret they
+    # must match POSTGRES_USER and POSTGRES_DB.
     username: "openpm"
-    password: "openpm_secure_db_pass"
+    password: ""
     database: "openpm"
   redis:
-    password: "openpm_secure_redis_pass"
+    password: ""
   # Resend API key for outgoing email (invites, assignment notices). Empty = no email is sent and the
   # worker logs a warning per message. Set it with --set secrets.resendApiKey=... rather than in Git.
   resendApiKey: ""
@@ -99,6 +111,11 @@ api:
     pullPolicy: "IfNotPresent"
   port: 3000
   corsOrigin: "http://openpm.local"
+  # Proxies whose X-Forwarded-For the API believes (TRUST_PROXY): "1" = the Ingress controller in
+  # front of it, so rate limits are per client rather than one bucket for everyone. Add a hop per
+  # proxy in front of the controller that also appends the header (e.g. "2" behind a cloud L7 load
+  # balancer). "" = trust none. The NetworkPolicy lets only the Ingress reach the API.
+  trustProxy: "1"
   # Run database migrations in an init container before each API pod starts. Disable only if you
   # apply migrations another way (e.g. a CI job running `node apps/api/dist/db/migrate.js up`).
   migrations:

@@ -5,18 +5,25 @@ import { createShutdown } from './shutdown';
 import { closeDb } from './db/client';
 import { closeRedis } from './cache/redis';
 import { closeJobQueue } from './queue';
+import { createRateLimitRedis } from './security/rateLimitStore';
 
 // Process-level Prometheus metrics (CPU, memory, event loop, ...). Registered once, here, not in
 // buildApp(): tests build several apps in one process.
 client.collectDefaultMetrics();
 
-const fastify = buildApp();
+const rateLimitRedis = createRateLimitRedis();
+const fastify = buildApp({ rateLimitRedis });
 
 // Graceful shutdown. Kubernetes sends SIGTERM before killing a pod: finish in-flight requests, then
 // close the queue, Redis and the database pool so nothing is cut off mid-command (see shutdown.ts).
 const shutdown = createShutdown({
   app: fastify,
-  resources: { queue: closeJobQueue, redis: closeRedis, database: closeDb },
+  resources: {
+    queue: closeJobQueue,
+    redis: closeRedis,
+    rateLimitRedis: () => rateLimitRedis.quit().then(() => undefined, () => rateLimitRedis.disconnect()),
+    database: closeDb,
+  },
   log: fastify.log,
   exit: (code) => process.exit(code),
 });

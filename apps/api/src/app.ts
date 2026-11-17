@@ -1,4 +1,5 @@
 import Fastify, { LogController, type FastifyServerOptions } from 'fastify';
+import type { Redis } from 'ioredis';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
@@ -7,7 +8,7 @@ import websocket from '@fastify/websocket';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 
-import { config } from './config';
+import { config, trustProxySetting } from './config';
 import { corsOptions } from './corsOptions';
 import { httpRequestDurationMicroseconds, httpRequestsTotal } from './metrics';
 import { genReqId, loggerOptions } from './logger';
@@ -43,6 +44,11 @@ declare module 'fastify' {
 export interface BuildAppOptions {
   /** Fastify logger setting; defaults to the JSON production logger. Tests pass `false`. */
   logger?: FastifyServerOptions['logger'];
+  /**
+   * Redis connection for rate-limit counters shared by every API instance (security/rateLimitStore.ts).
+   * index.ts passes one; without it each instance counts on its own (tests).
+   */
+  rateLimitRedis?: Redis;
 }
 
 /**
@@ -59,6 +65,10 @@ export function buildApp(options: BuildAppOptions = {}) {
     // which lets slow clients hold connections open (slowloris). Upgraded WebSockets are not
     // affected. Slow handlers are bounded separately by the database statement_timeout.
     requestTimeout: 30_000,
+    // Behind an Ingress every request arrives from the proxy; without this, all users would share one
+    // rate-limit bucket. Off unless TRUST_PROXY is set (the Helm chart sets it), so direct clients
+    // cannot choose their own address with X-Forwarded-For.
+    trustProxy: trustProxySetting(),
     ajv: {
       customOptions: {
         removeAdditional: false,
@@ -110,6 +120,9 @@ export function buildApp(options: BuildAppOptions = {}) {
   fastify.register(rateLimit, {
     max: 100, // 100 req/min general limit
     timeWindow: '1 minute',
+    // Counted in Redis when given, so the limits hold across pods. If Redis fails, let the request
+    // through: an outage turns rate limiting off rather than the API.
+    ...(options.rateLimitRedis && { redis: options.rateLimitRedis, nameSpace: 'openpm:rate-limit:', skipOnError: true }),
     ...(exempt && { allowList: (request: { ip: string }) => exempt(request.ip) }),
   });
 

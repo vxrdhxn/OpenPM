@@ -1,5 +1,9 @@
 
 
+# Runs the production builds (NODE_ENV=production). The only required setting is JWT_SECRET in .env
+# (README, "Fastest way"); there is no default because anyone who knows it can sign in as anyone.
+# Postgres and Redis listen on this machine only (127.0.0.1); the other containers reach them on the
+# Compose network.
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openpm}
       POSTGRES_DB: ${POSTGRES_DB:-openpm}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,7 +29,7 @@ services:
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD:-openpm}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -62,7 +66,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-openpm}:${POSTGRES_PASSWORD:-openpm}@postgres:5432/${POSTGRES_DB:-openpm}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-openpm}@redis:6379/0
-      - JWT_SECRET=${JWT_SECRET:-some_super_secret_jwt_key_that_is_long_enough}
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env first, e.g. echo JWT_SECRET=$(openssl rand -hex 32) >> .env}
       - PORT=3000
       - CORS_ORIGIN=http://localhost:3001
       - NODE_ENV=production
@@ -89,7 +93,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-openpm}:${POSTGRES_PASSWORD:-openpm}@postgres:5432/${POSTGRES_DB:-openpm}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-openpm}@redis:6379/0
-      - JWT_SECRET=${JWT_SECRET:-some_super_secret_jwt_key_that_is_long_enough}
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env first, e.g. echo JWT_SECRET=$(openssl rand -hex 32) >> .env}
       - NODE_ENV=production
       - APP_URL=${APP_URL:-http://localhost:3001}
       - RESEND_API_KEY=${RESEND_API_KEY:-}

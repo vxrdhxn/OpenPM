@@ -40,6 +40,7 @@ title = "OpenPM Gitleaks Config"
     regexes = [
       '''(?i)['"][^'"]*change[_-]?me''',  # "change_me_to_something_..." template values
       '''['"]\$\{[A-Z_]+''',              # "${JWT_SECRET}" references (the value IS a variable)
+      '''['"]\$\(openssl rand ''',         # "$(openssl rand -hex 32)": generated at run time
     ]
 
 [[rules]]

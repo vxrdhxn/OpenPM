@@ -29,16 +29,30 @@ type K8sObject = {
   spec?: any;
 };
 
-function render(...args: string[]): K8sObject[] {
-  const out = execFileSync('helm', ['template', 'openpm', CHART, ...args], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+// The chart has no default credentials; tests supply throwaway ones (renderBare does not).
+const TEST_SECRETS = ['--set', 'secrets.jwtSecret=' + 'x'.repeat(40), '--set', 'secrets.postgres.password=pg-test', '--set', 'secrets.redis.password=redis-test'];
+
+function renderBare(...args: string[]): K8sObject[] {
+  const out = execFileSync('helm', ['template', 'openpm', CHART, ...args], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
   return parseAllDocuments(out)
     .map((d) => d.toJS() as K8sObject | null)
     .filter((o): o is K8sObject => o !== null);
 }
 
+const render = (...args: string[]) => renderBare(...TEST_SECRETS, ...args);
+
+function renderError(...args: string[]): string {
+  try {
+    renderBare(...args);
+  } catch (err) {
+    return String((err as { stderr?: string }).stderr ?? err);
+  }
+  throw new Error('expected helm template to fail');
+}
+
 const VARIANTS: Record<string, string[]> = {
   defaults: [],
-  production: ['-f', path.join(CHART, 'values.prod.yaml')],
+  production: ['-f', path.join(CHART, 'values.prod.yaml')], // credentials from existingSecret
   monitoring: ['--set', 'serviceMonitor.enabled=true', '--set', 'prometheusRule.enabled=true', '--set', 'grafana.dashboards.enabled=true'],
 };
 
@@ -137,6 +151,44 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
     const pg = deployment(render(), 'postgres')!.spec.template.spec;
     expect(pg.securityContext).toMatchObject({ runAsNonRoot: true, runAsUser: 70, fsGroup: 70 });
     expect(pg.containers[0].env).toContainEqual({ name: 'PGDATA', value: '/var/lib/postgresql/data/pgdata' });
+  });
+
+  describe('credentials', () => {
+    it('refuses to render without a JWT secret, or with one published in this repository', () => {
+      expect(renderError()).toMatch(/secrets\.jwtSecret must be set/);
+      for (const published of ['change_me_to_something_super_secret_and_long_enough_32_chars', 'super_secret_development_key_change_me_in_prod_123']) {
+        expect(renderError(...TEST_SECRETS, '--set', `secrets.jwtSecret=${published}`)).toMatch(/secrets\.jwtSecret must be set/);
+      }
+      expect(renderError(...TEST_SECRETS, '--set', 'secrets.jwtSecret=short')).toMatch(/at least 32/);
+    });
+
+    it('refuses to render in-chart Postgres or Redis without a password', () => {
+      expect(renderError(...TEST_SECRETS, '--set', 'secrets.postgres.password=')).toMatch(/secrets\.postgres\.password is required/);
+      expect(renderError(...TEST_SECRETS, '--set', 'secrets.redis.password=')).toMatch(/secrets\.redis\.password is required/);
+      expect(renderError(...TEST_SECRETS, '--set', 'postgres.enabled=false')).toMatch(/externalDatabase\.url is required/);
+    });
+
+    it('uses an existing Secret instead of rendering one, for every reference', () => {
+      const objects = renderBare('--set', 'secrets.existingSecret=my-creds');
+      expect(objects.some((o) => o.kind === 'Secret')).toBe(false);
+      const names = JSON.stringify(objects).match(/"secretKeyRef":\{"name":"[^"]+"/g) ?? [];
+      expect(names.length).toBeGreaterThan(5);
+      expect(new Set(names)).toEqual(new Set(['"secretKeyRef":{"name":"my-creds"']));
+      const resend = (deployment(objects, 'worker')!.spec.template.spec.containers[0].env as any[]).find((e) => e.name === 'RESEND_API_KEY');
+      expect(resend.valueFrom.secretKeyRef).toEqual({ name: 'my-creds', key: 'RESEND_API_KEY', optional: true });
+    });
+
+    it('URL-encodes generated passwords inside DATABASE_URL and REDIS_URL', () => {
+      const secret = render('--set', 'secrets.postgres.password=a@b/c').find((o) => o.kind === 'Secret') as K8sObject & { data: Record<string, string> };
+      // Compared from the user part on, so this file holds no whole connection string (gitleaks).
+      expect(Buffer.from(secret.data.DATABASE_URL, 'base64').toString()).toMatch(/^postgresql:\/\/openpm:a%40b%2Fc@openpm-postgres:5432\/openpm$/);
+    });
+  });
+
+  it('makes the API trust one proxy hop (the Ingress) by default, and none when unset', () => {
+    const env = (objects: K8sObject[]) => deployment(objects, 'api')!.spec.template.spec.containers[0].env as Array<{ name: string; value?: string }>;
+    expect(env(render())).toContainEqual({ name: 'TRUST_PROXY', value: '1' });
+    expect(env(render('--set', 'api.trustProxy=')).map((e) => e.name)).not.toContain('TRUST_PROXY');
   });
 
   it('can turn the migration init container off', () => {

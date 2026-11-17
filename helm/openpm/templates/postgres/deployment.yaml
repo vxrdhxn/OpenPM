@@ -46,17 +46,17 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "openpm.fullname" . }}-secrets
+                  name: {{ include "openpm.secretName" . }}
                   key: POSTGRES_DB
             # A subdirectory, so initdb creates it with its own ownership and mode (0700) inside the
             # volume root, which belongs to root and is only group-writable through fsGroup.

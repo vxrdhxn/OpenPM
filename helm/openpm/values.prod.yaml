@@ -10,12 +10,11 @@ postgres:
 redis:
   enabled: false
 
-# Configure external production database and cache connections
-# Override these secrets during helm deployment (e.g. --set externalDatabase.url=$DB_URL)
-externalDatabase:
-  url: "postgresql://openpm_prod_user:SECRET_PASSWORD_HERE@postgres-prod-instance.internal:5432/openpm_prod"
-externalRedis:
-  url: "redis://:SECRET_REDIS_PASS_HERE@redis-prod-instance.internal:6379/0"
+# Credentials come from a Secret created in the openpm-prod namespace before the first sync, never
+# from Git: JWT_SECRET, DATABASE_URL and REDIS_URL (the managed database and cache), and optionally
+# RESEND_API_KEY. docs/deploying.md shows how to create it.
+secrets:
+  existingSecret: "openpm-secrets"
 
 # Image repository, tag and digest are set by the release workflow's "deploy: vX.Y.Z to production"
 # pull request (docs/releasing.md). Do not edit them by hand.
