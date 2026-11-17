@@ -41,7 +41,7 @@ gate merges, in **Settings → Branches → Add branch protection rule** (or a r
 - Require a pull request before merging (1 approval if there is more than one maintainer).
 - Require status checks to pass, and require branches to be up to date. Select these checks:
   `Lint, build, test`, `Integration tests (Postgres)`, `Helm chart`, `Secret scan (gitleaks)`,
-  `Image (api)`, `Image (worker)`, `Image (frontend)`, `CodeQL (javascript-typescript)`,
+  `Image (api)`, `Image (worker)`, `Image (frontend)`, `Browser tests (Playwright)`, `CodeQL (javascript-typescript)`,
   `CodeQL (actions)`.
 - Require conversation resolution before merging.
 - Block force pushes and deletions.

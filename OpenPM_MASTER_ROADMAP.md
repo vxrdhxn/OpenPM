@@ -326,13 +326,13 @@ Actions:
 
 ## Navigation
 
-- [ ] Consistent application shell.
+- [x] Consistent application shell.
 - [ ] Organization switcher.
 - [ ] Project navigation.
-- [ ] User/account menu.
-- [ ] Responsive navigation.
-- [ ] Mobile behavior.
-- [ ] Correct loading states.
+- [ ] User/account menu. — *partial:* name, email, role and sign out in the sidebar; no menu
+- [x] Responsive navigation.
+- [x] Mobile behavior.
+- [x] Correct loading states.
 
 ## Dashboard
 
@@ -346,32 +346,32 @@ Actions:
 ## Task UI
 
 - [x] Task creation.
-- [ ] Task editing.
+- [x] Task editing. — task dialog edits every field
 - [x] Status control. — drag and drop on the board
-- [ ] Priority control.
-- [ ] Assignee control.
+- [x] Priority control.
+- [x] Assignee control.
 - [x] Labels. — chips on cards, picker in the task dialog, Labels panel in settings
-- [ ] Due date.
-- [ ] Description editor.
+- [x] Due date.
+- [x] Description editor. — plain text
 - [x] Comments. — Comments section in the task dialog
 - [ ] Activity.
 - [ ] Safe optimistic updates where appropriate.
-- [ ] Error recovery.
+- [x] Error recovery. — failed saves keep the edit and say why; failed moves put the card back
 
 ## UX quality
 
-- [ ] Loading skeletons.
-- [ ] Error states.
-- [ ] Empty states.
-- [ ] Confirmation dialogs for destructive actions. — *partial:* attachment delete is confirmed; other deletes are not reviewed
-- [ ] Toast/notification system.
-- [ ] Keyboard accessibility.
+- [x] Loading skeletons.
+- [x] Error states.
+- [x] Empty states.
+- [x] Confirmation dialogs for destructive actions. — every delete, remove and leave
+- [x] Toast/notification system. — `ui/feedback.tsx`
+- [x] Keyboard accessibility.
 - [x] Focus management. — task dialog: focus trap, Escape, focus restored
-- [ ] Screen-reader labels.
-- [ ] Responsive layouts.
+- [x] Screen-reader labels. — every control named (axe in CI)
+- [x] Responsive layouts.
 - [ ] Consistent spacing and typography.
 - [ ] No unnecessary loading spinners.
-- [ ] No obvious placeholder UI.
+- [x] No obvious placeholder UI.
 
 ---
 
@@ -1048,24 +1048,24 @@ For every threat:
 
 Before release:
 
-- [ ] Consistent design system.
-- [ ] Consistent buttons/forms/modals.
-- [ ] Consistent error messages.
-- [ ] Consistent loading states.
-- [ ] Consistent empty states.
-- [ ] Keyboard navigation.
-- [ ] Accessibility review.
-- [ ] Responsive UI.
+- [ ] Consistent design system. — *partial:* shared Dialog, Field, button, toast and state components (`components/ui`); older pages still carry one-off styles
+- [x] Consistent buttons/forms/modals. — every dialog uses `ui/Dialog`; `btn-compact` / `btn-secondary` / `btn-danger`
+- [x] Consistent error messages. — toasts for actions, `ErrorBlock` with retry for loads
+- [ ] Consistent loading states. — *partial:* shared `LoadingBlock`; the dashboard keeps its own skeletons
+- [x] Consistent empty states. — `EmptyBlock` with the action that fills it
+- [x] Keyboard navigation. — dialogs, skip link, menu, keyboard drag (tested; `docs/accessibility.md`)
+- [ ] Accessibility review. — *partial:* axe WCAG 2.1 AA clean on every screen in CI, keyboard reviewed; no screen-reader pass yet
+- [x] Responsive UI. — phone menu drawer, no sideways scrolling, tested at Pixel 7 size
 - [ ] Visual regression checks where useful.
-- [ ] Clear onboarding.
-- [ ] Helpful first-run experience.
-- [ ] Destructive-action confirmations.
-- [ ] Undo/recovery where appropriate.
-- [ ] 404 page.
-- [ ] 500/error page.
-- [ ] Network failure states.
-- [ ] No placeholder UI.
-- [ ] No production console errors.
+- [x] Clear onboarding. — dashboard welcome with three steps; `docs/user-guide.md`
+- [x] Helpful first-run experience. — "Create your first project" opens the project dialog
+- [x] Destructive-action confirmations. — in-app confirm (Cancel focused) for every delete, remove and leave
+- [ ] Undo/recovery where appropriate. — *partial:* unsaved task edits are protected; archive instead of delete for projects; no undo after delete
+- [x] 404 page.
+- [x] 500/error page. — `error.tsx` and `global-error.tsx`
+- [x] Network failure states. — offline banner; failed requests shown, not swallowed
+- [x] No placeholder UI. — the board's "Loading..." title and the empty app shell are gone
+- [ ] No production console errors. — *partial:* no app errors in dev; production build not checked in a browser
 
 ---
 
@@ -1118,11 +1118,11 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Gate 6 — UX
 
-- [ ] Core user journey works.
-- [ ] No blocking UI defects.
-- [ ] Responsive behavior verified.
-- [ ] Accessibility reviewed.
-- [ ] Error states reviewed.
+- [x] Core user journey works. — `journey.spec.ts` in CI
+- [x] No blocking UI defects. — none known after the Phase 10 audit
+- [x] Responsive behavior verified. — `responsive.spec.ts` (phone)
+- [ ] Accessibility reviewed. — *partial:* automated + keyboard; screen reader pending
+- [x] Error states reviewed.
 
 ---
 
@@ -1217,12 +1217,12 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Phase 10 — Product Polish
 
-- [ ] UX audit.
-- [ ] Accessibility.
-- [ ] Responsive UI.
-- [ ] Empty/error/loading states.
-- [ ] Onboarding.
-- [ ] Documentation.
+- [x] UX audit. — findings fixed in Phase 10 (task editing, labels, nested controls, contrast, layout)
+- [x] Accessibility. — WCAG 2.1 AA automated in CI; screen-reader pass still open
+- [x] Responsive UI.
+- [x] Empty/error/loading states.
+- [x] Onboarding.
+- [x] Documentation. — `docs/user-guide.md`, `docs/accessibility.md`, `docs/frontend-testing.md`
 
 ## Phase 11 — Release
 

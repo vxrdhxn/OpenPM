@@ -296,9 +296,9 @@ export default function KanbanBoard() {
               {project?.name ?? <span className="inline-block h-7 w-48 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" aria-label="Loading project" />}
             </h1>
             {isConnected ? (
-              <span className="flex items-center text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full"><span className="w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse"></span> Live</span>
+              <span className="flex items-center text-xs font-medium text-green-800 bg-green-100 dark:text-green-300 dark:bg-green-900/40 px-2 py-1 rounded-full"><span className="w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse" aria-hidden="true"></span> Live</span>
             ) : (
-              <span className="flex items-center text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full"><AlertCircle className="w-3 h-3 mr-1" /> Disconnected</span>
+              <span className="flex items-center text-xs font-medium text-slate-700 bg-slate-100 dark:text-slate-300 dark:bg-slate-800 px-2 py-1 rounded-full"><AlertCircle className="w-3 h-3 mr-1" aria-hidden="true" /> Disconnected</span>
             )}
           </div>
           {project?.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{project.description}</p>}
@@ -321,7 +321,7 @@ export default function KanbanBoard() {
 
       <BoardFilters value={filters} onChange={setFilters} members={members} labels={orgLabels} />
       {isFiltering(filters) && (
-        <p className="px-8 pt-2 text-xs text-slate-500">Showing matching tasks only.</p>
+        <p className="px-4 sm:px-8 pt-2 text-xs text-slate-600 dark:text-slate-400">Showing matching tasks only.</p>
       )}
 
       {loadError && (
@@ -353,25 +353,30 @@ export default function KanbanBoard() {
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`Open task: ${task.title}`}
+                              // A click anywhere on the card opens it; keyboard and screen-reader users
+                              // use the title button. The card is not itself a button, because it
+                              // contains another control (the drag handle).
                               onClick={() => setSelectedTaskId(task.id)}
-                              onKeyDown={(e) => {
-                                // Only when the card itself has focus, so the drag handle's own keys are left alone.
-                                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                                  e.preventDefault();
-                                  setSelectedTaskId(task.id);
-                                }
-                              }}
-                              className={`bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-3 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${snapshot.isDragging ? 'shadow-xl scale-105 ring-2 ring-indigo-500' : 'hover:border-indigo-300 dark:hover:border-indigo-500'} transition-all`}
+                              className={`bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-3 group cursor-pointer focus-within:ring-2 focus-within:ring-indigo-500 ${snapshot.isDragging ? 'shadow-xl scale-105 ring-2 ring-indigo-500' : 'hover:border-indigo-300 dark:hover:border-indigo-500'} transition-all`}
                             >
                               <div className="flex items-start gap-2">
                                 <div {...provided.dragHandleProps} onClick={(e) => e.stopPropagation()} aria-label={`Move task: ${task.title}`} className={`text-slate-400 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity mt-1 cursor-grab active:cursor-grabbing ${canEdit ? '' : 'hidden'}`}>
                                   <GripVertical className="w-4 h-4" aria-hidden="true" />
                                 </div>
                                 <div className="flex-1">
-                                  <h4 className="font-medium text-slate-900 dark:text-slate-100">{task.title}</h4>
+                                  <h3 className="font-medium text-slate-900 dark:text-slate-100">
+                                    <button
+                                      type="button"
+                                      aria-label={`Open task: ${task.title}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedTaskId(task.id);
+                                      }}
+                                      className="text-left break-words outline-none"
+                                    >
+                                      {task.title}
+                                    </button>
+                                  </h3>
                                   {task.labels?.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-2">
                                       {task.labels.map((l: Label) => (

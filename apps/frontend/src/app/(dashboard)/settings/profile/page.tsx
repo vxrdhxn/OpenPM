@@ -59,23 +59,27 @@ export default function ProfileSettings() {
 
       <form onSubmit={handleSave} className="space-y-6 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          <label htmlFor="profile-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Email Address
           </label>
           <input
+            id="profile-email"
+            aria-describedby="profile-email-hint"
             type="email"
             disabled
             value={profile.email}
             className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-500 cursor-not-allowed"
           />
-          <p className="text-xs text-slate-500 mt-1">Email cannot be changed.</p>
+          <p id="profile-email-hint" className="text-xs text-slate-600 dark:text-slate-400 mt-1">Email cannot be changed.</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          <label htmlFor="profile-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Full Name
           </label>
           <input
+            id="profile-name"
+            autoComplete="name"
             type="text"
             required
             value={profile.name}
@@ -85,10 +89,12 @@ export default function ProfileSettings() {
         </div>
 
         <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          <label htmlFor="profile-password" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             New Password
           </label>
           <input
+            id="profile-password"
+            autoComplete="new-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

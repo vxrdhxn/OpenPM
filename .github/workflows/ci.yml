@@ -98,6 +98,42 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://openpm:openpm@localhost:5432/postgres
 
+  e2e:
+    name: Browser tests (Playwright)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # The real API, Postgres and Redis (Compose builds the API image and runs migrations first).
+      - name: Start the API
+        run: |
+          docker compose up -d --build api
+          for _ in $(seq 1 60); do curl -sf http://localhost:3000/health && exit 0; sleep 2; done
+          echo "::error::API did not become healthy"; docker compose logs api migrate; exit 1
+
+      - name: Install Chromium
+        working-directory: apps/frontend
+        run: npx playwright install --with-deps chromium
+
+      # Core journey, accessibility (axe, WCAG 2.1 AA) and phone layout; starts the frontend dev server.
+      - name: Browser tests
+        working-directory: apps/frontend
+        run: npx playwright test
+
+      - name: API logs
+        if: failure()
+        run: docker compose logs --tail=200 api
+
   helm:
     name: Helm chart
     runs-on: ubuntu-24.04

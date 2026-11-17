@@ -69,13 +69,13 @@ export default function Register() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Company Name</label>
-              <input type="text" name="org_name" className="input-field" placeholder="Acme Corp" value={formData.org_name} onChange={handleChange} required />
+              <label htmlFor="reg-org-name" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Company Name</label>
+              <input id="reg-org-name" type="text" name="org_name" autoComplete="organization" className="input-field" placeholder="Acme Corp" value={formData.org_name} onChange={handleChange} required />
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Workspace Slug</label>
-              <input type="text" name="org_slug" className="input-field" placeholder="acme-corp" pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only" value={formData.org_slug} onChange={handleChange} required />
+              <label htmlFor="reg-org-slug" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Workspace Slug</label>
+              <input id="reg-org-slug" type="text" name="org_slug" autoComplete="off" className="input-field" placeholder="acme-corp" pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, and hyphens only" value={formData.org_slug} onChange={handleChange} required />
             </div>
 
             <div className="md:col-span-2 mt-4">
@@ -83,18 +83,18 @@ export default function Register() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Full Name</label>
-              <input type="text" name="name" className="input-field" placeholder="John Doe" value={formData.name} onChange={handleChange} required />
+              <label htmlFor="reg-name" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Full Name</label>
+              <input id="reg-name" type="text" name="name" autoComplete="name" className="input-field" placeholder="John Doe" value={formData.name} onChange={handleChange} required />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Email Address</label>
-              <input type="email" name="email" className="input-field" placeholder="john@acme.com" value={formData.email} onChange={handleChange} required />
+              <label htmlFor="reg-email" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Email Address</label>
+              <input id="reg-email" type="email" name="email" autoComplete="email" className="input-field" placeholder="john@acme.com" value={formData.email} onChange={handleChange} required />
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Password</label>
-              <input type="password" name="password" className="input-field" placeholder="••••••••" minLength={8} value={formData.password} onChange={handleChange} required />
+              <label htmlFor="reg-password" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Password</label>
+              <input id="reg-password" type="password" name="password" autoComplete="new-password" className="input-field" placeholder="••••••••" minLength={8} value={formData.password} onChange={handleChange} required />
             </div>
           </div>
 

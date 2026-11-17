@@ -173,7 +173,7 @@ function ProjectsPage() {
                 <p className="text-slate-500 dark:text-slate-400 text-sm line-clamp-2 mb-4">
                   {p.description || 'No description provided.'}
                 </p>
-                <div className="flex items-center text-xs text-slate-400 gap-1 mt-auto">
+                <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 gap-1 mt-auto">
                   <Clock className="w-4 h-4" />
                   Created {new Date(p.created_at).toLocaleDateString()}
                 </div>

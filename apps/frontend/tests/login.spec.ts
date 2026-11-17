@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 
+// Signed out: the shared session would send /login straight to the dashboard.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test('has title and login form', async ({ page }) => {
   await page.goto('/login');
 

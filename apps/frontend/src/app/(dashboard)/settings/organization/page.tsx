@@ -85,12 +85,13 @@ export default function OrganizationSettings() {
 
             <form onSubmit={handleInvite} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" />
+                  <Mail className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" aria-hidden="true" />
                   <input
+                    id="invite-email"
                     type="email"
                     required
                     value={email}
@@ -102,12 +103,13 @@ export default function OrganizationSettings() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Role
                 </label>
                 <div className="relative">
-                  <Shield className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" />
+                  <Shield className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" aria-hidden="true" />
                   <select
+                    id="invite-role"
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white appearance-none"
@@ -156,7 +158,7 @@ export default function OrganizationSettings() {
                     </div>
                     <button
                       onClick={() => handleRevoke(invite.id)}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                      className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                       title="Revoke Invite"
                     >
                       <Trash2 className="w-5 h-5" />

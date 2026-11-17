@@ -33,7 +33,7 @@ export default function BoardFilters({
   const set = (patch: Partial<BoardFilterValues>) => onChange({ ...value, ...patch });
 
   return (
-    <div className="flex flex-wrap items-center gap-3 px-8 pt-4">
+    <div className="flex flex-wrap items-center gap-3 px-4 sm:px-8 pt-4">
       <div className="relative w-64">
         <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
         <input

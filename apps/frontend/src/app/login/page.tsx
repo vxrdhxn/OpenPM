@@ -55,9 +55,11 @@ export default function Login() {
           
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Email Address</label>
+              <label htmlFor="login-email" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Email Address</label>
               <input 
+                id="login-email"
                 type="email" 
+                autoComplete="email"
                 className="input-field" 
                 placeholder="you@example.com"
                 value={email}
@@ -67,9 +69,11 @@ export default function Login() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Password</label>
+              <label htmlFor="login-password" className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Password</label>
               <input 
+                id="login-password"
                 type="password" 
+                autoComplete="current-password"
                 className="input-field" 
                 placeholder="••••••••"
                 value={password}
