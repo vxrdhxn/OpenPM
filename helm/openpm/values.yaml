@@ -53,6 +53,12 @@ secrets:
     username: "openpm"
     password: ""
     database: "openpm"
+    # Least-privilege app user (docs/database-access.md). When appPassword is set, the API and worker
+    # connect as appUsername, which can change rows but not the schema; the migration step connects as
+    # `username` and creates and grants appUsername. Empty: everything connects as `username`.
+    # (With existingSecret: put the app user in DATABASE_URL and the owner in DATABASE_MIGRATION_URL.)
+    appUsername: "openpm_app"
+    appPassword: ""
   redis:
     password: ""
   # Resend API key for outgoing email (invites, assignment notices). Empty = no email is sent and the
@@ -178,6 +184,10 @@ frontend:
     digest: ""
     pullPolicy: "IfNotPresent"
   port: 3001
+  # Origins the browser may connect to besides this host, for the Content-Security-Policy (space-
+  # separated). Set it to your object storage's public origin (the API's S3_PUBLIC_ENDPOINT) when
+  # attachments are on, or uploads are blocked. Example: "https://files.example.com".
+  cspConnectSrc: ""
   resources:
     limits:
       cpu: 500m

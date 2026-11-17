@@ -6,6 +6,7 @@ import { authFailuresTotal } from '../metrics';
 import { clearSessionCookie, issueSession, revokeSessions } from '../plugins/session';
 import { generateToken, hashToken, TOKEN_PATTERN } from '../security/tokens';
 import { enqueue } from '../jobs/enqueue';
+import { audit, auditBestEffort, originOf, type RequestOrigin } from '../security/audit';
 
 export const REGISTER_CONFLICT =
   'Could not create the account. Try a different organization URL, or sign in if you already have an account.';
@@ -66,7 +67,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           [orgId, normalizedEmail, passwordHash, name, 'owner']
         );
 
-        return { orgId, userId: userRes.rows[0].id };
+        const userId: string = userRes.rows[0].id;
+        await audit(client, originOf(request), {
+          orgId, actorId: userId, action: 'auth.registered', targetType: 'organization', targetId: orgId, metadata: { slug: org_slug },
+        });
+        return { orgId, userId };
       });
 
       const token = issueSession(fastify, reply, { user_id: userId, org_id: orgId, role: 'owner', tv: 0 });
@@ -122,6 +127,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const match = await verifyPassword(password, user?.password_hash);
 
     if (!user || !match) {
+      // A wrong password for a real account is audited for that workspace's admins. Not awaited: the
+      // extra write must not make "account exists" answer slower than "no such account".
+      if (user) {
+        void auditBestEffort(originOf(request), {
+          orgId: user.org_id, actorId: null, action: 'auth.login_failed', targetType: 'user', targetId: user.id,
+        }, request.log);
+      }
       return rejectLogin();
     }
 
@@ -131,6 +143,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       role: user.role,
       tv: user.token_version ?? 0,
     });
+    await auditBestEffort(originOf(request), {
+      orgId: user.org_id, actorId: user.id, action: 'auth.login', targetType: 'user', targetId: user.id,
+    }, request.log);
 
     return reply.send({ token });
   });
@@ -148,6 +163,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (check.ok) {
       await revokeSessions(request.user.user_id);
       request.log.info({ event: 'logout', user_id: request.user.user_id }, 'Sessions revoked on logout');
+      const { org_id, user_id } = request.user;
+      await auditBestEffort(originOf(request), { orgId: org_id, actorId: user_id, action: 'auth.logout', targetType: 'user', targetId: user_id }, request.log);
     }
     clearSessionCookie(reply);
     return reply.send({ success: true });
@@ -178,7 +195,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     // Reply first, then do the work. If the lookup, insert and enqueue ran before replying, a
     // registered address would answer measurably slower than an unknown one (account enumeration).
     // Failures are logged; the caller can't be told anyway without revealing whether the address exists.
-    void issuePasswordResetLink(normalizedEmail, request.id).catch((err) => {
+    void issuePasswordResetLink(normalizedEmail, request.id, originOf(request)).catch((err) => {
       request.log.error({ err }, 'Could not issue password reset link');
     });
 
@@ -235,6 +252,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           'INSERT INTO activity_log (org_id, user_id, entity_type, entity_id, action, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
           [orgId, userId, 'user', userId, 'password_reset', '{}']
         );
+        await audit(client, originOf(request), { orgId, actorId: null, action: 'auth.password_reset', targetType: 'user', targetId: userId });
       });
 
       return reply.send({ success: true });
@@ -254,14 +272,15 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
  * Earlier links for the user are invalidated, so only the newest one works. The database keeps only
  * the token's hash; the raw token goes into the job, which is removed from Redis once it completes.
  */
-export async function issuePasswordResetLink(email: string, requestId: string): Promise<void> {
+export async function issuePasswordResetLink(email: string, requestId: string, origin: RequestOrigin | null = null): Promise<void> {
   const { token, tokenHash } = generateToken();
 
   const userId = await withTransaction(async (client) => {
-    const users = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+    const users = await client.query('SELECT id, org_id FROM users WHERE email = $1', [email]);
     if (users.rows.length === 0) return null;
 
     const id: string = users.rows[0].id;
+    await audit(client, origin, { orgId: users.rows[0].org_id, actorId: null, action: 'auth.password_reset_requested', targetType: 'user', targetId: id });
     await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [id]);
     await client.query(
       'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',

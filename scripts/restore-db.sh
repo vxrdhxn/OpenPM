@@ -35,5 +35,7 @@ fi
 psql "CREATE DATABASE $DB"
 
 # --exit-on-error: a partial restore must fail loudly, not leave a half-filled database behind.
-$PG_EXEC sh -c "pg_restore -U \"\$POSTGRES_USER\" -d $DB --no-owner --exit-on-error" < "$FILE"
+# --no-privileges: grants name the app's database user, which may not exist on this server yet. The
+# next `migrate up` (it runs before the API starts) creates it and grants it again.
+$PG_EXEC sh -c "pg_restore -U \"\$POSTGRES_USER\" -d $DB --no-owner --no-privileges --exit-on-error" < "$FILE"
 echo "Restored $FILE into $DB"

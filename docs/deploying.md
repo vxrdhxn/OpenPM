@@ -13,7 +13,7 @@ of any workspace, so a value published in this repository is never accepted:
   the example values from this repository.
 - The **Helm chart** refuses to render without a JWT secret of at least 32 characters, and without
   passwords for the in-chart Postgres and Redis.
-- **Docker Compose** refuses to start without `JWT_SECRET` in `.env`.
+- **Docker Compose** refuses to start without `JWT_SECRET` and `DATABASE_APP_PASSWORD` in `.env`.
 
 Generate secrets with `openssl rand -hex 32`.
 
@@ -21,10 +21,14 @@ Generate secrets with `openssl rand -hex 32`.
 
 ```bash
 echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
+echo "DATABASE_APP_PASSWORD=$(openssl rand -hex 24)" >> .env  # the API's own database user
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> .env     # before the first start
 echo "REDIS_PASSWORD=$(openssl rand -hex 16)" >> .env
 docker compose up -d --build
 ```
+
+The API and worker connect to Postgres as `openpm_app`, which can change rows but not the schema;
+migrations create it ([database-access.md](database-access.md)).
 
 Postgres and Redis listen on `127.0.0.1` only. The API (`:3000`) and frontend (`:3001`) listen on
 every interface; put a TLS-terminating proxy in front of them for anything beyond a trusted network.
@@ -38,7 +42,8 @@ never pass through Git or Helm values:
 kubectl create namespace openpm
 kubectl -n openpm create secret generic openpm-secrets \
   --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
-  --from-literal=DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/openpm' \
+  --from-literal=DATABASE_URL='postgresql://APP_USER:PASSWORD@HOST:5432/openpm' \
+  --from-literal=DATABASE_MIGRATION_URL='postgresql://OWNER:PASSWORD@HOST:5432/openpm' \
   --from-literal=REDIS_URL='redis://:PASSWORD@HOST:6379/0' \
   --from-literal=RESEND_API_KEY='re_...'          # optional: outgoing email
 helm install openpm helm/openpm -n openpm -f helm/openpm/values.prod.yaml   # sets existingSecret
@@ -48,6 +53,10 @@ With the in-chart Postgres and Redis (`postgres.enabled`, `redis.enabled`), the 
 `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` and `REDIS_PASSWORD`. `DATABASE_URL` and
 `REDIS_URL` must then point at the chart's services (`<release>-postgres:5432`,
 `<release>-redis:6379`) with the same passwords.
+
+`DATABASE_MIGRATION_URL` is optional but recommended: with it, migrations run as the owner and the
+API and worker as an app user that cannot change the schema ([database-access.md](database-access.md)).
+Without it, everything uses `DATABASE_URL`.
 
 Both Argo CD applications (`argocd/apps/`) read a Secret named `openpm-secrets` in their namespace.
 External Secrets or Sealed Secrets can create it; the chart only needs the keys above.
@@ -63,10 +72,24 @@ For a quick evaluation, the chart can render the Secret itself:
 helm install openpm helm/openpm -n openpm --create-namespace \
   --set secrets.jwtSecret="$(openssl rand -hex 32)" \
   --set secrets.postgres.password="$(openssl rand -hex 16)" \
-  --set secrets.redis.password="$(openssl rand -hex 16)"
+  --set secrets.redis.password="$(openssl rand -hex 16)" \
+  --set secrets.postgres.appPassword="$(openssl rand -hex 24)"   # optional: least-privilege app user
 ```
 
 Keep those values: every later `helm upgrade` needs the same ones (`--reuse-values` keeps them).
+
+## Content-Security-Policy and attachments
+
+Every page carries a Content-Security-Policy that only lets the browser connect to this host and
+the API ([security-model.md](security-model.md#browser-protections)). Attachments upload straight
+from the browser to object storage, so tell the frontend its public origin, the same as the API's
+`S3_PUBLIC_ENDPOINT`:
+
+- Helm: `frontend.cspConnectSrc: "https://files.example.com"`
+- Compose: `CSP_CONNECT_SRC` on the `frontend` service (`docker-compose.storage.yml` sets it for MinIO)
+
+Without it, uploads fail with a CSP error in the browser console. The setting is read at runtime;
+no rebuild is needed.
 
 ## Behind a proxy
 

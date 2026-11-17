@@ -5,6 +5,7 @@ import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 import { hasMinRole } from '../plugins/auth';
 import { unassignWithoutAccess, userSeesProjectSql } from '../security/projectAccess';
+import { audit, originOf } from '../security/audit';
 
 class ProjectMemberError extends Error {
   constructor(
@@ -83,6 +84,10 @@ const projectMemberRoutes: FastifyPluginAsync = async (fastify) => {
         );
         if (res.rows.length > 0) {
           await logProjectActivity(client, org_id, actorId, projectId, 'member_added', { user_id, name: user.rows[0]!.name });
+          await audit(client, originOf(request), {
+            orgId: org_id, actorId, action: 'project.member_added', targetType: 'project', targetId: projectId,
+            metadata: { user_id, name: user.rows[0]!.name },
+          });
         }
         return res.rows.length > 0;
       });
@@ -115,6 +120,10 @@ const projectMemberRoutes: FastifyPluginAsync = async (fastify) => {
       if (res.rows.length === 0) return null;
       const unassigned = await unassignWithoutAccess(client, org_id, projectId);
       await logProjectActivity(client, org_id, actorId, projectId, 'member_removed', { user_id: userId, name: res.rows[0]!.name, unassigned });
+      await audit(client, originOf(request), {
+        orgId: org_id, actorId, action: 'project.member_removed', targetType: 'project', targetId: projectId,
+        metadata: { user_id: userId, name: res.rows[0]!.name, unassigned },
+      });
       return { unassigned };
     });
     if (!result) return reply.code(404).send({ error: 'Not a member of this project' });

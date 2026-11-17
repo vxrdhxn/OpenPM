@@ -1,5 +1,5 @@
-// Sent with every page. No full Content-Security-Policy yet (Next.js needs per-request nonces for
-// its inline scripts); frame-ancestors alone stops other sites from framing the app (clickjacking).
+// Sent with every response. Pages also get the full Content-Security-Policy, with a per-request
+// nonce, from src/proxy.ts; this frame-ancestors one covers everything else (static files too).
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
   { key: 'X-Frame-Options', value: 'DENY' },

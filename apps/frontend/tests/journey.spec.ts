@@ -82,13 +82,19 @@ test.describe('core journey', () => {
     const projectId = await createProject(page);
     await createTask(page, projectId, 'Move me');
     await page.goto(`/projects/${projectId}`);
+    // Wait until the board is live: connecting reloads the tasks, which would cancel a drag already
+    // in progress.
+    await expect(page.getByText('Live', { exact: true })).toBeVisible();
+    await page.waitForLoadState('networkidle');
     // Drag handle: Space lifts, an arrow key moves to the next column, Space drops.
     await page.getByRole('button', { name: 'Move task: Move me' }).focus();
     await page.keyboard.press('Space');
     await page.keyboard.press('ArrowRight');
+    const saved = page.waitForResponse((r) => r.request().method() === 'PATCH' && /\/tasks\//.test(r.url()));
     await page.keyboard.press('Space');
     await expect(page.getByRole('region', { name: 'In Progress' }).getByRole('button', { name: 'Open task: Move me' })).toBeVisible();
-    // And it was saved, not only moved on screen.
+    // And it was saved, not only moved on screen. (Reloading before the save completes would cancel it.)
+    expect((await saved).ok()).toBe(true);
     await page.reload();
     await expect(page.getByRole('region', { name: 'In Progress' }).getByRole('button', { name: 'Open task: Move me' })).toBeVisible();
   });

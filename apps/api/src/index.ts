@@ -6,6 +6,7 @@ import { closeDb } from './db/client';
 import { closeRedis } from './cache/redis';
 import { closeJobQueue } from './queue';
 import { createRateLimitRedis } from './security/rateLimitStore';
+import { startAuditRetention } from './security/audit';
 
 // Process-level Prometheus metrics (CPU, memory, event loop, ...). Registered once, here, not in
 // buildApp(): tests build several apps in one process.
@@ -13,6 +14,8 @@ client.collectDefaultMetrics();
 
 const rateLimitRedis = createRateLimitRedis();
 const fastify = buildApp({ rateLimitRedis });
+// Old audit entries (they hold IP addresses) are deleted after AUDIT_RETENTION_DAYS.
+const stopAuditRetention = startAuditRetention(fastify.log);
 
 // Graceful shutdown. Kubernetes sends SIGTERM before killing a pod: finish in-flight requests, then
 // close the queue, Redis and the database pool so nothing is cut off mid-command (see shutdown.ts).
@@ -29,7 +32,10 @@ const shutdown = createShutdown({
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => void shutdown(signal));
+  process.on(signal, () => {
+    stopAuditRetention();
+    void shutdown(signal);
+  });
 }
 
 const start = async () => {

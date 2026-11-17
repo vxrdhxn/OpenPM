@@ -14,6 +14,7 @@ import {
   searchQuerySchema,
   toPage,
 } from '../query/pagination';
+import { audit, originOf } from '../security/audit';
 
 const projectRoutes: FastifyPluginAsync = async (fastify) => {
   // All routes in this plugin require authentication
@@ -231,6 +232,12 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         await logActivity(client, org_id, user_id, id, 'updated', unassigned ? { ...updates, unassigned } : updates);
+        if (accessChanged) {
+          await audit(client, originOf(request), {
+            orgId: org_id, actorId: user_id, action: 'project.visibility_changed', targetType: 'project', targetId: id,
+            metadata: { name: res.rows[0].name, from: check.rows[0]!.visibility, to: updates.visibility, unassigned },
+          });
+        }
         return res.rows[0];
       });
 
@@ -283,6 +290,9 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
         }
         // Audit trail (activity_log rows are not tied to the project, so this survives the delete).
         await logActivity(client, org_id, user_id, id, 'deleted', { name: res.rows[0].name });
+        await audit(client, originOf(request), {
+          orgId: org_id, actorId: user_id, action: 'project.deleted', targetType: 'project', targetId: id, metadata: { name: res.rows[0].name },
+        });
 
         return attachments.rows.map((r: { storage_key: string }) => r.storage_key);
       });

@@ -136,6 +136,25 @@ describe('GET /ws', () => {
     });
   });
 
+  describe('client messages', () => {
+    it('refuses anything a client sends, unread, and closes the socket', async () => {
+      await build();
+      websocketRejectionsTotal.reset();
+      const c = connect({ headers: asCookie(tokenFor()) });
+      await open(c);
+      await vi.waitFor(() => expect(cache.subscribe).toHaveBeenCalled());
+
+      c.ws.send(JSON.stringify({ type: 'subscribe', channel: 'org:someone-else:updates', __proto__: { admin: true } }));
+
+      expect(await c.closed).toMatchObject({ code: 1008, reason: 'This socket does not accept messages' });
+      await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalled(), { timeout: 2000 });
+      const refused = (await websocketRejectionsTotal.get()).values.find((v) => v.labels.reason === 'client_message');
+      expect(refused?.value).toBe(1);
+      // Still only its own organization's channel.
+      expect([...handlers.keys()]).toEqual(['org:org-1:updates']);
+    });
+  });
+
   describe('authentication', () => {
     beforeEach(() => build());
 

@@ -103,6 +103,16 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       expect(env.map((e: { name: string }) => e.name).filter((n: string) => n.startsWith('NEXT_PUBLIC_'))).toEqual([]);
     });
 
+    it('passes the storage origin to the frontend for its Content-Security-Policy only when set', () => {
+      const envOf = (objs: K8sObject[]) =>
+        (deployment(objs, 'frontend')!.spec.template.spec.containers[0].env ?? []).find((e: { name: string }) => e.name === 'CSP_CONNECT_SRC');
+      expect(envOf(objects)).toBeUndefined();
+      expect(envOf(render('--set', 'frontend.cspConnectSrc=https://files.example.com'))).toEqual({
+        name: 'CSP_CONNECT_SRC',
+        value: 'https://files.example.com',
+      });
+    });
+
     it('does not let the start-up CPU spike of a rollout scale the API or frontend up', () => {
       for (const c of ['api', 'frontend']) {
         const hpa = objects.find((o) => o.kind === 'HorizontalPodAutoscaler' && o.metadata?.name === `openpm-${c}`)!;
@@ -182,6 +192,37 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       const secret = render('--set', 'secrets.postgres.password=a@b/c').find((o) => o.kind === 'Secret') as K8sObject & { data: Record<string, string> };
       // Compared from the user part on, so this file holds no whole connection string (gitleaks).
       expect(Buffer.from(secret.data.DATABASE_URL, 'base64').toString()).toMatch(/^postgresql:\/\/openpm:a%40b%2Fc@openpm-postgres:5432\/openpm$/);
+    });
+  });
+
+  describe('least-privilege database user', () => {
+    const secretOf = (objs: K8sObject[]) => (objs.find((o) => o.kind === 'Secret') as K8sObject & { data: Record<string, string> }).data;
+    const decoded = (v: string | undefined) => (v === undefined ? undefined : Buffer.from(v, 'base64').toString());
+
+    it('is off by default: everything connects as the owner, and there is no migration URL', () => {
+      const data = secretOf(render());
+      expect(decoded(data.DATABASE_URL)).toMatch(/^postgresql:\/\/openpm:/);
+      expect(data.DATABASE_MIGRATION_URL).toBeUndefined();
+    });
+
+    it('with appPassword, the app connects as its own user and migrations as the owner', () => {
+      const objs = render('--set', 'secrets.postgres.appPassword=a@b');
+      const data = secretOf(objs);
+      expect(decoded(data.DATABASE_URL)).toMatch(/^postgresql:\/\/openpm_app:a%40b@openpm-postgres:5432\/openpm$/);
+      expect(decoded(data.DATABASE_MIGRATION_URL)).toMatch(/^postgresql:\/\/openpm:pg-test@/);
+
+      // Only the migration init container is given the owner's URL (optional: existingSecret may lack it).
+      const pod = deployment(objs, 'api')!.spec.template.spec;
+      const migrate = pod.initContainers.find((c: { command?: string[] }) => c.command?.includes('apps/api/dist/db/migrate.js'));
+      expect(migrate.env.find((e: { name: string }) => e.name === 'DATABASE_MIGRATION_URL').valueFrom.secretKeyRef.optional).toBe(true);
+      for (const component of ['api', 'worker']) {
+        const names = deployment(objs, component)!.spec.template.spec.containers.flatMap((c: { env?: Array<{ name: string }> }) => (c.env ?? []).map((e) => e.name));
+        expect(names).not.toContain('DATABASE_MIGRATION_URL');
+      }
+    });
+
+    it('refuses an app user named like the owner', () => {
+      expect(renderError('--set', 'secrets.postgres.appPassword=x', '--set', 'secrets.postgres.appUsername=openpm', ...TEST_SECRETS)).toMatch(/must differ/);
     });
   });
 

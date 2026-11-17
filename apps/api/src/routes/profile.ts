@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
 import { hashPassword } from '../security/passwords';
 import { issueSession } from '../plugins/session';
+import { auditBestEffort, originOf } from '../security/audit';
 
 const profileRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
@@ -71,6 +72,9 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
     if (password !== undefined) {
       issueSession(fastify, reply, { user_id: user.id, org_id: user.org_id, role: user.role, tv: user.token_version });
       request.log.info({ event: 'password_changed' }, 'Password changed; other sessions revoked');
+      await auditBestEffort(originOf(request), {
+        orgId: user.org_id, actorId: user.id, action: 'auth.password_changed', targetType: 'user', targetId: user.id,
+      }, request.log);
     }
 
     const { id, name: newName, email, role } = user;

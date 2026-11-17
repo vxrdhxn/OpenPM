@@ -5,6 +5,7 @@ import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 import { clearSessionCookie } from '../plugins/session';
 import { checkMemberChange, DENIAL_MESSAGES, isManager, ROLES } from '../security/memberPolicy';
+import { audit, originOf, type RequestOrigin } from '../security/audit';
 
 /** Shape of a member in every response. Never includes the password hash or token version. */
 const MEMBER_COLUMNS = 'id, name, email, role, created_at';
@@ -73,6 +74,7 @@ async function assertStillRun(client: PoolClient, orgId: string, member: { id: s
 
 async function logMemberActivity(
   client: PoolClient,
+  origin: RequestOrigin,
   orgId: string,
   actorId: string,
   targetId: string,
@@ -83,6 +85,7 @@ async function logMemberActivity(
     'INSERT INTO activity_log (org_id, user_id, entity_type, entity_id, action, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
     [orgId, actorId, 'user', targetId, action, JSON.stringify(metadata)]
   );
+  await audit(client, origin, { orgId, actorId, action: `member.${action}`, targetType: 'user', targetId, metadata });
 }
 
 /**
@@ -160,7 +163,7 @@ const memberRoutes: FastifyPluginAsync = async (fastify) => {
           `UPDATE users SET role = $1 WHERE id = $2 AND org_id = $3 RETURNING ${MEMBER_COLUMNS}`,
           [role, id, org_id]
         );
-        await logMemberActivity(client, org_id, user_id, id, 'role_changed', { from: target.role, to: role });
+        await logMemberActivity(client, originOf(request), org_id, user_id, id, 'role_changed', { from: target.role, to: role });
         return res.rows[0];
       });
       return reply.send(member);
@@ -187,7 +190,7 @@ const memberRoutes: FastifyPluginAsync = async (fastify) => {
         await assertStillRun(client, org_id, target);
 
         const changed = await deactivate(client, org_id, id);
-        await logMemberActivity(client, org_id, user_id, id, 'removed', { role: target.role, name: target.name });
+        await logMemberActivity(client, originOf(request), org_id, user_id, id, 'removed', { role: target.role, name: target.name });
         return changed;
       });
 
@@ -220,7 +223,7 @@ const memberRoutes: FastifyPluginAsync = async (fastify) => {
             RETURNING ${MEMBER_COLUMNS}`,
           [id, user_id, org_id]
         );
-        await logMemberActivity(client, org_id, user_id, id, 'ownership_transferred', { from_role: target.role });
+        await logMemberActivity(client, originOf(request), org_id, user_id, id, 'ownership_transferred', { from_role: target.role });
         return res.rows;
       });
       return reply.send(result);
@@ -243,7 +246,7 @@ const memberRoutes: FastifyPluginAsync = async (fastify) => {
         await assertStillRun(client, org_id, me);
 
         const changed = await deactivate(client, org_id, user_id);
-        await logMemberActivity(client, org_id, user_id, user_id, 'left', { role: me.role });
+        await logMemberActivity(client, originOf(request), org_id, user_id, user_id, 'left', { role: me.role });
         return changed;
       });
 

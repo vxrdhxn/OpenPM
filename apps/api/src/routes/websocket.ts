@@ -49,6 +49,14 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       websocketErrorsTotal.inc();
       fastify.log.warn(err, 'WS socket error');
     });
+    // The socket only carries server events: clients have nothing to send. Any message is refused
+    // unread and the socket closed (1008, so the browser client does not reconnect in a loop), which
+    // leaves no client payload to parse or validate. Frames over 4 KiB are cut off earlier (app.ts).
+    socket.on('message', () => {
+      if (closed) return;
+      websocketRejectionsTotal.inc({ reason: 'client_message' });
+      socket.close(1008, 'This socket does not accept messages');
+    });
 
     const origin = request.headers.origin;
     if (origin && origin !== config.CORS_ORIGIN) {

@@ -96,7 +96,7 @@ npm test
 - [x] Use strict TypeScript settings where practical. — `strict` plus `noUncheckedIndexedAccess` etc. in `tsconfig.base.json`
 - [ ] Remove unsafe `any` from important paths. — *partial:* route handlers still cast `request.body/params as any`
 - [ ] Avoid duplicated domain types.
-- [ ] Validate external input at runtime. — *partial:* request bodies and path params (UUIDs) are validated; WebSocket payloads are not
+- [x] Validate external input at runtime. — bodies, query strings and path params by JSON Schema; NUL bytes refused; the WebSocket accepts no client messages
 - [ ] Validate environment variables at startup. — *partial:* API validates with zod (`config.ts`); the worker reads `process.env` directly
 
 ## Dependencies
@@ -124,7 +124,7 @@ npm test
 - [x] Define logout behavior. — clears the cookie and ends all of the user's sessions on every device (H.3)
 - [x] Rate-limit authentication endpoints. — login/register 10/min, forgot-password 5/min, reset-password 10/min, invite lookup/accept 20/10 per min
 - [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform; register answers a taken email and a taken slug identically (H.3), but still fails where a fresh email would succeed. Fully closing it needs verify-by-email sign-up
-- [ ] Audit security-sensitive authentication events. — *partial:* password resets go to `activity_log`; login failures are only logged and counted (`auth_failures_total`)
+- [x] Audit security-sensitive authentication events. — sign-ins, failed sign-ins for existing accounts, sign-outs, password changes and resets in `audit_log` (`docs/audit-log.md`)
 - [x] Add authentication bypass tests. — `security_rbac.test.ts`, `websocket.test.ts`
 
 ---
@@ -156,7 +156,7 @@ Member
 Viewer
 ```
 
-- [ ] Document permissions. — *partial:* membership rules in `docs/members.md`; per-route permissions for projects/tasks not yet documented
+- [x] Document permissions. — role table in `docs/security-model.md`; membership rules in `docs/members.md`; private projects in `docs/projects.md`
 - [x] Enforce permissions server-side.
 - [x] Add UI restrictions only as a UX layer, never as the security boundary.
 - [x] Add authorization tests. — `security_rbac.test.ts`
@@ -218,7 +218,7 @@ Review/finalize:
 
 - [x] Credentials from secrets. — Helm Secrets
 - [x] Database not publicly exposed. — ClusterIP + NetworkPolicy
-- [ ] Least-privilege DB user.
+- [x] Least-privilege DB user. — the API and worker connect as a user that cannot change the schema, the migration history or the audit log; `migrate up` creates and grants it (`docs/database-access.md`). Compose by default, Helm opt-in
 - [ ] Automated backups in production. — *partial:* production expects a managed database with provider backups (`docs/backup-restore.md`); the in-chart Postgres has no backup job
 - [x] Restore procedure documented and tested. — `docs/backup-restore.md`; drill and disaster recovery on Compose and kind (`docs/rehearsal.md`)
 - [x] Migration/rollback strategy documented. — expand/contract, forward-only rollback (`docs/releasing.md`)
@@ -510,15 +510,15 @@ Triggers:
 
 Track important actions:
 
-- [ ] Authentication/security events.
-- [ ] Organization creation.
+- [x] Authentication/security events. — `audit_log` (`docs/audit-log.md`)
+- [x] Organization creation. — `auth.registered`
 - [x] Membership changes.
 - [x] Role changes.
 - [x] Project creation/deletion. — deletion logged with the name
 - [x] Task deletion.
-- [ ] Permission changes.
+- [x] Permission changes. — role changes, ownership transfer, project visibility and project membership
 - [x] Invitation actions. — created/revoked/accepted in `activity_log`
-- [ ] Sensitive configuration changes.
+- [x] Sensitive configuration changes. — workspace rename and deletion (deletion: API log, since the audit log goes with the workspace); there are no other in-app settings
 
 Audit record:
 
@@ -536,8 +536,8 @@ metadata
 - [x] Normal users cannot modify audit records. — no endpoint writes or edits `activity_log`
 - [x] Tenant isolation enforced. — `org_id` on every row
 - [x] Secrets never stored in metadata.
-- [ ] Retention policy documented.
-- [ ] Audit logs queryable. — *partial:* product activity via `GET /api/activity`; no admin view of account/membership events
+- [x] Retention policy documented. — `AUDIT_RETENTION_DAYS` (365), pruned by the API every 6 hours
+- [x] Audit logs queryable. — `GET /api/audit` (admins and owners; filter by action or person) and Settings → Security log
 
 ---
 
@@ -553,7 +553,7 @@ metadata
 - [x] Validate path parameters. — every `:id`/`:*Id` must be a UUID (`plugins/uuidParams.ts`)
 - [x] Validate query parameters. — JSON schema, unknown keys rejected
 - [x] Validate request bodies. — JSON schema, unknown keys rejected on PATCH
-- [ ] Validate WebSocket payloads.
+- [x] Validate WebSocket payloads. — clients send none: any message closes the socket (1008), frames over 4 KiB are refused; the client drops events without a string `type`
 - [x] Request body size limits. — 1 MB
 - [x] Rate limiting. — global 100/min, auth 10/min
 - [x] Strict CORS. — single configured origin; tested
@@ -589,7 +589,7 @@ metadata
 
 ## Input
 
-- [ ] Validate all external input. — *partial:* bodies and path params yes; WebSocket payloads no
+- [x] Validate all external input. — bodies, queries, params; NUL bytes; WebSocket messages refused
 - [x] Prevent injection. — parameterized SQL, whitelisted column names
 - [x] Sanitize rich text/HTML. — not applicable: descriptions and comments are plain text, rendered escaped by React; no `dangerouslySetInnerHTML`
 - [x] Validate URLs where accepted. — not applicable: no endpoint accepts a URL
@@ -793,7 +793,7 @@ Explicitly test:
 - [x] Invalid JWT.
 - [x] Expired JWT.
 - [x] Unauthorized WebSocket subscription.
-- [ ] Malicious payloads.
+- [x] Malicious payloads. — `maliciousInput.int.test.ts`: SQL, HTML, NUL bytes, prototype pollution, deep nesting, oversized and malformed bodies, crafted queries
 - [x] Rate limiting. — login 10/min and forgot-password 5/min against the real app wiring
 
 ## E2E
@@ -848,7 +848,7 @@ Audit event
 - [x] Unit tests.
 - [x] Integration tests. — Postgres service container
 - [x] Build.
-- [ ] Dependency audit. — *partial:* Dependabot, Trivy (blocking), `npm audit` clean; no `npm audit` gate on PRs
+- [x] Dependency audit. — `npm audit --audit-level=high` blocks CI; Dependabot; Trivy (blocking)
 - [x] Secret scanning.
 - [x] CodeQL. — `codeql.yml` (H.4)
 - [x] Container scan. — Trivy, blocking
@@ -974,7 +974,7 @@ Define:
 
 ## Threats
 
-- [ ] Threat model written. — *not started:* `docs/security-review.md` (v0.1.0) checks the main controls but is not a threat model. Outline:
+- [x] Threat model written. — `docs/threat-model.md`: assets, attackers, 16 threats with impact, likelihood, mitigation, detection and tests; residual risks. Outline it covers:
 
 Threats:
 
@@ -1027,14 +1027,14 @@ For every threat: impact, likelihood, mitigation, detection and a security test.
 
 ## Security
 
-- [ ] Threat model.
-- [ ] Security architecture.
-- [ ] Authentication model. — *partial:* summarized in `docs/security-review.md`
-- [ ] Authorization model. — *partial:* roles in `docs/user-guide.md`, membership rules in `docs/members.md`
-- [ ] Tenant isolation model. — *partial:* summarized in `docs/security-review.md`
+- [x] Threat model. — `docs/threat-model.md`
+- [x] Security architecture. — `docs/security-model.md`
+- [x] Authentication model. — `docs/security-model.md`
+- [x] Authorization model. — `docs/security-model.md`
+- [x] Tenant isolation model. — `docs/security-model.md`
 - [x] Secret management. — `docs/deploying.md`
 - [x] Vulnerability reporting. — `SECURITY.md`
-- [ ] Security assumptions. — *partial:* known limits in `docs/security-review.md`
+- [x] Security assumptions. — `docs/security-model.md`; residual risks in `docs/threat-model.md`
 
 ---
 
@@ -1163,12 +1163,12 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Phase 5 — Security
 
-- [ ] Threat model.
+- [x] Threat model.
 - [x] Security tests.
 - [x] Rate limiting.
-- [ ] Input hardening.
+- [x] Input hardening.
 - [x] File security.
-- [ ] Audit logs.
+- [x] Audit logs.
 - [x] Secret management. — no default credentials, `existingSecret`, rotation documented
 
 ## Phase 6 — Kubernetes
@@ -1302,7 +1302,7 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie; secrets required, published ones refused in production; algorithm confusion tested. Password reset end to end; sessions revocable everywhere (WebSockets included); the current role is read on every request. Remaining: changing the password does not ask for the current one; sign-up can reveal a taken email until it verifies by email; no MFA or lockout. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Roles in `docs/user-guide.md`; per-route permissions not documented. |
 | Multi-tenancy         | 🟢     | Every query scoped to the session's `org_id` (directly or after an org-scoped ownership check, reviewed in Phase 11); IDOR tests against real Postgres in CI. Gap: no shared data-access layer. |
-| Database              | 🟡     | 21 reversible migrations, FKs, indexes, transactions; backup/restore scripts and a tested drill. No least-privilege DB user. |
+| Database              | 🟡     | 22 reversible migrations, FKs, indexes, transactions; backup/restore scripts and a tested drill; a least-privilege app user (`docs/database-access.md`). |
 | Organizations         | 🟢     | The creator owns the workspace and every workspace keeps an owner; rename, ownership transfer, and deletion (slug + password, full cascade including files); invite, accept, decline, revoke; member list, role change, remove and leave with rank rules and an audit trail. No reactivation of removed members (re-invite) or multi-workspace membership. |
 | Projects              | 🟢     | Create, edit, archive/restore and delete from the UI, with file cleanup. Private projects (members plus admins/owners) enforced on every route, org-wide read, live event and notification (`docs/projects.md`). Actions inside a project still follow the workspace role; no per-project roles. |
 | Tasks                 | 🟢     | Every field editable in one dialog; labels, comments with @mentions, attachments, Kanban board with filters (labels included), keyboard moves, org-wide search, activity log. No task archive. |
@@ -1313,9 +1313,9 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Redis                 | 🟢     | Org-scoped cache, shared subscriber per pod, shared rate-limit counters; outage tested (reads from Postgres, writes succeed, rate limiting fails open). Eviction policy is the default, not set explicitly. |
 | BullMQ/Workers        | 🟢     | Three email jobs with retries, idempotent sends, payload validation, metrics and alerts (`docs/jobs.md`); retry verified through a Postgres outage. |
 | Notifications         | 🟢     | In-app: assignment, mention, comment, status change; live badge; mark read. No due-date reminders, preferences or retention policy. |
-| Audit logging         | 🟡     | `activity_log` covers projects, tasks, comments, labels, invites, membership and password resets; readable via `GET /api/activity`. Login events are not recorded; no admin view of account events. |
+| Audit logging         | 🟢     | Security audit log (`audit_log`): sign-ins and failures, password changes, role, membership, invite and project-access changes, with IP and device; admin view and `GET /api/audit`; 365-day retention; append-only for the app (`docs/audit-log.md`). Product activity stays in `activity_log`. |
 | API hardening         | 🟡     | Body schemas, UUID params, 1 MB limit, rate limits per real client (`TRUST_PROXY`) shared across pods, helmet, strict CORS, one error shape, timeouts. Swagger is dev-only; routes lack response schemas. |
-| Security              | 🟡     | Pre-release review with 7 fixes (`docs/security-review.md`): no default credentials anywhere, published secrets refused, framing headers. gitleaks, Trivy (blocking), CodeQL, Dependabot. No threat model, no full CSP. |
+| Security              | 🟡     | Threat model and security model (`docs/threat-model.md`, `docs/security-model.md`); pre-release review with 7 fixes. No default credentials, nonce-based CSP, security audit log, least-privilege DB user, hostile-input tests, `npm audit`, gitleaks, Trivy and CodeQL in CI. Open: no MFA or account lockout; sign-up still reveals registered emails; tenant filtering is per query, not in a shared data layer. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download; verified against MinIO. Not covered: malware scanning, pending-upload reaper, retention. |
 | Docker                | 🟢     | Multi-stage, alpine, non-root, Trivy-clean; tag strategy `X.Y.Z` + `sha-<commit>`. Compose requires `JWT_SECRET` and keeps Postgres/Redis on localhost. The worker image has no `HEALTHCHECK` (Kubernetes probes it). |
 | Kubernetes            | 🟢     | Installed and exercised on kind: app flow, NetworkPolicies, upgrades, rollback, Argo CD, Ingress, HPA, a production-values install from an existing Secret, restore. Not tested: a cloud cluster, node drain (PDB), topology spread. |

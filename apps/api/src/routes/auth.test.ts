@@ -253,7 +253,7 @@ describe('Auth routes', () => {
 
     it('forgot-password stores a token hash, invalidates older links and emails the raw token via a job', async () => {
       mockClient.query.mockImplementation(async (sql: string) =>
-        sql.startsWith('SELECT id FROM users') ? rows([{ id: 'u1' }]) : rows()
+        sql.startsWith('SELECT id, org_id FROM users') ? rows([{ id: 'u1', org_id: 'o1' }]) : rows()
       );
 
       const res = await forgot('Ada@Example.com');
@@ -261,7 +261,7 @@ describe('Auth routes', () => {
       await vi.waitFor(() => expect(queueAdd).toHaveBeenCalledTimes(1));
 
       const calls = mockClient.query.mock.calls;
-      expect(calls.find((c) => sqlOf(c).startsWith('SELECT id FROM users'))![1]).toEqual(['ada@example.com']);
+      expect(calls.find((c) => sqlOf(c).startsWith('SELECT id, org_id FROM users'))![1]).toEqual(['ada@example.com']);
       expect(calls.map(sqlOf)).toContain('DELETE FROM password_reset_tokens WHERE user_id = $1');
       const insert = calls.find((c) => sqlOf(c).startsWith('INSERT INTO password_reset_tokens'))!;
       expect(sqlOf(insert)).toContain('token_hash');
@@ -278,7 +278,7 @@ describe('Auth routes', () => {
 
     it('forgot-password answers identically for unknown emails and queues nothing', async () => {
       mockClient.query.mockImplementation(async (sql: string) =>
-        sql.startsWith('SELECT id FROM users') ? rows([{ id: 'u1' }]) : rows()
+        sql.startsWith('SELECT id, org_id FROM users') ? rows([{ id: 'u1', org_id: 'o1' }]) : rows()
       );
       const known = await forgot('a@b.com');
       await vi.waitFor(() => expect(queueAdd).toHaveBeenCalledTimes(1));

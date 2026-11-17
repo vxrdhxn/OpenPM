@@ -42,6 +42,11 @@ Settings → Organization (admins and owners):
 - **Delete the workspace** (owners): type its slug and your password. Everything in it is deleted
   and everyone is signed out. This cannot be undone.
 
+**Security log** (Settings → Security log, admins and owners): who signed in and from where, failed
+sign-ins (wrong password for an existing account), password changes and resets, role changes,
+removals, invites, and changes to who can see a project. Entries are kept for a year. Use it to spot
+an unfamiliar device or a run of failed sign-ins ([audit-log.md](audit-log.md)).
+
 Someone who receives an invitation they don't want can **decline** it from the invitation page.
 Admins see it marked declined and can invite them again later.
 

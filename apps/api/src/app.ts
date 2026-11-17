@@ -15,6 +15,7 @@ import { genReqId, loggerOptions } from './logger';
 import requestIdPlugin from './plugins/requestId';
 import errorHandling from './plugins/errors';
 import uuidParams from './plugins/uuidParams';
+import textInput from './plugins/textInput';
 import { parseAllowlist } from './security/rateLimitAllowlist';
 import authPlugin from './plugins/auth';
 import healthRoutes from './routes/health';
@@ -34,6 +35,7 @@ import { activityRoutes, dashboardRoutes } from './routes/dashboard';
 import notificationRoutes from './routes/notifications';
 import organizationRoutes from './routes/organization';
 import projectMemberRoutes from './routes/projectMembers';
+import auditRoutes from './routes/audit';
 import { canSeeProject } from './security/projectAccess';
 
 declare module 'fastify' {
@@ -85,6 +87,9 @@ export function buildApp(options: BuildAppOptions = {}) {
   // Must come before the routes: rejects non-UUID ids with a 400 (plugins/uuidParams.ts).
   fastify.register(uuidParams);
 
+  // Requests carrying a NUL character are a 400 before any handler runs (plugins/textInput.ts).
+  fastify.register(textInput);
+
   // Prometheus request metrics
   fastify.addHook('onRequest', (request, _reply, done) => {
     request.metrics = {
@@ -130,6 +135,9 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
 
   fastify.register(websocket, {
+    // Clients never send messages (routes/websocket.ts closes the socket on one); this bounds what
+    // ws buffers before that happens. Larger frames close the socket with 1009.
+    options: { maxPayload: 4096 },
     // On shutdown, tell connected clients this is a restart (1001 Going Away), not a broken
     // connection: the default closes without a code (1005). Clients reconnect either way (the
     // frontend retries everything except 1008); see docs/load-testing.md, failure test 4.
@@ -198,6 +206,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   fastify.register(inviteRoutes, { prefix: '/api/invites' });
   fastify.register(memberRoutes, { prefix: '/api/members' });
   fastify.register(organizationRoutes, { prefix: '/api/organization' });
+  fastify.register(auditRoutes, { prefix: '/api/audit' });
   fastify.register(taskSearchRoutes, { prefix: '/api/tasks' });
   fastify.register(websocketRoutes);
 

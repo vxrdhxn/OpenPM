@@ -48,14 +48,16 @@ To replace the live database:
 2. Restore over it: `scripts/restore-db.sh FILE openpm --replace`. This drops the database first;
    there is no undo, so take a fresh backup of it first if anything in it might be wanted.
 3. Start the API and worker again. They apply any migrations the dump predates, so a dump from an
-   older release restores into a newer one. A dump from a *newer* release than the one running does
+   older release restores into a newer one. Restores leave out grants (`--no-privileges`, since the
+   app's database user may not exist on this server); the same migration step grants them again
+   ([database-access.md](database-access.md)), so start through it, not around it. A dump from a *newer* release than the one running does
    not work: deploy that release first.
 4. Everyone keeps their session (tokens are checked against the restored users). Users created after
    the dump no longer exist and are signed out.
 
 Set `PG_EXEC` for Kubernetes as for backups. For a managed database, use the provider's restore, or
-`pg_restore --no-owner --exit-on-error -d "$NEW_DATABASE_URL" FILE` into a new database and switch
-`DATABASE_URL` to it.
+`pg_restore --no-owner --no-privileges --exit-on-error -d "$NEW_DATABASE_URL" FILE` into a new
+database, switch `DATABASE_URL` (and `DATABASE_MIGRATION_URL`) to it, and run the migration step.
 
 ## Drill
 

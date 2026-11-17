@@ -38,11 +38,22 @@ Upgrading an install that used the old defaults: rotate the secrets, as
 - **Kubernetes.** Non-root, read-only root filesystems, all capabilities dropped, seccomp
   `RuntimeDefault`. Default-deny NetworkPolicies; only the Ingress reaches the API and frontend.
 
+## Since v0.1.0
+
+Closed after this review (details in [security-model.md](security-model.md) and
+[threat-model.md](threat-model.md)):
+
+- A full **Content-Security-Policy** with per-request nonces on every page.
+- A **security audit log** for admins: sign-ins, failed sign-ins, password and permission changes.
+- A **least-privilege database user** for the API and worker (Compose by default; Helm opt-in).
+- **NUL bytes** in any text were a 500 (Postgres cannot store them); now a 400. Values Postgres
+  rejects are a 400, never a 500.
+- The **WebSocket** refuses client messages; frames over 4 KiB are cut off.
+- **`npm audit`** blocks high and critical findings in CI.
+
 ## Known limits (accepted for v0.1.0)
 
-- **No full Content-Security-Policy** on the frontend; Next.js needs per-request nonces for one.
-  `frame-ancestors` is set. An XSS bug would not be contained by a CSP. React escapes output and
-  there is no `dangerouslySetInnerHTML`, but there is no CSP as a backstop.
+- ~~No full Content-Security-Policy~~: added after v0.1.0 (above).
 - **Tokens are bearer tokens for 24 hours.** Revocation is immediate (token version), but a stolen
   cookie works until then unless the user changes their password or is removed.
 - **No account lockout or MFA.** Sign-in is rate-limited per address only, and not at all while

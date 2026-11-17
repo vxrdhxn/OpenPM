@@ -61,5 +61,10 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  frontend:
+    environment:
+      # Browsers upload attachments straight to MinIO: the page's Content-Security-Policy must allow it.
+      - CSP_CONNECT_SRC=http://localhost:9000
+
 volumes:
   minio_data:

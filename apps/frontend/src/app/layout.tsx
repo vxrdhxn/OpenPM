@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { connection } from 'next/server';
 import './globals.css';
 import { FeedbackProvider } from '@/components/ui/feedback';
 
@@ -10,11 +11,14 @@ export const metadata: Metadata = {
   description: 'Self-hosted, real-time, open-source project management platform.',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Every page is rendered per request, never prerendered at build time: its scripts need this
+  // request's CSP nonce (proxy.ts), and a page built in advance would carry none, so it would not run.
+  await connection();
   return (
     <html lang="en">
       {/* Browser extensions (e.g. Grammarly) add attributes to <body> before React hydrates. This

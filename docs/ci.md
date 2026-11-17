@@ -6,8 +6,8 @@ request cancels that PR's older run.
 
 | Job | What it checks | Blocks merge? |
 |---|---|---|
-| **Lint, build, test** | `npm ci` (lockfile must match every `package.json`), `npm run lint`, `npm run build` (API, worker and frontend; also the type-check), `npm test` (every package, then the cross-package dashboard check) | Yes |
-| **Integration tests (Postgres)** | `npm run test:integration` against a Postgres service container: creates a throwaway database, runs every migration up, down to an empty schema and up again, then drives the real API (routes, auth, SQL) for tenant isolation, roles, account flows (register, password reset, invites) and rate limits. Redis and the job queue are in-memory fakes | Yes |
+| **Lint, build, test** | `npm ci` (lockfile must match every `package.json`), `npm audit --audit-level=high` (known high or critical vulnerabilities in any dependency, dev included), `npm run lint`, `npm run build` (API, worker and frontend; also the type-check), `npm test` (every package, then the cross-package dashboard check) | Yes |
+| **Integration tests (Postgres)** | `npm run test:integration` against a Postgres service container: creates a throwaway database, runs every migration up, down to an empty schema and up again, then drives the real API (routes, auth, SQL) for tenant isolation, roles, account flows (register, password reset, invites) and rate limits. Redis and the job queue are in-memory fakes. The API connects as a least-privilege user created the way `migrate up` creates it in production | Yes |
 | **Helm chart** | `helm lint --strict` and `helm template` for default values, `values.prod.yaml`, and monitoring + dashboards + alert rules enabled; `promtool check rules` and `promtool test rules` on the alert rules (promtool from the Prometheus image, pinned by digest) | Yes |
 | **Secret scan (gitleaks)** | Whole git history against `.gitleaks.toml`, plus a canary that proves the config still detects secrets | Yes |
 | **Image (api / worker / frontend)** | Builds each Dockerfile from a clean checkout, then scans the image with Trivy (HIGH/CRITICAL, fixable only) | Yes (build and scan) |

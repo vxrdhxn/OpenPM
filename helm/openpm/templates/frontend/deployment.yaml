@@ -48,6 +48,10 @@ spec:
                   key: NODE_ENV
             - name: PORT
               value: {{ .Values.frontend.port | default 3001 | quote }}
+            {{- with .Values.frontend.cspConnectSrc }}
+            - name: CSP_CONNECT_SRC
+              value: {{ . | quote }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /

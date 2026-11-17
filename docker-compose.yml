@@ -49,7 +49,10 @@ services:
     restart: "no"
     command: ["node", "apps/api/dist/db/migrate.js", "up"]
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-openpm}:${POSTGRES_PASSWORD:-openpm}@postgres:5432/${POSTGRES_DB:-openpm}
+      # Migrations run as the database owner. They also create the app's own user (DATABASE_URL), which
+      # the API and worker use: it can change rows, not the schema (docs/database-access.md).
+      - DATABASE_MIGRATION_URL=postgresql://${POSTGRES_USER:-openpm}:${POSTGRES_PASSWORD:-openpm}@postgres:5432/${POSTGRES_DB:-openpm}
+      - DATABASE_URL=postgresql://openpm_app:${DATABASE_APP_PASSWORD:?set DATABASE_APP_PASSWORD in .env first, e.g. echo DATABASE_APP_PASSWORD=$(openssl rand -hex 24) >> .env}@postgres:5432/${POSTGRES_DB:-openpm}
       - NODE_ENV=production
     depends_on:
       postgres:
@@ -64,7 +67,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-openpm}:${POSTGRES_PASSWORD:-openpm}@postgres:5432/${POSTGRES_DB:-openpm}
+      - DATABASE_URL=postgresql://openpm_app:${DATABASE_APP_PASSWORD:?set DATABASE_APP_PASSWORD in .env first, e.g. echo DATABASE_APP_PASSWORD=$(openssl rand -hex 24) >> .env}@postgres:5432/${POSTGRES_DB:-openpm}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-openpm}@redis:6379/0
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env first, e.g. echo JWT_SECRET=$(openssl rand -hex 32) >> .env}
       - PORT=3000
@@ -91,7 +94,7 @@ services:
     container_name: openpm-worker
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-openpm}:${POSTGRES_PASSWORD:-openpm}@postgres:5432/${POSTGRES_DB:-openpm}
+      - DATABASE_URL=postgresql://openpm_app:${DATABASE_APP_PASSWORD:?set DATABASE_APP_PASSWORD in .env first, e.g. echo DATABASE_APP_PASSWORD=$(openssl rand -hex 24) >> .env}@postgres:5432/${POSTGRES_DB:-openpm}
       - REDIS_URL=redis://:${REDIS_PASSWORD:-openpm}@redis:6379/0
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env first, e.g. echo JWT_SECRET=$(openssl rand -hex 32) >> .env}
       - NODE_ENV=production

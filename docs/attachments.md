@@ -21,6 +21,11 @@ Attachments are optional. Until storage is configured, every attachment endpoint
 
 Blank values (as in `.env.example`) are treated as unset.
 
+**The frontend must allow the storage origin** in its Content-Security-Policy, or the browser blocks
+uploads: set `CSP_CONNECT_SRC` (Helm: `frontend.cspConnectSrc`) to the origin of
+`S3_PUBLIC_ENDPOINT`, e.g. `https://files.example.com` ([deploying.md](deploying.md)). Downloads are
+navigations and need nothing.
+
 ### Bucket CORS (required)
 
 Browsers upload and download across origins, so the bucket must allow your frontend origin. For AWS S3:

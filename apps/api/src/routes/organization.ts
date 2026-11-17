@@ -4,6 +4,7 @@ import { withTransaction } from '../db/transaction';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import { clearSessionCookie } from '../plugins/session';
 import { verifyPassword } from '../security/passwords';
+import { audit, originOf } from '../security/audit';
 
 const ORG_COLUMNS = 'id, name, slug, created_at, updated_at';
 
@@ -57,6 +58,10 @@ const organizationRoutes: FastifyPluginAsync = async (fastify) => {
           'INSERT INTO activity_log (org_id, user_id, entity_type, entity_id, action, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
           [org_id, user_id, 'organization', org_id, 'renamed', JSON.stringify({ from: before.rows[0]?.name, to: name })]
         );
+        await audit(client, originOf(request), {
+          orgId: org_id, actorId: user_id, action: 'organization.renamed', targetType: 'organization', targetId: org_id,
+          metadata: { from: before.rows[0]?.name, to: name },
+        });
       }
       return res.rows[0];
     });
@@ -110,7 +115,8 @@ const organizationRoutes: FastifyPluginAsync = async (fastify) => {
       // After the commit, as for project deletion: a storage failure leaves (logged) orphaned files,
       // never data that points at deleted files.
       await deleteStoredObjects(keys, request.log);
-      request.log.warn({ event: 'organization_deleted', org_id, user_id, files: keys.length }, 'Organization deleted');
+      // The organization's audit log is deleted with it, so this log line is the only record left.
+      request.log.warn({ event: 'organization_deleted', org_id, user_id, ip: request.ip, files: keys.length }, 'Organization deleted');
 
       // Members' tokens now fail (their users are gone); open WebSockets close at the next heartbeat.
       clearSessionCookie(reply);

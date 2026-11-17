@@ -16,6 +16,15 @@ const UNAVAILABLE_SQLSTATES = new Set(['57P01', '57P02', '57P03']); // admin/cra
 const NETWORK_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'EHOSTUNREACH']);
 
 /**
+ * Postgres rejected a value the client sent, not the query: text too long for its column (22001),
+ * a character it cannot store (22021, 22P05), a value of the wrong form (22P02) or a number out of
+ * range (22003). Validation should catch these first; if one gets through, it is still the
+ * request's fault, so a 400 rather than a 500.
+ */
+const BAD_VALUE_SQLSTATES = new Set(['22001', '22021', '22P05', '22P02', '22003']);
+export const isBadValue = (err: { code?: string }) => BAD_VALUE_SQLSTATES.has(String(err?.code ?? ''));
+
+/**
  * The database cannot be reached (down, restarting, failing over). Also a 503: the request may well
  * succeed in a moment, and it is not a bug in this request.
  */
@@ -66,6 +75,11 @@ export default fp(async function errorHandling(fastify) {
       overloadRejectionsTotal.inc({ reason: 'db_unavailable' });
       request.log.warn({ event: 'unavailable', reason: 'db_unavailable', err: { message: err.message, code: err.code } }, 'Database unavailable; answered 503');
       return reply.code(503).header('Retry-After', '5').send({ error: 'The service is temporarily unavailable. Please try again shortly.' });
+    }
+
+    if (isBadValue(err)) {
+      request.log.warn({ err: { message: err.message, code: err.code } }, 'Database rejected a value from the request');
+      return reply.code(400).send({ error: 'Invalid request: a value is too long or not allowed' });
     }
 
     request.log.error({ err }, 'Unhandled error');

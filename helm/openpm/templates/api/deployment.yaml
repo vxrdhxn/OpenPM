@@ -53,6 +53,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "openpm.secretName" . }}
                   key: DATABASE_URL
+            # The owner, for migrations only, when the app has its own user (docs/database-access.md).
+            # Only this init container gets it; the API, worker and their logs never see it.
+            - name: DATABASE_MIGRATION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpm.secretName" . }}
+                  key: DATABASE_MIGRATION_URL
+                  optional: true
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
       {{- end }}

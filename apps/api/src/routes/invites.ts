@@ -6,6 +6,7 @@ import { withTransaction } from '../db/transaction';
 import { generateToken, hashToken, TOKEN_PATTERN } from '../security/tokens';
 import { issueSession } from '../plugins/session';
 import { enqueue } from '../jobs/enqueue';
+import { audit, auditBestEffort, originOf, type RequestOrigin } from '../security/audit';
 
 const INVITE_TTL_DAYS = 7;
 
@@ -17,6 +18,7 @@ const tokenProperty = { type: 'string', pattern: TOKEN_PATTERN } as const;
 
 async function logInviteActivity(
   client: PoolClient,
+  origin: RequestOrigin,
   orgId: string,
   userId: string,
   inviteId: string,
@@ -27,6 +29,7 @@ async function logInviteActivity(
     'INSERT INTO activity_log (org_id, user_id, entity_type, entity_id, action, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
     [orgId, userId, 'invite', inviteId, action, JSON.stringify(metadata)]
   );
+  await audit(client, origin, { orgId, actorId: userId, action: `invite.${action}`, targetType: 'invite', targetId: inviteId, metadata });
 }
 
 const inviteRoutes: FastifyPluginAsync = async (fastify) => {
@@ -73,7 +76,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
           );
           const created = res.rows[0];
 
-          await logInviteActivity(client, org_id, user_id, created.id, 'created', { role });
+          await logInviteActivity(client, originOf(request), org_id, user_id, created.id, 'created', { role });
           return created;
         });
 
@@ -133,7 +136,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
           if (res.rows.length === 0) {
             throw new Error('NOT_FOUND');
           }
-          await logInviteActivity(client, org_id, user_id, id, 'revoked');
+          await logInviteActivity(client, originOf(request), org_id, user_id, id, 'revoked');
         });
       } catch (err) {
         if (err instanceof Error && err.message === 'NOT_FOUND') {
@@ -196,12 +199,15 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
     const res = await db.query(
       `UPDATE organization_invites SET declined_at = NOW()
         WHERE token_hash = $1 AND expires_at > NOW() AND declined_at IS NULL
-        RETURNING id`,
+        RETURNING id, org_id, email`,
       [hashToken(token)]
     );
     if (res.length === 0) {
       return reply.code(404).send({ error: 'Invite not found or expired' });
     }
+    await auditBestEffort(originOf(request), {
+      orgId: res[0].org_id, actorId: null, action: 'invite.declined', targetType: 'invite', targetId: res[0].id, metadata: { email: res[0].email },
+    }, request.log);
     return reply.code(204).send();
   });
 
@@ -253,7 +259,7 @@ const inviteRoutes: FastifyPluginAsync = async (fastify) => {
         const userId = userRes.rows[0].id;
 
         await client.query('DELETE FROM organization_invites WHERE id = $1', [invite.id]);
-        await logInviteActivity(client, invite.org_id, userId, invite.id, 'accepted', { role: invite.role });
+        await logInviteActivity(client, originOf(request), invite.org_id, userId, invite.id, 'accepted', { role: invite.role });
 
         return { user_id: userId as string, org_id: invite.org_id as string, role: invite.role as string, tv: 0 };
       });

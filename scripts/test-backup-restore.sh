@@ -49,8 +49,10 @@ diff "$DUMP.live" "$DUMP.copy" || { echo "FAIL: migrations differ" >&2; exit 1; 
 migrations=$(wc -l < "$DUMP.live" | tr -d ' ')
 
 echo "4/4 migrator against the copy"
+# Both URLs point at the copy: the owner's (DATABASE_MIGRATION_URL, when the app has its own user) and
+# the app's, so the app user is granted on the copy too.
 # shellcheck disable=SC2016 # expanded by the inner shell, where DATABASE_URL is set
-out=$($MIGRATE_EXEC sh -c 'DATABASE_URL="${DATABASE_URL%/*}/'"$SCRATCH"'" node apps/api/dist/db/migrate.js up' 2>&1) \
+out=$($MIGRATE_EXEC sh -c 'export DATABASE_URL="${DATABASE_URL%/*}/'"$SCRATCH"'"; if [ -n "${DATABASE_MIGRATION_URL:-}" ]; then export DATABASE_MIGRATION_URL="${DATABASE_MIGRATION_URL%/*}/'"$SCRATCH"'"; fi; node apps/api/dist/db/migrate.js up' 2>&1) \
   || { echo "$out" >&2; echo "FAIL: migrator failed on the copy" >&2; exit 1; }
 echo "$out" | tail -2
 echo "$out" | grep -q "up to date" || { echo "FAIL: the copy needed migrations" >&2; exit 1; }

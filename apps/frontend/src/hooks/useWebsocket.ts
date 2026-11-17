@@ -46,7 +46,11 @@ export function useWebsocketConnection(): WebsocketState {
 
       socket.onmessage = (event) => {
         try {
-          setLastMessage(JSON.parse(event.data));
+          // Every event the API sends is an object with a string `type`; anything else is dropped.
+          const data: unknown = JSON.parse(event.data);
+          if (data && typeof data === 'object' && typeof (data as { type?: unknown }).type === 'string') {
+            setLastMessage(data as WebSocketMessage);
+          }
         } catch (e) {
           console.error('Error parsing WS message', e);
         }

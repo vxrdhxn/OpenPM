@@ -43,6 +43,11 @@ jobs:
       # npm ci fails if package-lock.json and the package.json files disagree.
       - run: npm ci
 
+      # Known vulnerabilities in dependencies. Blocks on high and critical; Dependabot proposes the
+      # updates. (Trivy also scans the built images.)
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npm run lint
 
@@ -134,6 +139,9 @@ jobs:
           export JWT_SECRET=$(openssl rand -hex 32)
           echo "::add-mask::$JWT_SECRET"
           echo "JWT_SECRET=$JWT_SECRET" >> "$GITHUB_ENV"
+          export DATABASE_APP_PASSWORD=$(openssl rand -hex 24)
+          echo "::add-mask::$DATABASE_APP_PASSWORD"
+          echo "DATABASE_APP_PASSWORD=$DATABASE_APP_PASSWORD" >> "$GITHUB_ENV"
           docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build api
           for _ in $(seq 1 60); do curl -sf http://localhost:3000/health && exit 0; sleep 2; done
           echo "::error::API did not become healthy"; docker compose logs api migrate; exit 1

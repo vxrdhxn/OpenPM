@@ -76,12 +76,13 @@ CI/CD       GitHub Actions (lint, build, unit/integration/browser tests, Helm, g
 git clone https://github.com/YOUR_ORG/openpm.git
 cd openpm
 echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env   # signs sessions; there is deliberately no default
+echo "DATABASE_APP_PASSWORD=$(openssl rand -hex 24)" >> .env   # the API's own, least-privilege database user
 docker compose up --build
 ```
 
 Then open <http://localhost:3001> and register: the first account creates your organization.
 Database migrations run automatically (a one-shot `migrate` service runs before the API starts).
-`JWT_SECRET` is the only setting you must provide. Stop it with `docker compose down` (add `-v` to
+`JWT_SECRET` and `DATABASE_APP_PASSWORD` are the only settings you must provide. Stop it with `docker compose down` (add `-v` to
 also delete the data). Running it for real: [`docs/deploying.md`](docs/deploying.md).
 
 For development with hot reload, use the steps below instead.
@@ -216,6 +217,7 @@ Backups: [`docs/backup-restore.md`](docs/backup-restore.md).
 
 ```bash
 echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
+echo "DATABASE_APP_PASSWORD=$(openssl rand -hex 24)" >> .env
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> .env
 echo "REDIS_PASSWORD=$(openssl rand -hex 16)" >> .env
 docker compose up --build -d
@@ -276,6 +278,9 @@ See [`.env.example`](.env.example) for all available configurations. Key variabl
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql://openpm:openpm@localhost:5432/openpm` | PostgreSQL connection string |
+| `DATABASE_MIGRATION_URL` | _(unset)_ | Migrations only: the database owner. When set, `DATABASE_URL` is a least-privilege app user that migrations create and grant ([docs/database-access.md](docs/database-access.md)) |
+| `AUDIT_RETENTION_DAYS` | `365` | How long the security audit log keeps entries ([docs/audit-log.md](docs/audit-log.md)) |
+| `CSP_CONNECT_SRC` | _(empty)_ | Frontend: extra origins the browser may connect to, for the Content-Security-Policy. Set it to the object storage's public origin when attachments are on |
 | `REDIS_URL` | `redis://:openpm@localhost:6379` | Redis connection string |
 | `JWT_SECRET` | dev key outside production | **Required when `NODE_ENV=production`**: the API refuses to start without it or with an example value from this repository. Minimum 32 characters |
 | `CORS_ORIGIN` | `http://localhost:3001` | Allowed CORS origins |
@@ -291,12 +296,16 @@ See [`.env.example`](.env.example) for all available configurations. Key variabl
 OpenPM is designed to be self-hosted and open-source. Security is defence-in-depth:
 
 - **Secrets**: No built-in credentials. Compose and the Helm chart refuse to start without them, and the API refuses example secrets from this repository in production. Kubernetes can read them from an existing Secret.
-- **Auth**: bcrypt (cost 12), httpOnly cookies (SameSite=Strict), JWT with expiry.
-- **Input**: Parameterised SQL queries, Fastify JSON Schema validation on all routes.
+- **Auth**: bcrypt (cost 12), httpOnly cookies (SameSite=Strict), JWT with expiry and server-side revocation.
+- **Audit**: sign-ins, failed sign-ins, password changes and permission changes in a security log for admins ([docs/audit-log.md](docs/audit-log.md)).
+- **Input**: Parameterised SQL queries, Fastify JSON Schema validation on all routes, NUL bytes refused, a WebSocket that accepts no client messages.
 - **API**: Rate limiting, Helmet security headers, strict CORS, 1MB body limit.
+- **Browser**: a nonce-based Content-Security-Policy on every page, no framing.
+- **Database**: the API connects as a user that cannot change the schema or the audit log ([docs/database-access.md](docs/database-access.md)).
+- **Design**: [security model](docs/security-model.md) and [threat model](docs/threat-model.md).
 - **Containers**: Non-root (UID 1001), multi-stage builds, minimal base images.
 - **Network**: Kubernetes NetworkPolicy with default deny-all.
-- **CI**: gitleaks secret scanning, Trivy image scanning (blocks fixable HIGH/CRITICAL findings), CodeQL, Helm lint and render checks. There is no `npm audit` gate yet (it reports 0 vulnerabilities). See [docs/ci.md](docs/ci.md).
+- **CI**: gitleaks secret scanning, Trivy image scanning (blocks fixable HIGH/CRITICAL findings), CodeQL, Helm lint and render checks, and `npm audit` (blocks high and critical). See [docs/ci.md](docs/ci.md).
 - **Dependencies**: Dependabot auto-updates for npm, Actions, and Docker.
 
 The pre-release review, what it fixed and the known limits: [`docs/security-review.md`](docs/security-review.md).

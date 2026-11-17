@@ -8,6 +8,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().regex(/^\d+$/).default('3000'),
   DATABASE_URL: z.string().url().default('postgresql://openpm:openpm@localhost:5432/openpm'),
+  // Migrations only: the database owner. When set, DATABASE_URL is the app's unprivileged user, which
+  // `migrate up` creates and grants (db/appRole.ts). Unset: everything connects with DATABASE_URL.
+  DATABASE_MIGRATION_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().default('redis://:openpm@localhost:6379'),
   // Optional here so development works out of the box; production is enforced by getJwtSecret().
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long').optional(),
@@ -31,6 +34,9 @@ const envSchema = z.object({
   TRUST_PROXY: z.string().regex(/^(\d+|[0-9a-fA-F.:/]+(\s*,\s*[0-9a-fA-F.:/]+)*)$/, 'TRUST_PROXY must be a hop count or a list of IPs/CIDRs').optional(),
   // Load tests only: IPs/CIDRs exempt from rate limiting (security/rateLimitAllowlist.ts). Never in production.
   RATE_LIMIT_ALLOWLIST: z.string().optional(),
+  // How long the security audit log keeps entries (docs/audit-log.md). They hold IP addresses, so
+  // they are not kept forever.
+  AUDIT_RETENTION_DAYS: z.string().regex(/^[1-9]\d*$/, 'AUDIT_RETENTION_DAYS must be a positive whole number').default('365').transform(Number),
 });
 
 const DEV_JWT_SECRET = 'super_secret_development_key_change_me_in_prod_123';
@@ -47,6 +53,7 @@ const PUBLISHED_JWT_SECRETS = new Set([
 // not an invalid URL/size. Other variables keep strict semantics: a blank JWT_SECRET must still fail.
 const BLANK_MEANS_UNSET = new Set([
   'LOG_LEVEL',
+  'DATABASE_MIGRATION_URL',
   'S3_ENDPOINT',
   'S3_PUBLIC_ENDPOINT',
   'S3_REGION',
@@ -57,6 +64,7 @@ const BLANK_MEANS_UNSET = new Set([
   'ATTACHMENT_MAX_BYTES',
   'RATE_LIMIT_ALLOWLIST',
   'TRUST_PROXY',
+  'AUDIT_RETENTION_DAYS',
 ]);
 
 const env = Object.fromEntries(
