@@ -84,8 +84,41 @@ helm install openpm helm/openpm -n openpm --create-namespace -f my-secrets.yaml
 
 `tests/helm/rendered.test.ts` now guards the chart properties above in CI.
 
-### Not covered
+### Not covered (closed on 2026-11-17, below)
 
 - **Ingress controller:** the Ingress object was created but not served. Applying the downloaded ingress-nginx manifest was declined by this session's permission policy, so a local proxy with the same routing stood in for it.
 - **HPA scaling:** kind has no metrics-server, so the HPAs show `cpu: <unknown>`.
 - **ArgoCD sync and drift detection.**
+
+## Kubernetes: Argo CD, Ingress and HPA (G.5): 2026-11-17
+
+The same kind cluster, now with Argo CD (`openpm-dev` Application syncing `helm/openpm` from `main`),
+Traefik as the Ingress controller and metrics-server.
+
+| Check | Result |
+| --- | --- |
+| Argo CD sync | `openpm-dev` is `Synced` / `Healthy`. A change to the Application's Helm values rolled the API out with no manual step. |
+| Drift (self-heal) | `kubectl scale deploy openpm-dev-worker --replicas=3` was reverted to 1 within ~2 s. |
+| Ingress (Traefik) | Host `openpm.local`: `/login` → 200 from the frontend, `POST /api/auth/login` → the API's own 401, and `/ws` → `101 Switching Protocols`. The Ingress reports an address, so Argo CD marks it healthy. |
+| HPA scale-up | [`load/k6/hpa.js`](../load/k6/hpa.js) at a constant 60 req/s from a pod in a separate namespace: CPU hit 230% of the request and the API went 2 → 4 → 7 replicas within ~30 s, then held at 37–57% (target 70%). 18,291 requests, 0 failed; p95 48 ms, p99 191 ms. |
+| HPA scale-down | After the load stopped: 7 → 6 → 5 → 3 → 2 in ~5 min (the default 300 s stabilization window). |
+
+The load pod's addresses were exempt from rate limiting only for the run: `RATE_LIMIT_ALLOWLIST` was
+set through the live Application's `helm.valuesObject` (never in git) and removed afterwards.
+
+```bash
+kubectl patch application openpm-dev -n argocd --type merge \
+  -p '{"spec":{"source":{"helm":{"valuesObject":{"api":{"extraEnv":[{"name":"RATE_LIMIT_ALLOWLIST","value":"10.244.0.0/16"}]}}}}}}'
+kubectl create ns loadtest
+kubectl create configmap hpa-script -n loadtest --from-file=hpa.js=load/k6/hpa.js
+# run grafana/k6 with the script mounted at /s: `k6 run /s/hpa.js` (env RATE, DURATION, BASE_URL)
+kubectl patch application openpm-dev -n argocd --type json -p '[{"op":"remove","path":"/spec/source/helm/valuesObject"}]'
+```
+
+### Found, not fixed
+
+- **Every rollout scales the API up.** Node's startup CPU is well above the 100m request, so after a
+  restart or rollout the HPA saw 268% and went to 4–8 replicas with no traffic, then took 5 min to
+  come back to 2. Harmless on an idle cluster but wasteful, and it can scale up a whole fleet on every
+  deploy. Fix options: a `behavior.scaleUp.stabilizationWindowSeconds` on the HPA, or a CPU request
+  closer to real usage.

@@ -1101,10 +1101,10 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] Helm validates.
 - [x] Kubernetes deployment succeeds. — kind (G.4); not yet a real cluster
 - [x] Probes work. — API not ready until the database works; observed on kind
-- [ ] HPA works where applicable. — *partial:* HPAs created; kind has no metrics-server, so scaling untested
+- [x] HPA works where applicable. — kind + metrics-server: 2 → 7 under load, back to 2 after (G.5)
 - [x] NetworkPolicy works. — enforced on kind: required paths open, others blocked
 - [ ] PDB works. — *partial:* PDBs report the right allowed disruptions; no drain test
-- [ ] ArgoCD sync works.
+- [x] ArgoCD sync works. — kind: sync, drift reverted by self-heal (G.5)
 
 ## Gate 5 — Reliability
 
@@ -1322,9 +1322,9 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Security              | 🟡     | gitleaks, Trivy (blocking), Dependabot, no secrets in images or bundles. CodeQL on TypeScript and workflows (H.4). No threat model, no rotation procedure. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download (`docs/attachments.md`). Not covered: malware scanning, orphan reaper, retention. Upload/download/delete verified in Chrome against MinIO (G.3). |
 | Docker                | 🟢     | Multi-stage, alpine, non-root, healthchecks (except worker), `.dockerignore`, `npm ci`. Runtime images ship no npm/yarn/corepack (their bundled deps failed Trivy). Trivy-clean and blocking in CI. No tag strategy. |
-| Kubernetes            | 🟢     | Installed and exercised on kind (G.4): app flow, NetworkPolicy enforcement, upgrades, rollback. Fixed on the way: invalid NetworkPolicies, Postgres crash loop, missing migrations, config changes not rolling pods. Not yet tested: Ingress controller, HPA scaling, a real cloud cluster. |
+| Kubernetes            | 🟢     | Installed and exercised on kind (G.4): app flow, NetworkPolicy enforcement, upgrades, rollback. Fixed on the way: invalid NetworkPolicies, Postgres crash loop, missing migrations, config changes not rolling pods. Argo CD sync and drift, a Traefik Ingress (HTTP and WebSockets) and HPA scaling verified on kind (G.5). Not yet tested: a real cloud cluster. |
 | Helm                  | 🟢     | Install, upgrade and rollback tested on kind; CI renders three value sets and checks the objects (`tests/helm`). No `values.schema.json`; `values.yaml` still ships dev secrets. |
-| ArgoCD                | 🟡     | App-of-apps with dev/prod. Prod auto-syncs from `HEAD` with prune/self-heal. Never synced to a cluster. |
+| ArgoCD                | 🟡     | App-of-apps with dev/prod. Dev auto-syncs with prune/self-heal; prod syncs manually. Dev synced on kind, drift reverted in ~2 s (G.5). |
 | Observability         | 🟢     | Structured logs, API/worker metrics, 2 Grafana dashboards, 18 promtool-tested alerts (`docs/observability.md`). Run against live Prometheus/Grafana with real traffic in Compose (G.3): every target up, an alert fired and cleared, every dashboard query checked. No log retention policy. |
 | Testing               | 🟡     | Broad unit and route tests, plus an integration suite against real Postgres in CI (tenant isolation, roles, account flows, rate limits, all migrations up/down/up). Redis and S3 are still faked. No E2E beyond one Playwright login spec. k6 load tests and failure tests run against Compose (`docs/load-testing.md`); not in CI. |
 | CI/CD                 | 🟡     | PR/push pipeline: lint, build, unit tests, integration tests (Postgres service), Helm, gitleaks, image build + blocking Trivy; actionlint clean; green on GitHub. CodeQL in its own workflow. No release pipeline; branch protection documented but not yet enabled. |
@@ -1333,7 +1333,7 @@ Audited 2026-11-15 against commit `c0c3cbc`.
 | Backup/restore        | ⬜     | |
 | Documentation         | 🟡     | README, CONTRIBUTING, SECURITY, plus attachments/CI/observability guides. Missing: permissions, WebSocket events, threat model, backup/rollback runbooks. |
 | UX polish             | ⬜     | |
-| Production readiness  | 🟡     | Runs on Kubernetes (kind). Remaining: ArgoCD sync, an Ingress controller and HPA on a real cluster, then Phases H and I. |
+| Production readiness  | 🟡     | Runs on Kubernetes (kind) with Argo CD, an Ingress controller and HPA verified (G.5). Remaining: a real cloud cluster, release pipeline, Phases 10–11. |
 
 ### Status legend
 

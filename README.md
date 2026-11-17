@@ -243,6 +243,18 @@ kubectl apply -f argocd/app-of-apps.yaml
 # ArgoCD syncs from git. Every deploy = a git commit.
 ```
 
+- `openpm-dev` syncs automatically, with prune and self-heal: a manual change in the cluster is
+  reverted within seconds. `openpm-prod` syncs **manually**, so production only changes when someone
+  syncs a reviewed revision (`argocd app sync openpm-prod`, or pin `targetRevision` to a tag).
+- The Ingress is a standard Kubernetes Ingress for any controller; set `ingress.className` (empty =
+  the cluster default). Argo CD reports the app healthy once the controller publishes the Ingress's
+  address. Verified with Traefik; ingress-nginx is retired and no longer patched.
+- The HPAs need [metrics-server](https://github.com/kubernetes-sigs/metrics-server) (or another
+  metrics API) in the cluster.
+
+What was verified on a local cluster (sync, drift, prune, Ingress, WebSockets, HPA) is in
+[`docs/rehearsal.md`](docs/rehearsal.md).
+
 ---
 
 ## Environment Variables
