@@ -16,7 +16,7 @@ All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lin
 
 What still stands between the project and production:
 
-1. **Kubernetes is only proven on kind.** The chart now installs, upgrades and rolls back on a local cluster (G.4). ArgoCD, an Ingress controller and HPA scaling are still unverified, and there is no real cloud deployment yet.
+1. **Kubernetes is only proven on kind.** The chart installs, upgrades and rolls back on a local cluster (G.4), and Argo CD sync, an Ingress controller and HPA scaling are verified there (G.5). There is no real cloud deployment yet.
 2. **The missing product features (Phase I).** Phases F (broken user flows) and H (hardening) are complete.
 
 ---
@@ -166,7 +166,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
   - A 401 caused an endless reload loop.
 
   A new CI test (`tests/helm`) guards these. See `docs/rehearsal.md`.
-- [x] **G.5 Remaining cluster checks (done):** on kind with Argo CD, Traefik and metrics-server. `openpm-dev` syncs from git and self-heals drift in ~2 s; the Ingress serves the frontend, the API and WebSockets; under a constant 60 req/s (`load/k6/hpa.js`) the API HPA went 2 → 7 in ~30 s with 0 failed requests (p95 48 ms) and back to 2 ~5 min after. Prod now syncs manually. **Found, not fixed:** startup CPU exceeds the 100m request, so every rollout scales the API up to 4–8 replicas for ~5 min. See `docs/rehearsal.md`.
+- [x] **G.5 Remaining cluster checks (done):** on kind with Argo CD, Traefik and metrics-server. `openpm-dev` syncs from git and self-heals drift in ~2 s; the Ingress serves the frontend, the API and WebSockets; under a constant 60 req/s (`load/k6/hpa.js`) the API HPA went 2 → 7 in ~30 s with 0 failed requests (p95 48 ms) and back to 2 ~5 min after. Prod now syncs manually. **Found and fixed:** a pod's start-up CPU spike scaled the API to 4–8 replicas on rollouts; both HPAs now have a 60 s scale-up stabilization window (real load scales ~1 min later). See `docs/rehearsal.md`.
 
 ### Phase H: Hardening
 - [x] **H.1 (done):** `plugins/errors.ts` gives every response the `{ error }` shape (validation, unknown routes, rate limits included); 5xx bodies say only "Internal server error" and the details go to the log. `plugins/uuidParams.ts` requires every `:id`/`:*Id` param to be a UUID, so a malformed id is a 400 instead of a Postgres cast error surfacing as a 500 (authentication still runs first). `requestTimeout` is 30s (Node default 5 min) and the API pool sets a 10s Postgres `statement_timeout`. On SIGTERM the API stops HTTP and WebSockets, then closes the job queue, both Redis clients and the pg pool, logging failures without blocking the rest, with a forced exit at 25s (`shutdown.ts`). Covered by unit tests and a new integration file (`apiErrors.int.test.ts`); green in CI.
@@ -196,7 +196,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | **Authentication** | 🟢 Solid | Require the current password to change it; verify-by-email sign-up |
 | **Background Worker** | 🟢 Solid | Crash-tested (Phase 9); a transactional outbox for guaranteed emails |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
-| **Kubernetes & DevOps** | 🟢 Verified on kind | HPA scale-up on rollout; a real cloud cluster |
+| **Kubernetes & DevOps** | 🟢 Verified on kind | A real cloud cluster |
 | **Observability** | 🟢 Verified locally | Run on a cluster with the Prometheus Operator (G.4) |
 
 ### Phase 9: Performance and reliability (done)
@@ -204,4 +204,3 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 
 ### Recommended Immediate Action
 1. **Repo settings (admin):** enable branch protection on `main`, review the first CodeQL alerts and make them merge-blocking (see `docs/ci.md`).
-2. **HPA on rollout:** stop rollouts from scaling the API up (scale-up stabilization or a realistic CPU request).

@@ -115,10 +115,16 @@ kubectl create configmap hpa-script -n loadtest --from-file=hpa.js=load/k6/hpa.j
 kubectl patch application openpm-dev -n argocd --type json -p '[{"op":"remove","path":"/spec/source/helm/valuesObject"}]'
 ```
 
-### Found, not fixed
+### Found and fixed
 
-- **Every rollout scales the API up.** Node's startup CPU is well above the 100m request, so after a
-  restart or rollout the HPA saw 268% and went to 4–8 replicas with no traffic, then took 5 min to
-  come back to 2. Harmless on an idle cluster but wasteful, and it can scale up a whole fleet on every
-  deploy. Fix options: a `behavior.scaleUp.stabilizationWindowSeconds` on the HPA, or a CPU request
-  closer to real usage.
+- **Rollouts scaled the API up with no traffic.** A new pod's start-up uses ~180m (about twice its
+  100m request) for 10–20 s, then idles at 8–10m. Whenever the HPA sampled that spike (268% after a
+  cluster restart) it went to 4–8 replicas, and took 5 min to come back to 2. The CPU request is
+  right for steady use (~45m per pod under load), so the HPAs now have a 60 s scale-up stabilization
+  window (`api.hpa.behavior` / `frontend.hpa.behavior`) instead.
+
+  Re-tested on kind: a cold node restart (296% sampled) and three rollouts all stayed at 2 replicas.
+  Real load still scales up, 1 min later: at 60 req/s the API went 2 → 6 at ~76 s (was ~16 s) and
+  settled at 8. The cost is that window: 2 pods carried the burst alone, so p95 was 953 ms (was
+  48 ms) and 1 of 14,471 requests failed. Size `minReplicas` for normal peak traffic; the HPA is
+  for sustained growth, not instant bursts.
