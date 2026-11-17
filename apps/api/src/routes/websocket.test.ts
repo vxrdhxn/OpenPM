@@ -281,7 +281,9 @@ describe('GET /ws', () => {
     beforeEach(() => build());
 
     it('closes the socket when its JWT expires and releases the subscription', async () => {
-      const c = connect({ headers: asCookie(tokenFor('org-1', {}, { expiresIn: 1 })) });
+      // 2 s, not 1: exp is whole seconds after a floored iat, so a 1 s token signed late in a second
+      // can expire before the handshake and be refused instead of closed (seen as a flaky failure).
+      const c = connect({ headers: asCookie(tokenFor('org-1', {}, { expiresIn: 2 })) });
 
       const info = await c.closed;
 
@@ -332,7 +334,9 @@ describe('GET /ws', () => {
     });
 
     it('decrements when the server expires the session', async () => {
-      const c = connect({ headers: asCookie(tokenFor('org-1', {}, { expiresIn: 1 })) });
+      // 2 s, not 1: exp is whole seconds after a floored iat, so a 1 s token signed late in a second
+      // can expire before the handshake and be refused instead of closed (seen as a flaky failure).
+      const c = connect({ headers: asCookie(tokenFor('org-1', {}, { expiresIn: 2 })) });
       await open(c);
       await until(1);
 
