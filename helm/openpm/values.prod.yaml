@@ -2,20 +2,16 @@
 global:
   environment: "production"
   domain: "app.openpm.com"
-
 # For production, we assume managed external databases are used
 postgres:
   enabled: false
-
 redis:
   enabled: false
-
 # Credentials come from a Secret created in the openpm-prod namespace before the first sync, never
 # from Git: JWT_SECRET, DATABASE_URL and REDIS_URL (the managed database and cache), and optionally
 # RESEND_API_KEY. docs/deploying.md shows how to create it.
 secrets:
   existingSecret: "openpm-secrets"
-
 # Image repository, tag and digest are set by the release workflow's "deploy: vX.Y.Z to production"
 # pull request (docs/releasing.md). Do not edit them by hand.
 api:
@@ -23,7 +19,7 @@ api:
   image:
     repository: "ghcr.io/vxrdhxn/openpm-api"
     tag: "0.1.0"
-    digest: ""
+    digest: "sha256:b7529d923fc8dc5c180fab62e66996fd41077472f37476c4933f3cdecd51d410"
     pullPolicy: "IfNotPresent"
   resources:
     limits:
@@ -32,13 +28,12 @@ api:
     requests:
       cpu: 250m
       memory: 512Mi
-
 worker:
   replicaCount: 2
   image:
     repository: "ghcr.io/vxrdhxn/openpm-worker"
     tag: "0.1.0"
-    digest: ""
+    digest: "sha256:ee3f58d0ab47a499f91d8ff543a418a0edb1b1a245c4498d67893eadb243722e"
     pullPolicy: "IfNotPresent"
   resources:
     limits:
@@ -47,13 +42,12 @@ worker:
     requests:
       cpu: 250m
       memory: 512Mi
-
 frontend:
   replicaCount: 3
   image:
     repository: "ghcr.io/vxrdhxn/openpm-frontend"
     tag: "0.1.0"
-    digest: ""
+    digest: "sha256:5fe3e06189581a16c91d87254facb3be031f54bbc15ea86b0310fe600dad4a39"
     pullPolicy: "IfNotPresent"
   resources:
     limits:
@@ -62,7 +56,6 @@ frontend:
     requests:
       cpu: 250m
       memory: 512Mi
-
 ingress:
   enabled: true
   # Set className to your controller's IngressClass (empty = the cluster default). HTTP->HTTPS
@@ -87,7 +80,6 @@ ingress:
     - secretName: openpm-tls-prod
       hosts:
         - "app.openpm.com"
-
 # Enable Prometheus ServiceMonitor in production
 serviceMonitor:
   enabled: true
