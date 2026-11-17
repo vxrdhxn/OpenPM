@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
@@ -81,9 +82,25 @@ export default function Dashboard() {
   const activity = useSection<Page<ActivityEntry>>(() => api.get('/activity?limit=15'));
 
   return (
-    <div className="p-8 h-full overflow-y-auto">
+    <div className="p-4 sm:p-8">
       <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-      <p className="text-slate-500 mt-1 mb-6">Your work and what is happening across the organization.</p>
+      <p className="text-slate-600 dark:text-slate-400 mt-1 mb-6">Your work and what is happening across the organization.</p>
+
+      {/* First run: an empty organization gets the three steps that make OpenPM useful. */}
+      {summary.state === 'ready' && summary.data.projects.active === 0 && (
+        <section aria-labelledby="welcome-title" className="mb-8 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10 p-6">
+          <h2 id="welcome-title" className="text-lg font-semibold text-slate-900 dark:text-white">Welcome to OpenPM</h2>
+          <ol className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300 list-decimal list-inside">
+            <li>Create a project for a piece of work your team is doing.</li>
+            <li>Add tasks to its board, then drag them across columns as work moves.</li>
+            <li>Invite your teammates from Settings → Organization, and assign them tasks.</li>
+          </ol>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link href="/projects?new=1" className="btn-compact">Create your first project</Link>
+            <Link href="/settings/organization" className="btn-secondary">Invite teammates</Link>
+          </div>
+        </section>
+      )}
 
       {/* Headline numbers (KPI row). */}
       {summary.state === 'error' ? (

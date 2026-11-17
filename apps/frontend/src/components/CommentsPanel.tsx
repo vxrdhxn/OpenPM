@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import { Loader2, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useComments } from '@/hooks/useComments';
 import MentionTextarea from './MentionTextarea';
+import { useConfirm } from '@/components/ui/feedback';
 import { mentionIdsIn, type Mentionable } from '@/lib/mentions';
 import {
   canComment,
@@ -40,6 +41,7 @@ function Counter({ length }: { length: number }) {
  */
 export default function CommentsPanel({ projectId, taskId, me, lastMessage, members = NO_MEMBERS }: Props) {
   const { comments, loading, error, hasOlder, loadingOlder, loadOlder, add, edit, remove } = useComments(projectId, taskId, lastMessage);
+  const confirm = useConfirm();
   const [draft, setDraft] = useState('');
   // People picked from the @ suggestions while writing; only those still named in the text are sent.
   const [draftMentions, setDraftMentions] = useState<Mentionable[]>([]);
@@ -78,7 +80,7 @@ export default function CommentsPanel({ projectId, taskId, me, lastMessage, memb
   };
 
   const confirmDelete = async (c: Comment) => {
-    if (!confirm('Delete this comment?')) return;
+    if (!(await confirm({ title: 'Delete this comment?', message: 'This cannot be undone.', confirmLabel: 'Delete', destructive: true }))) return;
     setActionError('');
     try {
       await remove(c.id);

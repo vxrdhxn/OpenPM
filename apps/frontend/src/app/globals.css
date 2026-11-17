@@ -37,7 +37,10 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
-@layer utilities {
+/* Components, not utilities: a utility on the same element (w-40, pl-9, ...) must be able to
+   override them. In the utilities layer, `.input-field`'s w-full and px-4 won, which stretched the
+   board filters and put search text under the search icon. */
+@layer components {
   .glass-panel {
     @apply bg-white/10 dark:bg-slate-800/50 backdrop-blur-lg border border-white/20 dark:border-slate-700/50 shadow-xl;
   }
@@ -49,6 +52,16 @@ body {
   /* A primary button sized to its content (.btn-primary is full width, for forms). */
   .btn-compact {
     @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50;
+  }
+
+  /* Neutral action next to a primary one (Cancel, Try again). */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm rounded-lg font-medium border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50;
+  }
+
+  /* Destructive confirm (delete, remove, leave). */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm rounded-lg font-medium bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50;
   }
 
   .btn-primary {

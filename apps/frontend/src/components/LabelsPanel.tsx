@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Tag, Trash2 } from 'lucide-react';
 import LabelChip from './LabelChip';
+import { useConfirm } from '@/components/ui/feedback';
 import { api } from '@/lib/api';
 import { createLabel, deleteLabel, LABEL_COLORS, listLabels, updateLabel, type LabelColor, type OrgLabel } from '@/lib/labels';
 
@@ -13,6 +14,7 @@ const RANK: Record<string, number> = { owner: 4, admin: 3, member: 2, viewer: 1 
  * also delete, which removes the label from every task. The API enforces the same rules.
  */
 export default function LabelsPanel() {
+  const confirm = useConfirm();
   const [role, setRole] = useState('');
   const [labels, setLabels] = useState<OrgLabel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,9 +70,9 @@ export default function LabelsPanel() {
     run(() => updateLabel(label.id, { name: next }), 'Could not rename the label');
   };
 
-  const remove = (label: OrgLabel) => {
+  const remove = async (label: OrgLabel) => {
     const usage = label.task_count ? ` It is on ${label.task_count} task${label.task_count === 1 ? '' : 's'}.` : '';
-    if (!confirm(`Delete the label "${label.name}"?${usage}`)) return;
+    if (!(await confirm({ title: `Delete the label "${label.name}"?`, message: `It is removed from every task.${usage}`, confirmLabel: 'Delete label', destructive: true }))) return;
     run(() => deleteLabel(label.id), 'Could not delete the label');
   };
 

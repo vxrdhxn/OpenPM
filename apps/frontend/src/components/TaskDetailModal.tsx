@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Loader2, Trash2 } from 'lucide-react';
 import AttachmentsPanel from './AttachmentsPanel';
 import CommentsPanel from './CommentsPanel';
 import TaskLabels from './TaskLabels';
+import TaskForm, { type Assignable } from './TaskForm';
+import Dialog from './ui/Dialog';
+import { messageOf, useConfirm, useToast } from './ui/feedback';
+import { api } from '@/lib/api';
+import { changesOf, draftOf, priorityLabel, statusLabel, toDateInput, type TaskDraft } from '@/lib/tasks';
 import type { Label } from '@/lib/labels';
 import type { Mentionable } from '@/lib/mentions';
 import type { CommentEvent } from '@/lib/comments';
@@ -15,6 +20,7 @@ export interface TaskSummary {
   description?: string | null;
   status: string;
   priority: string;
+  assignee_id?: string | null;
   assignee_name?: string | null;
   due_date?: string | null;
   labels?: Label[];
@@ -22,6 +28,7 @@ export interface TaskSummary {
 
 /** Stable empty list: a fresh `[]` each render would look like new board data to TaskLabels. */
 const NO_LABELS: Label[] = [];
+const NO_MEMBERS: (Assignable & Mentionable)[] = [];
 
 export interface CurrentUser {
   user_id: string;
@@ -36,129 +43,129 @@ interface Props {
   lastMessage?: CommentEvent | null;
   /** Every label of the organization, for the label picker. */
   orgLabels?: Label[];
-  /** The organization's members, for @mentions in comments. */
-  members?: Mentionable[];
+  /** The organization's members: assignees, and @mentions in comments. */
+  members?: (Assignable & Mentionable)[];
   onClose: () => void;
+  /** The task was saved or deleted here (the board refreshes; live events also arrive). */
+  onChanged?: () => void;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  in_review: 'In Review',
-  done: 'Done',
-};
+export default function TaskDetailModal({ task, projectId, me, lastMessage = null, orgLabels = NO_LABELS, members = NO_MEMBERS, onClose, onChanged }: Props) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const role = me?.role ?? '';
+  const canEdit = role !== '' && role !== 'viewer';
+  const isAdmin = role === 'admin' || role === 'owner';
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const formId = useId();
+  const [draft, setDraft] = useState<TaskDraft>(() => draftOf(task));
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [titleError, setTitleError] = useState('');
+  const changes = changesOf(task, draft);
+  const dirty = Object.keys(changes).length > 0;
 
-export default function TaskDetailModal({ task, projectId, me, lastMessage = null, orgLabels = NO_LABELS, members, onClose }: Props) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
+  // Someone else changed the task while it is open: show their version unless we have unsaved edits.
+  const lastSeen = useRef(task);
   useEffect(() => {
-    onCloseRef.current = onClose;
-  });
+    if (lastSeen.current === task) return;
+    const wasClean = Object.keys(changesOf(lastSeen.current, draft)).length === 0;
+    lastSeen.current = task;
+    if (wasClean) setDraft(draftOf(task));
+  }, [task, draft]);
 
-  // Move focus into the dialog, and put it back on whatever opened it when we close.
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
-    return () => opener?.focus?.();
-  }, []);
+  const requestClose = async () => {
+    if (dirty && !(await confirm({ title: 'Discard your changes?', message: 'Your edits to this task have not been saved.', confirmLabel: 'Discard', destructive: true }))) return;
+    onClose();
+  };
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      onCloseRef.current();
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft.title.trim()) {
+      setTitleError('A task needs a title.');
       return;
     }
-    if (e.key !== 'Tab') return;
-
-    // Keep Tab / Shift+Tab inside the dialog.
-    const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
-    if (items.length === 0) return;
-    const first = items[0]!;
-    const last = items[items.length - 1]!;
-    const active = document.activeElement;
-    if (e.shiftKey && (active === first || active === dialogRef.current)) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
+    setTitleError('');
+    if (!dirty) return;
+    setSaving(true);
+    try {
+      await api.patch(`/projects/${projectId}/tasks/${task.id}`, changes);
+      toast('Task saved');
+      onChanged?.();
+    } catch (err) {
+      toast(messageOf(err, 'Could not save the task'), 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const role = me?.role ?? '';
-  const canUpload = role !== '' && role !== 'viewer';
-  const isAdmin = role === 'admin' || role === 'owner';
+  const remove = async () => {
+    if (!(await confirm({ title: `Delete "${task.title}"?`, message: 'Its comments and attachments are deleted too. This cannot be undone.', confirmLabel: 'Delete task', destructive: true }))) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/projects/${projectId}/tasks/${task.id}`);
+      toast('Task deleted');
+      onChanged?.();
+      onClose();
+    } catch (err) {
+      toast(messageOf(err, 'Could not delete the task'), 'error');
+      setDeleting(false);
+    }
+  };
+
+  const due = toDateInput(task.due_date);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose(); // click on the backdrop only
-      }}
+    <Dialog
+      size="lg"
+      title={task.title}
+      onClose={requestClose}
+      headerExtra={
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium">{statusLabel(task.status)}</span>
+          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium">{priorityLabel(task.priority)} priority</span>
+          {task.assignee_name && <span className="text-slate-600 dark:text-slate-400">Assigned to {task.assignee_name}</span>}
+          {due && <span className="text-slate-600 dark:text-slate-400">Due {new Date(task.due_date!).toLocaleDateString()}</span>}
+        </div>
+      }
+      footer={
+        canEdit ? (
+          <>
+            {isAdmin && (
+              <button type="button" onClick={remove} disabled={deleting || saving} className="btn-secondary mr-auto text-red-700 dark:text-red-400">
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Trash2 className="w-4 h-4" aria-hidden="true" />}
+                Delete
+              </button>
+            )}
+            {dirty && (
+              <button type="button" className="btn-secondary" onClick={() => setDraft(draftOf(task))} disabled={saving}>
+                Discard changes
+              </button>
+            )}
+            <button type="submit" form={formId} className="btn-compact" disabled={!dirty || saving}>
+              {saving && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </>
+        ) : undefined
+      }
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="task-dialog-title"
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        className="bg-white dark:bg-slate-900 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl outline-none"
-      >
-        <div className="flex items-start justify-between gap-4 p-6 border-b border-slate-200 dark:border-slate-800">
-          <div className="min-w-0">
-            <h2 id="task-dialog-title" className="text-xl font-bold break-words">
-              {task.title}
-            </h2>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium">
-                {STATUS_LABELS[task.status] ?? task.status}
-              </span>
-              <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium uppercase">
-                {task.priority}
-              </span>
-              {task.assignee_name && <span className="text-slate-500">Assigned to {task.assignee_name}</span>}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-            aria-label="Close task details"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
-        </div>
+      {canEdit ? (
+        // Its own form: the comment and label editors below have forms of their own.
+        <form id={formId} onSubmit={save}>
+          <TaskForm draft={draft} onChange={setDraft} members={members} showStatus disabled={saving || deleting} titleError={titleError} />
+        </form>
+      ) : (
+        task.description && (
+          <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">{task.description}</p>
+        )
+      )}
 
-        <div className="p-6 space-y-6">
-          <TaskLabels
-            projectId={projectId}
-            taskId={task.id}
-            labels={task.labels ?? NO_LABELS}
-            orgLabels={orgLabels}
-            canEdit={canUpload}
-          />
+      <TaskLabels projectId={projectId} taskId={task.id} labels={task.labels ?? NO_LABELS} orgLabels={orgLabels} canEdit={canEdit} />
 
-          {task.description && (
-            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
-              {task.description}
-            </p>
-          )}
+      <AttachmentsPanel projectId={projectId} taskId={task.id} canUpload={canEdit} currentUserId={me?.user_id ?? null} isAdmin={isAdmin} />
 
-          <AttachmentsPanel
-            projectId={projectId}
-            taskId={task.id}
-            canUpload={canUpload}
-            currentUserId={me?.user_id ?? null}
-            isAdmin={isAdmin}
-          />
-
-          <CommentsPanel projectId={projectId} taskId={task.id} me={me} lastMessage={lastMessage} members={members} />
-        </div>
-      </div>
-    </div>
+      <CommentsPanel projectId={projectId} taskId={task.id} me={me} lastMessage={lastMessage} members={members} />
+    </Dialog>
   );
 }

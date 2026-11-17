@@ -1,10 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, FolderKanban, Clock, Loader2, Search } from 'lucide-react';
+import ProjectDialog from '@/components/ProjectDialog';
+import { EmptyBlock, ErrorBlock } from '@/components/ui/states';
 
 interface Project {
   id: string;
@@ -16,7 +19,7 @@ interface Project {
 
 const PAGE_SIZE = 24;
 
-export default function Projects() {
+function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,9 +28,19 @@ export default function Projects() {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState(''); // `search`, debounced
   const [status, setStatus] = useState<'' | 'active' | 'archived'>('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const router = useRouter();
+  // "Create your first project" on the dashboard links here with ?new=1.
+  const searchParams = useSearchParams();
+  const [isModalOpen, setIsModalOpen] = useState(searchParams.get('new') === '1');
+  const closeCreate = () => {
+    setIsModalOpen(false);
+    if (searchParams.get('new')) router.replace('/projects');
+  };
+  const [role, setRole] = useState('');
+  useEffect(() => {
+    api.get('/auth/me').then((d) => setRole(d.user.role)).catch(() => setRole(''));
+  }, []);
+  const canCreate = role !== '' && role !== 'viewer';
 
   // Only the newest request may update the list: a slow response for an old search must not
   // overwrite the results of the current one.
@@ -76,38 +89,25 @@ export default function Projects() {
 
   const filtered = query !== '' || status !== '';
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.post('/projects', { name: newProjectName, description: newProjectDesc });
-      setIsModalOpen(false);
-      setNewProjectName('');
-      setNewProjectDesc('');
-      loadProjects();
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   return (
-    <div className="p-8 h-full overflow-y-auto">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-8">
+      <div className="flex flex-wrap gap-4 items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Projects</h1>
-          <p className="text-slate-500 mt-1">Manage your team&apos;s workflows and tasks.</p>
+          <p className="text-slate-600 dark:text-slate-400 mt-1">Manage your team&apos;s workflows and tasks.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          New Project
-        </button>
+        {canCreate && (
+          <button onClick={() => setIsModalOpen(true)} className="btn-compact">
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            New project
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
           <input
             type="search"
             aria-label="Search projects"
@@ -131,27 +131,28 @@ export default function Projects() {
       </div>
 
       {error && (
-        <div role="alert" className="mb-6 p-3 rounded-lg text-sm bg-red-50 text-red-700">
-          {error}
+        <div className="mb-6">
+          <ErrorBlock message={error} onRetry={loadProjects} />
         </div>
       )}
 
       {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        <div role="status" className="flex justify-center items-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" aria-hidden="true" />
+          <span className="sr-only">Loading projects</span>
         </div>
       ) : projects.length === 0 && filtered ? (
-        <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
-          <Search className="w-12 h-12 text-slate-400 mb-4" />
-          <h3 className="text-lg font-medium">No matching projects</h3>
-          <p className="text-slate-500 mt-1 text-center max-w-sm">Try a different search or status.</p>
-        </div>
+        <EmptyBlock icon={<Search className="w-10 h-10" />} title="No matching projects">
+          Try a different search or status.
+        </EmptyBlock>
       ) : projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
-          <FolderKanban className="w-16 h-16 text-slate-400 mb-4" />
-          <h3 className="text-lg font-medium">No projects yet</h3>
-          <p className="text-slate-500 mt-1 text-center max-w-sm">Create your first project to start organizing tasks and collaborating with your team.</p>
-        </div>
+        <EmptyBlock
+          icon={<FolderKanban className="w-12 h-12" />}
+          title="No projects yet"
+          action={canCreate && <button onClick={() => setIsModalOpen(true)} className="btn-compact"><Plus className="w-4 h-4" aria-hidden="true" />Create a project</button>}
+        >
+          {canCreate ? 'A project holds a board of tasks for one piece of work.' : 'An admin or member of your organization can create one.'}
+        </EmptyBlock>
       ) : (
         <>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -195,54 +196,21 @@ export default function Projects() {
         </>
       )}
 
-      {/* Modal for creating project */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleCreate} className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-              <h2 className="text-xl font-bold">Create New Project</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Project Name</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  autoFocus
-                  required
-                  value={newProjectName}
-                  onChange={e => setNewProjectName(e.target.value)}
-                  placeholder="e.g. Website Redesign"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Description (Optional)</label>
-                <textarea 
-                  className="input-field min-h-[100px]" 
-                  value={newProjectDesc}
-                  onChange={e => setNewProjectDesc(e.target.value)}
-                  placeholder="Briefly describe the project goals..."
-                />
-              </div>
-            </div>
-            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit" 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors"
-              >
-                Create Project
-              </button>
-            </div>
-          </form>
-        </div>
+        <ProjectDialog
+          onClose={closeCreate}
+          onSaved={(created) => router.push(`/projects/${created.id}`)}
+        />
       )}
     </div>
+  );
+}
+
+// useSearchParams() needs a Suspense boundary when the page is prerendered.
+export default function Projects() {
+  return (
+    <Suspense>
+      <ProjectsPage />
+    </Suspense>
   );
 }

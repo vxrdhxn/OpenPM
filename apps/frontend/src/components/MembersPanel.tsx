@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LogOut, UserMinus, Users } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/ui/feedback';
 import { assignableRoles, canManage, isLastManager, type Member, type Role } from '@/lib/members';
 
 interface Me {
@@ -15,6 +16,7 @@ interface Me {
  * the API will allow them (lib/members.ts); the API still checks every request.
  */
 export default function MembersPanel() {
+  const confirm = useConfirm();
   const [members, setMembers] = useState<Member[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,7 +56,7 @@ export default function MembersPanel() {
   };
 
   const remove = async (member: Member) => {
-    if (!confirm(`Remove ${member.name} from the organization? They are signed out at once and their tasks are unassigned.`)) return;
+    if (!(await confirm({ title: `Remove ${member.name}?`, message: 'They are signed out at once and their tasks are unassigned.', confirmLabel: 'Remove', destructive: true }))) return;
     setBusy(member.id);
     setError('');
     try {
@@ -68,7 +70,7 @@ export default function MembersPanel() {
   };
 
   const leave = async () => {
-    if (!confirm('Leave this organization? You will be signed out and lose access to its projects.')) return;
+    if (!(await confirm({ title: 'Leave this organization?', message: 'You will be signed out and lose access to its projects.', confirmLabel: 'Leave', destructive: true }))) return;
     setBusy('leave');
     setError('');
     try {

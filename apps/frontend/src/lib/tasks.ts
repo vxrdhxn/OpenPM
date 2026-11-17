@@ -1,0 +1,100 @@
+/**
+ * Task fields as the UI edits them, and how they map to the API (PATCH /projects/:id/tasks/:taskId
+ * accepts title, description, status, priority, assignee_id and due_date).
+ */
+
+export const STATUSES = [
+  { value: 'todo', label: 'To Do' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'in_review', label: 'In Review' },
+  { value: 'done', label: 'Done' },
+] as const;
+
+export const PRIORITIES = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'urgent', label: 'Urgent' },
+] as const;
+
+export const statusLabel = (s: string) => STATUSES.find((x) => x.value === s)?.label ?? s;
+export const priorityLabel = (p: string) => PRIORITIES.find((x) => x.value === p)?.label ?? p;
+
+/** The editable fields of a task, in form shape (strings; '' = none). */
+export interface TaskDraft {
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  assignee_id: string;
+  /** yyyy-mm-dd, the value of an <input type="date">, in the user's time zone. */
+  due: string;
+}
+
+export interface TaskFields {
+  title: string;
+  description?: string | null;
+  status: string;
+  priority: string;
+  assignee_id?: string | null;
+  due_date?: string | null;
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** A stored due date as the yyyy-mm-dd the user picked (their local calendar day). */
+export function toDateInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * A picked yyyy-mm-dd as the instant it ends in the user's time zone. A task due "on the 20th" is
+ * overdue after the 20th, not from its first minute (the dashboard's overdue check is `due < now`).
+ */
+export function fromDateInput(day: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999).toISOString();
+}
+
+export function draftOf(task: TaskFields): TaskDraft {
+  return {
+    title: task.title,
+    description: task.description ?? '',
+    status: task.status,
+    priority: task.priority,
+    assignee_id: task.assignee_id ?? '',
+    due: toDateInput(task.due_date),
+  };
+}
+
+/**
+ * Only the fields the user changed, in API shape. Empty means nothing to save. A cleared assignee or
+ * due date is sent as null; the description is a string (the API does not accept null for it).
+ */
+export function changesOf(task: TaskFields, draft: TaskDraft): Record<string, string | null> {
+  const before = draftOf(task);
+  const out: Record<string, string | null> = {};
+  if (draft.title.trim() !== before.title) out.title = draft.title.trim();
+  if (draft.description !== before.description) out.description = draft.description;
+  if (draft.status !== before.status) out.status = draft.status;
+  if (draft.priority !== before.priority) out.priority = draft.priority;
+  if (draft.assignee_id !== before.assignee_id) out.assignee_id = draft.assignee_id || null;
+  if (draft.due !== before.due) out.due_date = draft.due ? fromDateInput(draft.due) : null;
+  return out;
+}
+
+/** Body for POST /projects/:id/tasks from a create form (empty optional fields are left out; new tasks start in To Do). */
+export function newTaskBody(draft: TaskDraft): Record<string, string> {
+  const body: Record<string, string> = { title: draft.title.trim(), priority: draft.priority || 'medium' };
+  if (draft.description.trim()) body.description = draft.description;
+  if (draft.assignee_id) body.assignee_id = draft.assignee_id;
+  const due = draft.due ? fromDateInput(draft.due) : null;
+  if (due) body.due_date = due;
+  return body;
+}
+
+export const EMPTY_DRAFT: TaskDraft = { title: '', description: '', status: 'todo', priority: 'medium', assignee_id: '', due: '' };

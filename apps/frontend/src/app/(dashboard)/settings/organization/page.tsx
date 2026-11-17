@@ -5,8 +5,11 @@ import { api } from '@/lib/api';
 import { Trash2, UserPlus, Mail, Shield } from 'lucide-react';
 import MembersPanel from '@/components/MembersPanel';
 import LabelsPanel from '@/components/LabelsPanel';
+import { messageOf, useConfirm, useToast } from '@/components/ui/feedback';
 
 export default function OrganizationSettings() {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [invites, setInvites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -46,13 +49,13 @@ export default function OrganizationSettings() {
   };
 
   const handleRevoke = async (id: string) => {
-    if (!confirm('Are you sure you want to revoke this invite?')) return;
+    if (!(await confirm({ title: 'Revoke this invite?', message: 'The invite link stops working. You can send a new one later.', confirmLabel: 'Revoke', destructive: true }))) return;
     
     try {
       await api.delete(`/invites/${id}`);
       setInvites(invites.filter(i => i.id !== id));
     } catch (err: any) {
-      alert(err.message || 'Failed to revoke invite');
+      toast(messageOf(err, 'Failed to revoke invite'), 'error');
     }
   };
 

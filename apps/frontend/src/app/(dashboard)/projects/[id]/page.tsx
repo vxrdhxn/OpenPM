@@ -1,17 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
-import { Plus, GripVertical, AlertCircle } from 'lucide-react';
+import { Plus, GripVertical, AlertCircle, Pencil } from 'lucide-react';
+import ProjectDialog from '@/components/ProjectDialog';
 import TaskDetailModal, { CurrentUser } from '@/components/TaskDetailModal';
 import BoardFilters, { EMPTY_BOARD_FILTERS, isFiltering, type BoardFilterValues } from '@/components/BoardFilters';
 import { buildQuery } from '@/lib/query';
 import type { Member } from '@/lib/members';
 import { listLabels, type Label } from '@/lib/labels';
 import LabelChip from '@/components/LabelChip';
+import TaskForm from '@/components/TaskForm';
+import Dialog from '@/components/ui/Dialog';
+import { messageOf, useToast } from '@/components/ui/feedback';
+import { ErrorBlock } from '@/components/ui/states';
+import { EMPTY_DRAFT, newTaskBody, priorityLabel, type TaskDraft } from '@/lib/tasks';
 
 const COLUMNS = [
   { id: 'todo', title: 'To Do', color: 'bg-slate-200 dark:bg-slate-800' },
@@ -32,9 +39,18 @@ export default function KanbanBoard() {
   const [cursors, setCursors] = useState<Record<string, string | null>>({});
   const [loadingColumn, setLoadingColumn] = useState<string | null>(null);
   
-  // Create task modal state
+  const toast = useToast();
+  const router = useRouter();
+  const [editingProject, setEditingProject] = useState(false);
+  // "Add task" dialog
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTask, setNewTask] = useState<TaskDraft>(EMPTY_DRAFT);
+  const [creating, setCreating] = useState(false);
+  const [newTitleError, setNewTitleError] = useState('');
+  const newTitleRef = useRef<HTMLInputElement>(null);
+  // Loading the board: null = fine, otherwise what went wrong.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [projectMissing, setProjectMissing] = useState(false);
   
   // The auth cookie is httpOnly, so the page can't (and shouldn't) read it; the browser sends it
   // with the WebSocket handshake on its own.
@@ -102,8 +118,9 @@ export default function KanbanBoard() {
           });
           setTotals(data.totals ?? {});
           setCursors(data.cursors ?? {});
+          setLoadError(null);
         })
-        .catch((e) => console.error(e)),
+        .catch((e) => setLoadError(messageOf(e, 'Could not load the tasks'))),
     [params.id, debouncedQ, filters.priority, filters.assignee, filters.label]
   );
 
@@ -133,7 +150,7 @@ export default function KanbanBoard() {
       }));
       setCursors((prev) => ({ ...prev, [column]: page.next_cursor }));
     } catch (e) {
-      console.error(e);
+      toast(messageOf(e, 'Could not load more tasks'), 'error');
     } finally {
       setLoadingColumn(null);
     }
@@ -143,8 +160,15 @@ export default function KanbanBoard() {
     () =>
       api
         .get(`/projects/${params.id}`)
-        .then((data) => setProject(data))
-        .catch((e) => console.error(e)),
+        .then((data) => {
+          setProject(data);
+          setProjectMissing(false);
+        })
+        .catch((e) => {
+          // A 404 (deleted, or another organization's id) is "not found"; anything else is a load error.
+          if (/not found/i.test(messageOf(e, ''))) setProjectMissing(true);
+          else setLoadError(messageOf(e, 'Could not load the project'));
+        }),
     [params.id]
   );
 
@@ -222,51 +246,77 @@ export default function KanbanBoard() {
         status: destination.droppableId
       });
     } catch (err) {
-      console.error(err);
-      // Revert on error
+      toast(messageOf(err, 'Could not move the task'), 'error');
+      // Put the board back the way the server has it.
       fetchTasks();
     }
   };
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-    
+    if (!newTask.title.trim()) {
+      setNewTitleError('A task needs a title.');
+      newTitleRef.current?.focus();
+      return;
+    }
+    setNewTitleError('');
+    setCreating(true);
     try {
-      await api.post(`/projects/${params.id}/tasks`, {
-        title: newTaskTitle,
-        priority: 'medium'
-      });
-      setNewTaskTitle('');
+      await api.post(`/projects/${params.id}/tasks`, newTaskBody(newTask));
+      setNewTask(EMPTY_DRAFT);
       setIsModalOpen(false);
-      // Wait for WS to trigger refetch, or just refetch manually
+      toast('Task created');
       fetchTasks();
     } catch (err) {
-      console.error(err);
+      toast(messageOf(err, 'Could not create the task'), 'error');
+    } finally {
+      setCreating(false);
     }
   };
 
+  // Viewers can look but not change anything (the API enforces this too).
+  const canEdit = me !== null && me.role !== 'viewer';
+
+  if (projectMissing) {
+    return (
+      <div className="p-8 max-w-xl">
+        <h1 className="text-2xl font-bold">Project not found</h1>
+        <p className="mt-2 text-slate-600 dark:text-slate-400">It may have been deleted, or the link is wrong.</p>
+        <Link href="/projects" className="btn-compact mt-4">Back to projects</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-950/50">
-      <div className="px-8 py-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center shrink-0">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{project?.name || 'Loading...'}</h1>
+      <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap gap-4 justify-between items-center shrink-0">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold break-words">
+              {project?.name ?? <span className="inline-block h-7 w-48 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" aria-label="Loading project" />}
+            </h1>
             {isConnected ? (
               <span className="flex items-center text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full"><span className="w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse"></span> Live</span>
             ) : (
               <span className="flex items-center text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full"><AlertCircle className="w-3 h-3 mr-1" /> Disconnected</span>
             )}
           </div>
-          <p className="text-sm text-slate-500 mt-1">{project?.description}</p>
+          {project?.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{project.description}</p>}
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="btn-primary flex items-center gap-2 max-w-fit"
-        >
-          <Plus className="w-4 h-4" />
-          Add Task
-        </button>
+        {canEdit && (
+          <div className="flex gap-2">
+            {project && (
+              <button onClick={() => setEditingProject(true)} className="btn-secondary">
+                <Pencil className="w-4 h-4" aria-hidden="true" />
+                Edit project
+              </button>
+            )}
+            <button onClick={() => setIsModalOpen(true)} className="btn-compact">
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              Add task
+            </button>
+          </div>
+        )}
       </div>
 
       <BoardFilters value={filters} onChange={setFilters} members={members} labels={orgLabels} />
@@ -274,11 +324,17 @@ export default function KanbanBoard() {
         <p className="px-8 pt-2 text-xs text-slate-500">Showing matching tasks only.</p>
       )}
 
-      <div className="flex-1 overflow-x-auto p-8">
+      {loadError && (
+        <div className="px-4 sm:px-8 pt-4">
+          <ErrorBlock message={loadError} onRetry={() => { setLoadError(null); fetchProject(); fetchTasks(); }} />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-x-auto p-4 sm:p-8">
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-6 h-full items-start">
             {COLUMNS.map(col => (
-              <div key={col.id} className="w-80 shrink-0 flex flex-col max-h-full">
+              <section key={col.id} aria-label={col.title} className="w-72 sm:w-80 shrink-0 flex flex-col max-h-full">
                 <div className={`px-4 py-3 rounded-t-xl font-semibold text-sm ${col.color}`}>
                   {col.title} <span className="ml-2 opacity-60 text-xs font-normal">{totals[col.id] ?? tasks[col.id]?.length ?? 0}</span>
                 </div>
@@ -292,7 +348,7 @@ export default function KanbanBoard() {
                       style={{ minHeight: '150px' }}
                     >
                       {tasks[col.id]?.map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                        <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!canEdit}>
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}
@@ -311,8 +367,8 @@ export default function KanbanBoard() {
                               className={`bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-3 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${snapshot.isDragging ? 'shadow-xl scale-105 ring-2 ring-indigo-500' : 'hover:border-indigo-300 dark:hover:border-indigo-500'} transition-all`}
                             >
                               <div className="flex items-start gap-2">
-                                <div {...provided.dragHandleProps} onClick={(e) => e.stopPropagation()} className="text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity mt-1 cursor-grab active:cursor-grabbing">
-                                  <GripVertical className="w-4 h-4" />
+                                <div {...provided.dragHandleProps} onClick={(e) => e.stopPropagation()} aria-label={`Move task: ${task.title}`} className={`text-slate-400 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity mt-1 cursor-grab active:cursor-grabbing ${canEdit ? '' : 'hidden'}`}>
+                                  <GripVertical className="w-4 h-4" aria-hidden="true" />
                                 </div>
                                 <div className="flex-1">
                                   <h4 className="font-medium text-slate-900 dark:text-slate-100">{task.title}</h4>
@@ -328,7 +384,7 @@ export default function KanbanBoard() {
                                       task.priority === 'high' || task.priority === 'urgent' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
                                       'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
                                     }`}>
-                                      {task.priority}
+                                      {priorityLabel(task.priority)}
                                     </span>
                                     {task.assignee_name && (
                                       <div className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-bold" title={task.assignee_name}>
@@ -358,7 +414,7 @@ export default function KanbanBoard() {
                     </div>
                   )}
                 </Droppable>
-              </div>
+              </section>
             ))}
           </div>
         </DragDropContext>
@@ -373,46 +429,42 @@ export default function KanbanBoard() {
           orgLabels={orgLabels}
           members={members}
           onClose={() => setSelectedTaskId(null)}
+          onChanged={fetchTasks}
+        />
+      )}
+
+      {editingProject && project && (
+        <ProjectDialog
+          project={project}
+          canDelete={me?.role === 'admin' || me?.role === 'owner'}
+          onClose={() => setEditingProject(false)}
+          onSaved={(saved) => {
+            setProject(saved);
+            setEditingProject(false);
+          }}
+          onDeleted={() => router.push('/projects')}
         />
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <form onSubmit={handleCreateTask} className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-              <h2 className="text-xl font-bold">Add New Task</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Task Title</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  autoFocus
-                  required
-                  value={newTaskTitle}
-                  onChange={e => setNewTaskTitle(e.target.value)}
-                  placeholder="e.g. Design Landing Page"
-                />
-              </div>
-            </div>
-            <div className="p-6 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >
+        <Dialog
+          title="Add task"
+          onClose={() => setIsModalOpen(false)}
+          onSubmit={handleCreateTask}
+          initialFocus={newTitleRef}
+          footer={
+            <>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
                 Cancel
               </button>
-              <button 
-                type="submit" 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors"
-              >
-                Create Task
+              <button type="submit" className="btn-compact" disabled={creating}>
+                {creating ? 'Creating…' : 'Create task'}
               </button>
-            </div>
-          </form>
-        </div>
+            </>
+          }
+        >
+          <TaskForm draft={newTask} onChange={setNewTask} members={members} titleRef={newTitleRef} titleError={newTitleError} disabled={creating} />
+        </Dialog>
       )}
     </div>
   );
