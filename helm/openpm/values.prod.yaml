@@ -17,10 +17,14 @@ externalDatabase:
 externalRedis:
   url: "redis://:SECRET_REDIS_PASS_HERE@redis-prod-instance.internal:6379/0"
 
+# Image repository, tag and digest are set by the release workflow's "deploy: vX.Y.Z to production"
+# pull request (docs/releasing.md). Do not edit them by hand.
 api:
   replicaCount: 3
   image:
-    tag: "1.0.0"
+    repository: "ghcr.io/vxrdhxn/openpm-api"
+    tag: "0.1.0"
+    digest: ""
     pullPolicy: "IfNotPresent"
   resources:
     limits:
@@ -33,7 +37,9 @@ api:
 worker:
   replicaCount: 2
   image:
-    tag: "1.0.0"
+    repository: "ghcr.io/vxrdhxn/openpm-worker"
+    tag: "0.1.0"
+    digest: ""
     pullPolicy: "IfNotPresent"
   resources:
     limits:
@@ -46,7 +52,9 @@ worker:
 frontend:
   replicaCount: 3
   image:
-    tag: "1.0.0"
+    repository: "ghcr.io/vxrdhxn/openpm-frontend"
+    tag: "0.1.0"
+    digest: ""
     pullPolicy: "IfNotPresent"
   resources:
     limits:

@@ -128,3 +128,37 @@ kubectl patch application openpm-dev -n argocd --type json -p '[{"op":"remove","
   settled at 8. The cost is that window: 2 pods carried the burst alone, so p95 was 953 ms (was
   48 ms) and 1 of 14,471 requests failed. Size `minReplicas` for normal peak traffic; the HPA is
   for sustained growth, not instant bursts.
+
+## Release, deploy and rollback (Phase 8): 2026-11-17
+
+The production path in [releasing.md](releasing.md) was rehearsed on the kind cluster. A
+throwaway Argo CD app with manual sync (like `openpm-prod`) deployed the chart from `main`. Images
+were pinned by digest and pulled from a local registry attached to the kind network, because
+`kind load` images carry no registry digest. Two releases: v0.1.0 (the current images) and v0.2.0,
+whose API image adds migration `020` (a nullable column). "Merging the deploy PR" was changing the
+app's pinned images; "reverting it" was changing them back.
+
+| Step | Result |
+| --- | --- |
+| Deploy v0.1.0 | Synced and healthy, running `…/openpm-api:0.1.0@sha256:6dd8…`. Smoke test passed (PostSync). A task was created. |
+| Upgrade to v0.2.0 | Init container: `Applying: 020_rehearsal.sql`. Smoke test passed; a task was created; both tasks visible. |
+| Roll back to v0.1.0 | Init container: `Database is up to date` (it skips the unknown `020`). Smoke test passed. v0.1.0 created a task on the v0.2.0 schema, and all three tasks were intact. |
+| Smoke test failure | Run by hand with the frontend address on a wrong port: the three API checks passed, the frontend check failed after its retries, and the Job failed with its log kept. |
+| Smoke test on dev | The first sync of `openpm-dev` with the chart change ran it as a PostSync hook: succeeded, Job removed. |
+
+### Found
+
+- **One sync of a healthy rollout was marked failed** ("one or more synchronization tasks completed
+  unsuccessfully"): the app went Healthy → Degraded → Healthy during the rollout, and everything
+  ended up running. Not reproduced in 5 further syncs, and the resource that was Degraded was not
+  caught. If it happens in production, check that the pods are running and the smoke test passed,
+  then sync again.
+- A sync whose Deployment had already passed its progress deadline (from an earlier image pull
+  failure) fails even after the pods recover. Syncing again succeeds.
+
+### Not covered
+
+- The release workflow itself has not run yet: it runs on the first `v*` tag. `actionlint`
+  (including shellcheck on every script) passes.
+- `argocd app rollback` (rolling back without a git revert) was not rehearsed; the documented path
+  is the revert.

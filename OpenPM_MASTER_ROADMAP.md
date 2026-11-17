@@ -695,12 +695,12 @@ Review:
 
 - [x] Reproducible ArgoCD application. — app-of-apps
 - [x] Environment separation. — dev/prod apps and namespaces
-- [ ] Intentional sync policy. — *partial:* automated sync everywhere, and prod tracks `HEAD`
-- [ ] Intentional prune policy.
-- [ ] Intentional self-healing.
+- [x] Intentional sync policy. — dev automated; prod manual (G.5)
+- [x] Intentional prune policy. — dev prunes; prod prunes only on a manual sync
+- [x] Intentional self-healing. — dev only; drift reverted in ~2 s on kind
 - [x] No plaintext production secrets in Git. — `values.prod.yaml` holds placeholders only
-- [ ] Rollback procedure documented.
-- [ ] Drift detection tested.
+- [x] Rollback procedure documented. — `docs/releasing.md`
+- [x] Drift detection tested. — kind (G.5)
 - [ ] Clean-cluster deployment tested.
 
 ---
@@ -860,13 +860,13 @@ Audit event
 
 ## Release
 
-- [ ] Version/tag strategy.
-- [ ] Immutable images.
-- [ ] Push images.
-- [ ] Release metadata.
-- [ ] GitOps deployment.
-- [ ] Deployment verification.
-- [ ] Rollback.
+- [x] Version/tag strategy. — one semver for the repo, `vX.Y.Z` tags, checked in CI (`docs/releasing.md`)
+- [x] Immutable images. — prod pinned by digest; a released version is never re-pushed
+- [x] Push images. — GHCR, after a blocking Trivy scan, with SBOM and provenance
+- [x] Release metadata. — GitHub Release with notes and digests; OCI labels
+- [x] GitOps deployment. — release PR → merge → manual `openpm-prod` sync
+- [x] Deployment verification. — PostSync smoke-test Job
+- [x] Rollback. — revert + sync; rehearsed on kind
 
 ## Branch protection
 
@@ -1202,9 +1202,9 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] PR pipeline.
 - [x] Security scanning.
 - [x] Container scanning.
-- [ ] Release pipeline.
-- [ ] GitOps deployment.
-- [ ] Rollback.
+- [x] Release pipeline. — `release.yml` on `vX.Y.Z` tags (not yet run: first tag pending)
+- [x] GitOps deployment. — release PR pins prod digests; manual sync; smoke test (rehearsed on kind)
+- [x] Rollback. — revert the deploy PR + sync; rehearsed on kind across a migration (`docs/releasing.md`)
 
 ## Phase 9 — Performance & Reliability
 

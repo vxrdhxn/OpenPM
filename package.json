@@ -18,7 +18,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm test --workspaces --if-present && npm run test:repo",
     "test:repo": "vitest run --config vitest.repo.config.mts",
-    "test:integration": "npm run test:integration --workspace=apps/api"
+    "test:integration": "npm run test:integration --workspace=apps/api",
+    "release:version": "node scripts/set-version.mjs"
   },
   "engines": {
     "node": ">=22.0.0"

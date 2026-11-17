@@ -104,3 +104,10 @@ On GitHub, every job has passed on every push to `main` since 2026-11-15, includ
   loaded runner could make one flaky.
 - `dist/` currently also contains compiled `*.test.js` files, so images ship them. Excluding tests
   from the build `tsconfig` would slim the images but would stop `tsc` type-checking the tests.
+
+## Release workflow
+
+`.github/workflows/release.yml` runs when a `vX.Y.Z` tag is pushed. It publishes the images to GHCR,
+creates the GitHub Release and opens the production deploy PR. It runs only for a commit on `main`
+whose CI checks above passed. Process, permissions and one-time setup: [releasing.md](releasing.md).
+

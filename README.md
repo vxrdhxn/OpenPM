@@ -255,6 +255,13 @@ kubectl apply -f argocd/app-of-apps.yaml
 What was verified on a local cluster (sync, drift, prune, Ingress, WebSockets, HPA) is in
 [`docs/rehearsal.md`](docs/rehearsal.md).
 
+### Releases
+
+Tag `vX.Y.Z` on `main` and the release workflow publishes the images to GHCR, creates a GitHub Release
+and opens a PR that pins production to the new image digests. Merging it and syncing `openpm-prod` is
+the deploy; a smoke test runs after every sync. Reverting it and syncing again is the rollback. See
+[`docs/releasing.md`](docs/releasing.md).
+
 ---
 
 ## Environment Variables

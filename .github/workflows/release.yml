@@ -1,0 +1,256 @@
+name: Release
+
+# Pushing a tag vX.Y.Z (on a commit of main whose CI passed) publishes a release:
+#   1. verify:  the tag matches the version in the repo, the commit is on main, and CI passed for it.
+#   2. images:  build api/worker/frontend, scan them (Trivy, blocking), push them to GHCR with an SBOM
+#               and build provenance. A version that already exists is never overwritten.
+#   3. release: create the GitHub Release (notes + image digests) and open a pull request that pins
+#               helm/openpm/values.prod.yaml to the new digests. Merging that PR and syncing
+#               openpm-prod in Argo CD is the deployment; reverting it is the rollback.
+# See docs/releasing.md.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# One release at a time; never cancel a release half-way through pushing images.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  HELM_VERSION: v3.16.4
+
+jobs:
+  verify:
+    name: Verify tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Tag matches the repository version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "::error::Tag $TAG is not vMAJOR.MINOR.PATCH"; exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          pkg=$(jq -r .version package.json)
+          app=$(sed -n 's/^appVersion: "\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' helm/openpm/Chart.yaml)
+          if [ "$pkg" != "$version" ] || [ "$app" != "$version" ]; then
+            echo "::error::Tag $TAG but package.json is $pkg and Chart.yaml appVersion is $app. Run 'npm run release:version -- $version' and merge that first."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main. Release only commits that were merged to main."; exit 1
+          fi
+
+      # Only release what CI tested. The checks below must have run on this exact commit and passed.
+      - name: CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          required=("Lint, build, test" "Integration tests (Postgres)" "Helm chart" "Secret scan (gitleaks)" "Image (api)" "Image (worker)" "Image (frontend)")
+          runs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" --jq '.check_runs[] | [.name, .conclusion // .status] | @tsv')
+          failed=0
+          for name in "${required[@]}"; do
+            result=$(printf '%s\n' "$runs" | awk -F'\t' -v n="$name" '$1 == n { print $2 }' | sort -u | paste -sd, -)
+            if [ "$result" = "success" ]; then echo "ok   $name"; else echo "::error::CI check '$name' is '${result:-missing}' for $GITHUB_SHA"; failed=1; fi
+          done
+          exit $failed
+
+  images:
+    name: Publish image (${{ matrix.app }})
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io/<owner>/openpm-*
+      id-token: write # build provenance attestation
+      attestations: write
+    strategy:
+      fail-fast: true
+      matrix:
+        app: [api, worker, frontend]
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Image name
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openpm-${{ matrix.app }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Released versions are immutable: re-running a release must not replace what may be deployed.
+      - name: Version is not published yet
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "::error::$IMAGE:$VERSION already exists. Released images are never overwritten; release a new version."; exit 1
+          fi
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: false
+          load: true
+          tags: openpm-${{ matrix.app }}:release
+          cache-from: type=gha,scope=${{ matrix.app }}
+
+      - name: Scan image (Trivy, blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: openpm-${{ matrix.app }}:release
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      # Same build from the cache, now pushed with an SBOM and provenance attached.
+      - name: Push image
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.name.outputs.image }}:${{ env.VERSION }}
+            ${{ steps.name.outputs.image }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.app }}
+
+      - name: Image digest
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: echo "$IMAGE:$VERSION@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: GitHub Release and production PR
+    needs: [verify, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release, push the release branch
+      pull-requests: write
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          # A PR opened with the default token does not trigger CI. With a RELEASE_PR_TOKEN secret
+          # (a fine-grained PAT or GitHub App token: contents + pull requests write) it does.
+          token: ${{ secrets.RELEASE_PR_TOKEN || github.token }}
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Resolve image digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          for app in api worker frontend; do
+            image="ghcr.io/$owner/openpm-$app"
+            digest=$(docker buildx imagetools inspect "$image:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for $image:$VERSION"; exit 1; }
+            echo "$app $image $digest" >> images.txt
+          done
+          cat images.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Images"
+            echo
+            echo "| App | Image (pinned by digest) |"
+            echo "| --- | --- |"
+            while read -r app image digest; do echo "| $app | \`$image:$VERSION@$digest\` |"; done < images.txt
+            echo
+            echo "Each image has an SBOM and build provenance attached. Deploy by merging the \"deploy: $TAG to production\" pull request and syncing \`openpm-prod\` (docs/releasing.md)."
+            echo
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body
+          } > notes.md
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md
+
+      - name: Pin production to the new images
+        run: |
+          while read -r app image digest; do
+            APP="$app" IMAGE="$image" DIGEST="$digest" yq -i '
+              .[strenv(APP)].image.repository = strenv(IMAGE) |
+              .[strenv(APP)].image.tag = strenv(VERSION) |
+              .[strenv(APP)].image.digest = strenv(DIGEST)' helm/openpm/values.prod.yaml
+          done < images.txt
+          git diff
+          # The PR may not run CI (see the checkout token above), so validate the change here.
+          helm lint --strict helm/openpm -f helm/openpm/values.prod.yaml
+          rendered=$(helm template openpm helm/openpm -f helm/openpm/values.prod.yaml)
+          while read -r app image digest; do
+            grep -q "image: \"$image:$VERSION@$digest\"" <<<"$rendered" || { echo "::error::$app is not pinned in the rendered chart"; exit 1; }
+          done < images.txt
+
+      - name: Open the production pull request
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || github.token }}
+        run: |
+          branch="release/$TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "deploy: $TAG to production"
+          git push origin "$branch"
+          {
+            echo "Pins production (\`helm/openpm/values.prod.yaml\`) to the images of [$TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG)."
+            echo
+            while read -r app image digest; do echo "- $app: \`$image:$VERSION@$digest\`"; done < images.txt
+            echo
+            echo "**Deploy:** merge, then sync \`openpm-prod\` in Argo CD (\`argocd app sync openpm-prod\`). The smoke test runs after the sync; a failed smoke test fails the sync."
+            echo
+            echo "**Roll back:** revert this pull request's merge commit and sync again (docs/releasing.md)."
+          } > pr.md
+          gh pr create --base main --head "$branch" --title "deploy: $TAG to production" --body-file pr.md
