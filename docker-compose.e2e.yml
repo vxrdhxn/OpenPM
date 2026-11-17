@@ -1,0 +1,11 @@
+# Browser-test overlay (docs/frontend-testing.md). The Playwright run sends every request from one
+# address, so a fast machine (a CI runner) goes past the API's 100 requests a minute and gets 429s.
+# Requests reaching a published port arrive from the Docker bridge gateway (172.16.0.0/12 covers
+# Docker's default address pools), which this exempts. Rate limits themselves are covered by the API's
+# integration tests. Never use this overlay in production.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build api
+services:
+  api:
+    environment:
+      - RATE_LIMIT_ALLOWLIST=127.0.0.1,172.16.0.0/12

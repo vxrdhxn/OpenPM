@@ -115,9 +115,10 @@ jobs:
       - run: npm ci
 
       # The real API, Postgres and Redis (Compose builds the API image and runs migrations first).
+      # The e2e overlay lifts the per-address rate limit for the test client (see the file).
       - name: Start the API
         run: |
-          docker compose up -d --build api
+          docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build api
           for _ in $(seq 1 60); do curl -sf http://localhost:3000/health && exit 0; sleep 2; done
           echo "::error::API did not become healthy"; docker compose logs api migrate; exit 1
 

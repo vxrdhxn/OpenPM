@@ -10,7 +10,7 @@
 They drive the real frontend against the real API, Postgres and Redis.
 
 ```bash
-docker compose up -d api                    # API on :3000 (Postgres, Redis and migrations start with it)
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d api   # API on :3000, test client not rate-limited
 cd apps/frontend
 npx playwright install chromium             # once
 npx playwright test                         # starts `next dev` on :3001 unless it is already running
@@ -18,8 +18,9 @@ npx playwright test --project=phone         # only the phone layout
 ```
 
 A `setup` step registers one throwaway workspace and saves its session (`tests/.auth/`, gitignored).
-The other tests reuse it, so a run stays inside the API's rate limits (10 registrations and 100
-requests a minute per address). Every run creates a new workspace; nothing is cleaned up, so use a
+The other tests reuse it, so a run makes only two registrations. On a fast machine the suite still
+sends more than the API's 100 requests a minute from one address, so `docker-compose.e2e.yml`
+exempts the Docker bridge addresses from rate limiting (CI uses it too); without it, expect 429s. Every run creates a new workspace; nothing is cleaned up, so use a
 development database.
 
 | Spec | Checks |
