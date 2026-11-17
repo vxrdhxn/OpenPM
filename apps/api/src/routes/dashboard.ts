@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
+import { seesAllProjects, visibleProjectSql } from '../security/projectAccess';
 import { Conditions, decodeCursor, paginationQuerySchema, toPage } from '../query/pagination';
 
 /** How many projects the dashboard's progress list shows (most recently active first). */
@@ -9,6 +10,13 @@ export const DASHBOARD_PROJECTS = 6;
 export const FEED_ENTITY_TYPES = ['project', 'task', 'comment'] as const;
 
 const UUID_REGEX = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+
+/**
+ * The project an activity entry belongs to: the live task's, the comment's task's, the project
+ * itself, or for a deleted task the project recorded with it (metadata, guarded like task_id).
+ */
+const ENTRY_PROJECT = `COALESCE(t.project_id, ct.project_id, pr.id,
+  CASE WHEN a.metadata->>'project_id' ~ '${UUID_REGEX}' THEN (a.metadata->>'project_id')::uuid END)`;
 
 /**
  * GET /api/dashboard: the numbers the dashboard leads with, for the caller's organization.
@@ -25,17 +33,25 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/', { preHandler: fastify.requireRole('viewer') }, async (request) => {
     const { org_id, user_id } = request.user;
+    // Private projects the caller cannot see stay out of every number. `$n` is the caller's id; it is
+    // referenced either way, because Postgres rejects a bound parameter the query never uses.
+    const visible = (alias: string, n: number) =>
+      seesAllProjects(request.user.role) ? `$${n}::uuid IS NOT NULL` : visibleProjectSql(alias, request.user, () => `$${n}`);
 
     const [mine, activeCount, projects] = await Promise.all([
       db.query<{ open: number; overdue: number; due_soon: number }>(
-        `SELECT count(*) FILTER (WHERE status <> 'done')::int AS open,
-                count(*) FILTER (WHERE status <> 'done' AND due_date < NOW())::int AS overdue,
-                count(*) FILTER (WHERE status <> 'done' AND due_date >= NOW() AND due_date < NOW() + INTERVAL '7 days')::int AS due_soon
-           FROM tasks
-          WHERE org_id = $1 AND assignee_id = $2`,
+        `SELECT count(*) FILTER (WHERE t.status <> 'done')::int AS open,
+                count(*) FILTER (WHERE t.status <> 'done' AND t.due_date < NOW())::int AS overdue,
+                count(*) FILTER (WHERE t.status <> 'done' AND t.due_date >= NOW() AND t.due_date < NOW() + INTERVAL '7 days')::int AS due_soon
+           FROM tasks t
+           JOIN projects vp ON vp.id = t.project_id
+          WHERE t.org_id = $1 AND t.assignee_id = $2 AND ${visible('vp', 2)}`,
         [org_id, user_id]
       ),
-      db.query<{ n: number }>(`SELECT count(*)::int AS n FROM projects WHERE org_id = $1 AND status = 'active'`, [org_id]),
+      db.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM projects p WHERE p.org_id = $1 AND p.status = 'active' AND ${visible('p', 2)}`,
+        [org_id, user_id]
+      ),
       // First pick the most recently active projects (one index lookup each, on
       // idx_tasks_project_updated), then count statuses for those few only. Aggregating every task
       // of the organization first took 57 ms at 50,000 tasks; this takes 8 ms (docs/load-testing.md).
@@ -48,7 +64,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
                  SELECT t.updated_at AS last FROM tasks t
                   WHERE t.project_id = p.id ORDER BY t.updated_at DESC LIMIT 1
                ) la ON TRUE
-              WHERE p.org_id = $1 AND p.status = 'active'
+              WHERE p.org_id = $1 AND p.status = 'active' AND ${visible('p', 3)}
               ORDER BY COALESCE(la.last, p.created_at) DESC, p.id
               LIMIT $2
            ) top
@@ -62,7 +78,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               WHERE t.project_id = top.id AND t.org_id = $1 -- a parameter, not top.org_id: see migration 019
            ) c
           ORDER BY top.last_activity DESC, top.id`,
-        [org_id, DASHBOARD_PROJECTS]
+        [org_id, DASHBOARD_PROJECTS, user_id]
       ),
     ]);
 
@@ -97,7 +113,14 @@ export const activityRoutes: FastifyPluginAsync = async (fastify) => {
     const where = new Conditions()
       .add((p) => `a.org_id = ${p(org_id)}`)
       .add((p) => `a.entity_type = ANY(${p([...FEED_ENTITY_TYPES])}::text[])`);
-    if (project_id) where.add((p) => `COALESCE(t.project_id, ct.project_id, pr.id) = ${p(project_id)}`);
+    if (project_id) where.add((p) => `${ENTRY_PROJECT} = ${p(project_id)}`);
+    // Private projects: an entry shows only if its project still exists and the caller can see it.
+    // So someone outside a private project never sees its tasks' titles, even of deleted tasks; for
+    // them, entries about deleted projects are gone too (admins and owners still see everything).
+    where.add((p) => {
+      const rule = visibleProjectSql('vp', request.user, p);
+      return rule === 'TRUE' ? 'TRUE' : `EXISTS (SELECT 1 FROM projects vp WHERE vp.id = ${ENTRY_PROJECT} AND vp.org_id = a.org_id AND ${rule})`;
+    });
     if (cursor) {
       const after = decodeCursor(cursor);
       where.add((p) => `(a.created_at, a.id) < (${p(after.key)}::timestamptz, ${p(after.id)}::uuid)`);
@@ -110,7 +133,7 @@ export const activityRoutes: FastifyPluginAsync = async (fastify) => {
               a.user_id, u.name AS user_name,
               COALESCE(t.title, ct.title, pr.name, a.metadata->>'title', a.metadata->>'name') AS entity_name,
               COALESCE(t.id, ct.id) AS task_id,
-              COALESCE(t.project_id, ct.project_id, pr.id) AS project_id,
+              ${ENTRY_PROJECT} AS project_id,
               CASE WHEN a.action = 'updated' AND a.entity_type = 'task' THEN a.metadata ELSE NULL END AS changes
          FROM activity_log a
          JOIN users u ON u.id = a.user_id

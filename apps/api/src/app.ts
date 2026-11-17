@@ -33,6 +33,8 @@ import { labelRoutes, taskLabelRoutes } from './routes/labels';
 import { activityRoutes, dashboardRoutes } from './routes/dashboard';
 import notificationRoutes from './routes/notifications';
 import organizationRoutes from './routes/organization';
+import projectMemberRoutes from './routes/projectMembers';
+import { canSeeProject } from './security/projectAccess';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -164,12 +166,28 @@ export function buildApp(options: BuildAppOptions = {}) {
   fastify.register(authPlugin);
 
   // Register Routes
+  // Private projects (docs/projects.md): every route under /api/projects/:projectId or
+  // /api/projects/:id answers 404 to someone who cannot see that project, before the route runs.
+  // One gate for tasks, comments, attachments, labels and members alike; tests/projectRoutes checks
+  // that every such route names its project parameter one of these two ways.
+  fastify.addHook('preHandler', async (request, reply) => {
+    const url = request.routeOptions.url ?? '';
+    if (!url.startsWith('/api/projects/:') || !request.user) return;
+    const params = request.params as Record<string, string | undefined>;
+    const projectId = params.projectId ?? params.id;
+    if (!projectId) return;
+    if (!(await canSeeProject(request.user, projectId))) {
+      return reply.code(404).send({ error: 'Project not found' });
+    }
+  });
+
   fastify.register(healthRoutes);
   fastify.register(metricsRoutes);
   fastify.register(authRoutes, { prefix: '/api/auth' });
   fastify.register(projectRoutes, { prefix: '/api/projects' });
   fastify.register(taskRoutes, { prefix: '/api/projects' }); // /:projectId/tasks
   fastify.register(attachmentRoutes, { prefix: '/api/projects' }); // /:projectId/tasks/:taskId/attachments
+  fastify.register(projectMemberRoutes, { prefix: '/api/projects' }); // /:projectId/members
   fastify.register(commentRoutes, { prefix: '/api/projects' }); // /:projectId/tasks/:taskId/comments
   fastify.register(taskLabelRoutes, { prefix: '/api/projects' }); // /:projectId/tasks/:taskId/labels
   fastify.register(labelRoutes, { prefix: '/api/labels' });

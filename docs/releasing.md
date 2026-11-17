@@ -89,6 +89,11 @@ only safe if **every release's migrations are backward compatible with the previ
   N+1 drops it.
 - A migration that the previous version cannot run against must not ship. Split it as above.
 
+Backward compatible is not always enough: a release that adds an **access rule** cannot be rolled
+back without losing that rule. Rolling back past private projects (migration 021) leaves the schema
+in place, but the older code ignores `visibility`, so private projects are visible to the whole
+workspace until you upgrade again (docs/projects.md).
+
 If a schema change has to be undone, roll the code back first, then run the down migration by hand
 (`node apps/api/dist/db/migrate.js down 1` in an API pod). Down migrations are tested in CI, but this
 loses whatever the dropped columns held.

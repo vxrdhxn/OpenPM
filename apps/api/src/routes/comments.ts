@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import type { PoolClient } from 'pg';
 import { db } from '../db/client';
+import { userSeesProjectSql } from '../security/projectAccess';
 import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 import { hasMinRole } from '../plugins/auth';
@@ -72,14 +73,16 @@ async function assertTask(client: PoolClient, { projectId, taskId }: TaskParams,
   return res.rows[0]!;
 }
 
-/** Every mentioned id must be an active member of the organization (400 otherwise). */
-async function assertMentionable(client: PoolClient, orgId: string, ids: string[]) {
+/** Every mentioned id must be an active member of the organization who can see the project (400 otherwise). */
+async function assertMentionable(client: PoolClient, orgId: string, projectId: string, ids: string[]) {
   if (ids.length === 0) return;
   const res = await client.query(
-    'SELECT id FROM users WHERE org_id = $1 AND id = ANY($2::uuid[]) AND deactivated_at IS NULL',
-    [orgId, ids]
+    `SELECT u.id FROM users u JOIN projects p ON p.id = $3 AND p.org_id = u.org_id
+      WHERE u.org_id = $1 AND u.id = ANY($2::uuid[]) AND u.deactivated_at IS NULL
+        AND ${userSeesProjectSql('p', 'u.id', 'u.role')}`,
+    [orgId, ids, projectId]
   );
-  if (res.rows.length !== ids.length) throw new CommentError(400, 'You can only mention members of your organization');
+  if (res.rows.length !== ids.length) throw new CommentError(400, 'You can only mention people who can see this project');
 }
 
 /** Replace a comment's mentions; returns the ids that were not mentioned before. */
@@ -180,7 +183,7 @@ const commentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const comment = await withTransaction(async (client) => {
         const task = await assertTask(client, params, org_id);
-        await assertMentionable(client, org_id, mentionIds);
+        await assertMentionable(client, org_id, params.projectId, mentionIds);
         const inserted = await client.query<{ id: string }>(
           'INSERT INTO task_comments (org_id, task_id, author_id, body) VALUES ($1, $2, $3, $4) RETURNING id',
           [org_id, params.taskId, user_id, body]
@@ -236,7 +239,7 @@ const commentRoutes: FastifyPluginAsync = async (fastify) => {
 
         // mention_ids, when sent, replaces the mentions; only people newly mentioned are notified.
         if (mentionIds) {
-          await assertMentionable(client, org_id, mentionIds);
+          await assertMentionable(client, org_id, params.projectId, mentionIds);
           const added = await setMentions(client, params.commentId, mentionIds);
           notified = await notify(client, {
             orgId: org_id,

@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import type { PoolClient } from 'pg';
 import { db } from '../db/client';
+import { seesAllProjects, visibleProjectSql } from '../security/projectAccess';
 import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 
@@ -74,13 +75,19 @@ export const labelRoutes: FastifyPluginAsync = async (fastify) => {
   const announce = (orgId: string) => cache.publish(`org:${orgId}:updates`, { type: 'labels_changed' });
 
   fastify.get('/', { preHandler: fastify.requireRole('viewer') }, async (request) => {
+    // Counts only tasks in projects the caller can see (private projects). $2 is the caller's id; it
+    // is referenced either way, because Postgres rejects a bound parameter the query never uses.
+    const visible = seesAllProjects(request.user.role) ? '$2::uuid IS NOT NULL' : visibleProjectSql('p', request.user, () => '$2');
     return db.query(
       `SELECT l.id, l.name, l.color, l.created_at,
-              (SELECT count(*)::int FROM task_labels tl WHERE tl.label_id = l.id) AS task_count
+              (SELECT count(*)::int FROM task_labels tl
+                 JOIN tasks t ON t.id = tl.task_id
+                 JOIN projects p ON p.id = t.project_id
+                WHERE tl.label_id = l.id AND ${visible}) AS task_count
          FROM labels l
         WHERE l.org_id = $1
         ORDER BY lower(l.name), l.id`,
-      [request.user.org_id]
+      [request.user.org_id, request.user.user_id]
     );
   });
 

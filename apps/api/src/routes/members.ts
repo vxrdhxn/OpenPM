@@ -100,6 +100,7 @@ async function deactivate(client: PoolClient, orgId: string, userId: string): Pr
     [userId, orgId, REMOVED_PASSWORD]
   );
   await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+  await client.query('DELETE FROM project_members WHERE user_id = $1 AND org_id = $2', [userId, orgId]);
   const unassigned = await client.query<{ project_id: string }>(
     'UPDATE tasks SET assignee_id = NULL, updated_at = NOW() WHERE assignee_id = $1 AND org_id = $2 RETURNING project_id',
     [userId, orgId]

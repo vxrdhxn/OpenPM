@@ -1,11 +1,19 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
+import { visibleProjectSql } from '../security/projectAccess';
 import { Conditions, decodeCursor, paginationQuerySchema, toPage } from '../query/pagination';
 
 /**
  * The caller's own notifications: /api/notifications. Every query is scoped to the caller's user id
  * AND organization, so nobody can read or mark anyone else's.
  */
+/** A notification is shown while its project (if any) is visible to the caller. */
+function visibleNotification(viewer: { user_id: string; role: string }, p: (v: unknown) => string): string {
+  const rule = visibleProjectSql('np', viewer, p);
+  if (rule === 'TRUE') return 'TRUE';
+  return `(n.project_id IS NULL OR EXISTS (SELECT 1 FROM projects np WHERE np.id = n.project_id AND ${rule}))`;
+}
+
 const notificationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
 
@@ -24,7 +32,8 @@ const notificationRoutes: FastifyPluginAsync = async (fastify) => {
 
     const where = new Conditions()
       .add((p) => `n.user_id = ${p(user_id)}`)
-      .add((p) => `n.org_id = ${p(org_id)}`);
+      .add((p) => `n.org_id = ${p(org_id)}`)
+      .add((p) => visibleNotification(request.user, p));
     if (unread) where.add(() => 'n.read_at IS NULL');
     if (cursor) {
       const after = decodeCursor(cursor);
@@ -49,9 +58,14 @@ const notificationRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /unread-count — for the badge.
   fastify.get('/unread-count', async (request) => {
     const { org_id, user_id } = request.user;
+    const params: unknown[] = [user_id, org_id];
+    const rule = visibleNotification(request.user, (v) => {
+      params.push(v);
+      return `$${params.length}`;
+    });
     const [row] = await db.query<{ count: number }>(
-      'SELECT count(*)::int AS count FROM notifications WHERE user_id = $1 AND org_id = $2 AND read_at IS NULL',
-      [user_id, org_id]
+      `SELECT count(*)::int AS count FROM notifications n WHERE n.user_id = $1 AND n.org_id = $2 AND n.read_at IS NULL AND ${rule}`,
+      params
     );
     return { count: row?.count ?? 0 };
   });

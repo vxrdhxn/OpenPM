@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { createProject, createTask } from './helpers';
+import { API, createProject, createTask } from './helpers';
 
 /**
  * Automated accessibility checks (axe-core, WCAG 2.1 A and AA rules) on every main screen, in the
@@ -51,6 +51,18 @@ test.describe('accessibility', () => {
 
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
+    await expectNoViolations(page);
+  });
+
+  test('private project board and its people', async ({ page }) => {
+    const res = await page.request.post(`${API}/projects`, { data: { name: 'A11y private', visibility: 'private' } });
+    expect(res.status()).toBe(201);
+    await page.goto(`/projects/${(await res.json()).id}`);
+    await expect(page.getByText('Private', { exact: true })).toBeVisible();
+    await expectNoViolations(page);
+
+    await page.getByRole('button', { name: 'People' }).click();
+    await expect(page.getByRole('dialog', { name: 'People in A11y private' })).toBeVisible();
     await expectNoViolations(page);
   });
 });

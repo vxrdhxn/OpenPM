@@ -4,11 +4,14 @@ import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import WebSocket from 'ws';
 
+// Private projects: which ones this user cannot see (no database in these tests).
+vi.mock('../security/projectAccess', () => ({ hiddenProjectIds: vi.fn() }));
 vi.mock('../cache/redis', () => ({
   cache: { get: vi.fn(), set: vi.fn(), del: vi.fn(), publish: vi.fn(), subscribe: vi.fn() },
 }));
 
 import { cache } from '../cache/redis';
+import { hiddenProjectIds } from '../security/projectAccess';
 import { config } from '../config';
 import { activeWebsocketConnections, websocketErrorsTotal, websocketRejectionsTotal } from '../metrics';
 import { TRUST_TOKEN_CLAIMS } from '../test/auth';
@@ -76,6 +79,7 @@ describe('GET /ws', () => {
       handlers.set(channel, handler);
       return unsubscribe as unknown as () => void;
     });
+    vi.mocked(hiddenProjectIds).mockResolvedValue(new Set());
   });
 
   afterEach(async () => {
@@ -216,6 +220,53 @@ describe('GET /ws', () => {
       handlers.get('org:org-1:updates')!(JSON.parse(raw), raw);
 
       expect(await received).toBe(raw);
+    });
+
+    /** Opens a client and collects what it receives. */
+    async function receiver() {
+      const c = connect({ headers: asCookie(tokenFor('org-1')) });
+      const got: string[] = [];
+      c.ws.on('message', (d) => got.push(d.toString()));
+      await open(c);
+      await tick();
+      const publish = (event: object) => handlers.get('org:org-1:updates')!(event, JSON.stringify(event));
+      return { got, publish };
+    }
+
+    it('drops events about private projects the user cannot see, and forwards the rest', async () => {
+      vi.mocked(hiddenProjectIds).mockResolvedValue(new Set(['secret']));
+      const { got, publish } = await receiver();
+
+      publish({ type: 'task_created', project_id: 'secret', task: { title: 'Payroll' } });
+      publish({ type: 'task_created', project_id: 'open', task: { title: 'Launch' } });
+      publish({ type: 'labels_changed' });
+      await tick();
+
+      expect(got.map((m) => JSON.parse(m).project_id ?? JSON.parse(m).type)).toEqual(['open', 'labels_changed']);
+      expect(got.join()).not.toContain('Payroll');
+    });
+
+    it('reloads access when it changes, in order with the events around it', async () => {
+      vi.mocked(hiddenProjectIds).mockResolvedValueOnce(new Set(['p'])).mockResolvedValue(new Set());
+      const { got, publish } = await receiver();
+
+      publish({ type: 'task_updated', project_id: 'p', n: 1 }); // still hidden
+      publish({ type: 'project_access_changed', project_id: 'p' }); // e.g. the user was added
+      publish({ type: 'task_updated', project_id: 'p', n: 2 }); // now visible
+      await tick();
+
+      expect(got.map((m) => JSON.parse(m).n ?? JSON.parse(m).type)).toEqual(['project_access_changed', 2]);
+    });
+
+    it('sends nothing about any project until it knows what the user may see', async () => {
+      vi.mocked(hiddenProjectIds).mockRejectedValue(new Error('db down'));
+      const { got, publish } = await receiver();
+
+      publish({ type: 'task_created', project_id: 'any' });
+      publish({ type: 'notification', user_ids: ['u1'] });
+      await tick();
+
+      expect(got.map((m) => JSON.parse(m).type)).toEqual(['notification']);
     });
 
     it('only subscribes a client to its own org, never one named by the client', async () => {

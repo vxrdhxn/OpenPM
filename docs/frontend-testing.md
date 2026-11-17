@@ -26,6 +26,7 @@ development database.
 | Spec | Checks |
 | --- | --- |
 | `journey.spec.ts` | The core journey in a fresh browser: sign up, first-run welcome, create a project, add a task with every field, edit it (status moves the card), delete it after a confirmation. Unsaved edits are not lost on Escape. A task moves with the keyboard (drag handle) and stays moved. Unknown projects and pages say so. |
+| `projects.spec.ts` | A private project: created with *Who can see it*, shows *Private* on its card and board, *People* lists its creator; making a shared project private asks first; it opens to the workspace again. Who sees what across users is in the API's `projectAccess.int.test.ts`. |
 | `organization.spec.ts` | In a throwaway workspace: the owner renames it, cannot leave as the only owner, and deletes it (slug and password required, a wrong password refused); the account is gone afterwards. |
 | `a11y.spec.ts` | axe-core (WCAG 2.1 A and AA rules) on every main screen, the task dialog and a confirmation, at desktop and phone size. |
 | `responsive.spec.ts` | Phone (Pixel 7, Chromium): the menu drawer opens, navigates, closes on Escape and returns focus; no page scrolls sideways; the task dialog's Save stays on screen. |

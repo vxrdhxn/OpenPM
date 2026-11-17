@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
+import { visibleProjectSql } from '../security/projectAccess';
 import { Conditions, decodeCursor, paginationQuerySchema, toPage } from '../query/pagination';
 import { TASK_LABELS_COLUMN } from '../query/taskLabels';
 import {
@@ -51,7 +52,7 @@ const taskSearchRoutes: FastifyPluginAsync = async (fastify) => {
     const { expr, type } = taskSortExpression(query.sort, query.order);
     const direction = query.order === 'asc' ? 'ASC' : 'DESC';
 
-    const where = new Conditions().add((p) => `t.org_id = ${p(org_id)}`);
+    const where = new Conditions().add((p) => `t.org_id = ${p(org_id)}`).add((p) => visibleProjectSql('p', request.user, p));
     if (query.project_id) where.add((p) => `t.project_id = ${p(query.project_id)}`);
     applyTaskFilters(where, query, user_id);
 

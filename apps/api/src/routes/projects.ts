@@ -3,6 +3,8 @@ import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
+import { seesAllProjects, unassignWithoutAccess, VISIBILITIES, visibleProjectSql, type Visibility } from '../security/projectAccess';
+import { announceAccessChange } from './projectMembers';
 import {
   Conditions,
   DEFAULT_PAGE_SIZE,
@@ -34,29 +36,33 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
         required: ['name'],
         properties: {
           name: { type: 'string', minLength: 1 },
-          description: { type: 'string' }
+          description: { type: 'string' },
+          visibility: { type: 'string', enum: [...VISIBILITIES] }
         },
         minProperties: 1,
         additionalProperties: false
       }
     }
   }, async (request, reply) => {
-    const { name, description } = request.body as any;
+    const { name, description, visibility = 'workspace' } = request.body as { name: string; description?: string; visibility?: Visibility };
     const { org_id, user_id } = request.user;
 
     const newProject = await withTransaction(async (client) => {
       const res = await client.query(
-        'INSERT INTO projects (org_id, name, description, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
-        [org_id, name, description, user_id]
+        'INSERT INTO projects (org_id, name, description, created_by, visibility) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [org_id, name, description, user_id, visibility]
       );
       const created = res.rows[0];
+      // The creator is a member, so a private project stays theirs (even if they are later demoted).
+      await client.query('INSERT INTO project_members (project_id, user_id, org_id, added_by) VALUES ($1, $2, $3, $2)', [created.id, user_id, org_id]);
 
-      await logActivity(client, org_id, user_id, created.id, 'created', { name });
+      await logActivity(client, org_id, user_id, created.id, 'created', { name, visibility });
       return created;
     });
 
     // Invalidate cache
     await cache.del(`org:${org_id}:projects`);
+    if (visibility === 'private') await announceAccessChange(org_id, newProject.id);
 
     return reply.code(201).send(newProject);
   });
@@ -77,18 +83,20 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async (request, reply) => {
-    const { org_id } = request.user;
+    const { org_id, role } = request.user;
     const { limit, cursor, q, status } = request.query as { limit: number; cursor?: string; q?: string; status?: string };
 
     // Only the plain first page is cached (it is what the projects page loads); every write clears it.
-    const cacheable = !cursor && !q && !status && limit === DEFAULT_PAGE_SIZE;
+    // Only for admins and owners: they see every project, so one cached list is right for all of
+    // them. Everyone else gets the list filtered for them (private projects), straight from Postgres.
+    const cacheable = seesAllProjects(role) && !cursor && !q && !status && limit === DEFAULT_PAGE_SIZE;
     const cacheKey = `org:${org_id}:projects`;
     if (cacheable) {
       const cached = await cache.get(cacheKey);
       if (cached) return reply.send(cached);
     }
 
-    const where = new Conditions().add((p) => `p.org_id = ${p(org_id)}`);
+    const where = new Conditions().add((p) => `p.org_id = ${p(org_id)}`).add((p) => visibleProjectSql('p', request.user, p));
     if (status) where.add((p) => `p.status = ${p(status)}`);
     if (q) where.add((p) => `p.name ILIKE ${p(likePattern(q))} ESCAPE '\\'`);
     if (cursor) {
@@ -97,7 +105,7 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const rows = await db.query(
-      `SELECT p.id, p.name, p.description, p.status, p.created_at, p.created_at::text AS sort_key
+      `SELECT p.id, p.name, p.description, p.status, p.visibility, p.created_at, p.created_at::text AS sort_key
          FROM projects p
         WHERE ${where.sql()}
         ORDER BY p.created_at DESC, p.id DESC
@@ -110,7 +118,7 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send(page);
   });
 
-  // GET /:id (Viewer or higher)
+  // GET /:id (Viewer or higher). Private projects: the gate in app.ts answers 404 to non-members.
   fastify.get('/:id', {
     preHandler: fastify.requireRole('viewer')
   }, async (request, reply) => {
@@ -139,7 +147,8 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           name: { type: 'string', minLength: 1 },
           description: { type: 'string' },
-          status: { type: 'string', enum: ['active', 'archived'] }
+          status: { type: 'string', enum: ['active', 'archived'] },
+          visibility: { type: 'string', enum: [...VISIBILITIES] }
         },
         minProperties: 1,
         additionalProperties: false
@@ -152,25 +161,35 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
       name?: string;
       description?: string;
       status?: 'active' | 'archived';
+      visibility?: Visibility;
     };
+    let accessChanged = false;
+    let unassigned = 0;
 
     try {
       const updated = await withTransaction(async (client) => {
-        // Verify the project belongs to the authenticated user's organization.
-        const check = await client.query(
-            'SELECT id FROM projects WHERE id = $1 AND org_id = $2',
+        // Verify the project belongs to the authenticated user's organization (locked: visibility).
+        const check = await client.query<{ visibility: Visibility; created_by: string }>(
+            'SELECT id, visibility, created_by FROM projects WHERE id = $1 AND org_id = $2 FOR UPDATE',
             [id, org_id]
         );
 
         if (check.rows.length === 0) {
           throw new Error('NOT_FOUND');
         }
+        accessChanged = updates.visibility !== undefined && updates.visibility !== check.rows[0]!.visibility;
+        // Changing who can see a shared project is for admins, owners and whoever created it, so a
+        // member cannot hide a project from the rest of the team.
+        if (accessChanged && !seesAllProjects(request.user.role) && check.rows[0]!.created_by !== user_id) {
+          throw new Error('VISIBILITY_FORBIDDEN');
+        }
 
         // Only explicitly permitted fields can become SQL column names.
         const columnByField: Record<string, string> = {
           name: 'name',
           description: 'description',
-          status: 'status'
+          status: 'status',
+          visibility: 'visibility'
         };
 
         const setClauses: string[] = [];
@@ -194,25 +213,40 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
 
         const res = await client.query(
             `UPDATE projects
-             SET ${setClauses.join(', ')}
+             SET ${setClauses.join(', ')}, updated_at = NOW()
              WHERE id = $${projectIdParam}
                AND org_id = $${orgIdParam}
                RETURNING *`,
             values
         );
 
-        await logActivity(client, org_id, user_id, id, 'updated', updates);
+        if (accessChanged && updates.visibility === 'private') {
+          // Whoever makes it private keeps it; assignees who can no longer see it are unassigned.
+          await client.query(
+            `INSERT INTO project_members (project_id, user_id, org_id, added_by) VALUES ($1, $2, $3, $2)
+             ON CONFLICT (project_id, user_id) DO NOTHING`,
+            [id, user_id, org_id]
+          );
+          unassigned = await unassignWithoutAccess(client, org_id, id);
+        }
+
+        await logActivity(client, org_id, user_id, id, 'updated', unassigned ? { ...updates, unassigned } : updates);
         return res.rows[0];
       });
 
       // Invalidate the organization-specific project cache.
       await cache.del(`org:${org_id}:projects`);
+      if (unassigned > 0) await cache.del(`org:${org_id}:project:${id}:tasks`);
+      if (accessChanged) await announceAccessChange(org_id, id);
 
       return reply.send(updated);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'NOT_FOUND') {
         return reply.code(404).send({ error: 'Project not found' });
+      }
+      if (message === 'VISIBILITY_FORBIDDEN') {
+        return reply.code(403).send({ error: 'Only admins, owners and the project creator can change who sees a project.' });
       }
       if (message.startsWith('UNSUPPORTED_FIELD:')) {
         return reply.code(400).send({

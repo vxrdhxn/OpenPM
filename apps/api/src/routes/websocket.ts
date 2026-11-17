@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { cache } from '../cache/redis';
 import { config } from '../config';
 import { activeWebsocketConnections, websocketErrorsTotal, websocketRejectionsTotal } from '../metrics';
+import { hiddenProjectIds } from '../security/projectAccess';
 
 export interface WebsocketRouteOptions {
   /** Ping interval. A client that misses a whole interval without answering is dropped. */
@@ -78,8 +79,23 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     activeWebsocketConnections.inc();
     counted = true;
 
-    const { org_id: orgId, exp } = request.user;
+    const { org_id: orgId, user_id: userId, exp } = request.user;
     const channel = `org:${orgId}:updates`;
+
+    // Private projects this user cannot see: events about them are dropped (docs/projects.md). null
+    // until first loaded, and then every project event waits, so nothing private slips out early.
+    // Reloaded when access changes (project_access_changed) and at every heartbeat (role changes).
+    // All messages go through one promise chain, so a reload and the events after it stay in order.
+    let hidden: Set<string> | null = null;
+    let queue: Promise<void> = Promise.resolve();
+    const reloadAccess = () =>
+      hiddenProjectIds(orgId, userId).then(
+        (ids) => {
+          hidden = ids;
+        },
+        (err) => fastify.log.warn(err, 'WS project access reload failed; keeping the previous set')
+      );
+    queue = queue.then(reloadAccess);
 
     // Don't keep serving a session whose token has expired.
     if (exp) {
@@ -104,6 +120,7 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       alive = false;
       socket.ping();
 
+      queue = queue.then(reloadAccess);
       fastify.isSessionCurrent(claims).then(
         (current) => {
           if (!current && !closed) {
@@ -118,9 +135,14 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
 
     try {
       const off = await cache.subscribe(channel, (message, raw) => {
-        if (socket.readyState === socket.OPEN) {
-          socket.send(raw ?? JSON.stringify(message));
-        }
+        queue = queue.then(async () => {
+          const event = (message ?? {}) as { type?: string; project_id?: unknown };
+          if (event.type === 'project_access_changed') await reloadAccess();
+          // Only the id goes out with project_access_changed, so every client can refresh (and one
+          // that just lost access learns it); any other event about a hidden project is dropped.
+          else if (typeof event.project_id === 'string' && (hidden === null || hidden.has(event.project_id))) return;
+          if (socket.readyState === socket.OPEN) socket.send(raw ?? JSON.stringify(message));
+        });
       });
 
       if (closed) {

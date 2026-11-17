@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, FolderKanban, Clock, Loader2, Search } from 'lucide-react';
+import { Plus, FolderKanban, Clock, Loader2, Search, Lock } from 'lucide-react';
 import ProjectDialog from '@/components/ProjectDialog';
 import { EmptyBlock, ErrorBlock } from '@/components/ui/states';
 
@@ -14,6 +14,7 @@ interface Project {
   name: string;
   description: string | null;
   status: 'active' | 'archived';
+  visibility: 'workspace' | 'private';
   created_at: string;
 }
 
@@ -163,9 +164,16 @@ function ProjectsPage() {
                   <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-400">
                     <FolderKanban className="w-6 h-6" />
                   </div>
-                  <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${p.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'}`}>
-                    {p.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {p.visibility === 'private' && (
+                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        <Lock className="w-3 h-3" aria-hidden="true" /> Private
+                      </span>
+                    )}
+                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${p.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'}`}>
+                      {p.status}
+                    </span>
+                  </div>
                 </div>
                 <h3 className="text-xl font-semibold mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {p.name}

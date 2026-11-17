@@ -4,6 +4,11 @@ import WebSocket from 'ws';
 vi.mock('./cache/redis', () => ({
   cache: { get: vi.fn(), set: vi.fn(), del: vi.fn(), publish: vi.fn(), ping: vi.fn(), subscribe: vi.fn(async () => () => undefined) },
 }));
+// No database here: nobody is outside any private project.
+vi.mock('./security/projectAccess', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./security/projectAccess')>()),
+  hiddenProjectIds: async () => new Set<string>(),
+}));
 vi.mock('./plugins/auth', async (importOriginal) => {
   const real = await importOriginal<typeof import('./plugins/auth')>();
   // The app's auth plugin, trusting token claims (no database in this test).
@@ -40,5 +45,5 @@ describe('WebSocket clients on shutdown', () => {
     app = undefined;
 
     expect(await closed).toEqual({ code: 1001, reason: 'Server restarting' });
-  });
+  }, 20_000); // builds and starts the whole app, which is slow when the suite runs in parallel
 });

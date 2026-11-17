@@ -59,8 +59,11 @@ test.describe('workspace settings', () => {
     await expect(page).toHaveURL(/\/login\?deleted=1$/);
     await expect(page.getByRole('status').filter({ hasText: 'The workspace was deleted' })).toBeVisible();
 
-    // The account went with it.
+    // The account went with it. (Wait for the page to finish loading first: typing into a field before
+    // React hydrates it is wiped, and an empty required field then blocks the submit.)
+    await page.waitForLoadState('networkidle');
     await page.getByLabel('Email').fill(email);
+    await expect(page.getByLabel('Email')).toHaveValue(email);
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page.getByText(/invalid/i)).toBeVisible();

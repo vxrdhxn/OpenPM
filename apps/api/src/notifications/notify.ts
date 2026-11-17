@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { cache } from '../cache/redis';
+import { userSeesProjectSql } from '../security/projectAccess';
 
 export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed';
 
@@ -26,8 +27,9 @@ export const excerpt = (text: string) => {
 
 /**
  * Create notifications inside the caller's transaction. Recipients are de-duplicated, the actor is
- * dropped, and only active members of the organization are kept (the INSERT ... SELECT checks it, so
- * an id from another organization or a removed member is silently skipped). Returns who was notified;
+ * dropped, and only active members of the organization who can see the project are kept (the
+ * INSERT ... SELECT checks it, so an id from another organization, a removed member or someone outside
+ * a private project is silently skipped). Returns who was notified;
  * pass that to `announce` after the transaction commits.
  */
 export async function notify(client: PoolClient, input: NotificationInput): Promise<string[]> {
@@ -38,7 +40,9 @@ export async function notify(client: PoolClient, input: NotificationInput): Prom
     `INSERT INTO notifications (org_id, user_id, actor_id, type, project_id, task_id, comment_id, data)
      SELECT $1, u.id, $2, $3, $4, $5, $6, $7
        FROM users u
+       LEFT JOIN projects p ON p.id = $4::uuid AND p.org_id = u.org_id
       WHERE u.id = ANY($8::uuid[]) AND u.org_id = $1 AND u.deactivated_at IS NULL
+        AND ($4::uuid IS NULL OR (p.id IS NOT NULL AND ${userSeesProjectSql('p', 'u.id', 'u.role')}))
      RETURNING user_id`,
     [
       input.orgId,

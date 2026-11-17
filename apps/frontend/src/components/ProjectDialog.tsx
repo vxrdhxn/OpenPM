@@ -12,6 +12,8 @@ export interface ProjectFields {
   name: string;
   description: string | null;
   status: 'active' | 'archived';
+  visibility: 'workspace' | 'private';
+  created_by?: string;
 }
 
 interface Props {
@@ -19,24 +21,35 @@ interface Props {
   project?: ProjectFields;
   /** Admins and owners may delete (the API enforces it too). */
   canDelete?: boolean;
+  /** Changing who sees an existing project: admins, owners and its creator (the API enforces it). */
+  canChangeVisibility?: boolean;
   onClose: () => void;
   onSaved: (project: ProjectFields) => void;
   onDeleted?: () => void;
 }
 
 /** Create a project, or edit/archive/delete one. */
-export default function ProjectDialog({ project, canDelete = false, onClose, onSaved, onDeleted }: Props) {
+export default function ProjectDialog({ project, canDelete = false, canChangeVisibility = true, onClose, onSaved, onDeleted }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(project?.name ?? '');
   const [description, setDescription] = useState(project?.description ?? '');
   const [status, setStatus] = useState<'active' | 'archived'>(project?.status ?? 'active');
+  const [visibility, setVisibility] = useState<'workspace' | 'private'>(project?.visibility ?? 'workspace');
   const [nameError, setNameError] = useState('');
   const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (project && visibility === 'private' && project.visibility !== 'private') {
+      const ok = await confirm({
+        title: 'Make this project private?',
+        message: 'Only people you add, and the workspace admins and owners, will see it. Tasks assigned to anyone else are unassigned. You are added automatically.',
+        confirmLabel: 'Make private',
+      });
+      if (!ok) return;
+    }
     if (!name.trim()) {
       setNameError('A project needs a name.');
       nameRef.current?.focus();
@@ -45,9 +58,10 @@ export default function ProjectDialog({ project, canDelete = false, onClose, onS
     setNameError('');
     setBusy('save');
     try {
+      const visibilityChange = !project || visibility !== project.visibility ? { visibility } : {};
       const saved: ProjectFields = project
-        ? await api.patch(`/projects/${project.id}`, { name: name.trim(), description, status })
-        : await api.post('/projects', { name: name.trim(), description });
+        ? await api.patch(`/projects/${project.id}`, { name: name.trim(), description, status, ...visibilityChange })
+        : await api.post('/projects', { name: name.trim(), description, visibility });
       toast(project ? 'Project saved' : 'Project created');
       onSaved(saved);
     } catch (err) {
@@ -106,6 +120,21 @@ export default function ProjectDialog({ project, canDelete = false, onClose, onS
         </Field>
         <Field label="Description" hint="Optional. What this project is for.">
           <textarea className="input-field min-h-[96px] resize-y" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+        <Field
+          label="Who can see it"
+          hint={
+            !canChangeVisibility
+              ? 'Only admins, owners and the person who created this project can change this.'
+              : visibility === 'private'
+                ? 'Only people added to it, plus admins and owners. Add people from the board.'
+                : 'Everyone in the workspace.'
+          }
+        >
+          <select className="input-field" value={visibility} onChange={(e) => setVisibility(e.target.value as 'workspace' | 'private')} disabled={!canChangeVisibility}>
+            <option value="workspace">Everyone in the workspace</option>
+            <option value="private">Private</option>
+          </select>
         </Field>
         {project && (
           <Field label="Status" hint="Archived projects are hidden from the dashboard; their tasks are kept.">

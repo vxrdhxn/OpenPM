@@ -70,18 +70,31 @@ describe('Project routes', () => {
     });
 
     describe('GET / (list)', () => {
-        const list = (qs = '') =>
-            app.inject({ method: 'GET', url: `/projects${qs}`, headers: { authorization: `Bearer ${token}` } });
+        const list = (qs = '', as = token) =>
+            app.inject({ method: 'GET', url: `/projects${qs}`, headers: { authorization: `Bearer ${as}` } });
+        const adminToken = () => app.jwt.sign({ user_id: 'user-1', org_id: 'org-1', role: 'admin' });
 
-        it('caches the plain first page as { items, next_cursor }', async () => {
+        it('caches the plain first page as { items, next_cursor } for admins, who see every project', async () => {
             vi.mocked(cache.get).mockResolvedValue(null);
             vi.mocked(db.query).mockResolvedValue([{ id: 'p1', name: 'A', sort_key: 'k' }]);
 
-            const res = await list();
+            const res = await list('', adminToken());
 
             expect(res.json()).toEqual({ items: [{ id: 'p1', name: 'A' }], next_cursor: null });
             expect(cache.set).toHaveBeenCalledWith('org:org-1:projects', res.json(), 300);
             expect(vi.mocked(db.query).mock.calls[0]![1]).toEqual(['org-1', 51]); // org, limit + 1
+        });
+
+        it('filters for members by private-project membership, and never uses the shared cache', async () => {
+            vi.mocked(db.query).mockResolvedValue([]);
+
+            await list();
+
+            expect(cache.get).not.toHaveBeenCalled();
+            expect(cache.set).not.toHaveBeenCalled();
+            const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
+            expect(sql).toContain("p.visibility = 'workspace' OR EXISTS");
+            expect(params).toEqual(['org-1', 'user-1', 51]);
         });
 
         it('never caches or serves the cache for searches, filters or later pages', async () => {
@@ -140,7 +153,7 @@ describe('Project routes', () => {
         expect(response.statusCode).toBe(404);
         expect(response.json()).toEqual({ error: 'Project not found' });
         expect(mockClient.query).toHaveBeenCalledWith(
-            'SELECT id FROM projects WHERE id = $1 AND org_id = $2',
+            'SELECT id, visibility, created_by FROM projects WHERE id = $1 AND org_id = $2 FOR UPDATE',
             ['project-1', 'org-1'],
         );
         expect(mockClient.query).toHaveBeenLastCalledWith('ROLLBACK');

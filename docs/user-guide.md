@@ -51,6 +51,13 @@ Admins see it marked declined and can invite them again later.
 keep their tasks but leave the dashboard. Admins can delete a project from the same dialog, which
 deletes all of its tasks. To keep the history, archive instead.
 
+**Private projects.** A project is open to everyone in the workspace unless you make it private
+(*Who can see it* when creating or editing it). A private project shows a *Private* badge, and only
+the people added to it, plus the workspace's admins and owners, can see it or anything in it. Use
+*People* on its board to add people, remove them, or leave. Tasks can only be assigned to people
+who can see the project, so making a project private, or removing someone from it, unassigns their
+tasks there. Changing an existing project's visibility is for admins, owners and whoever created it.
+
 ## Live updates and notifications
 
 Boards update live when someone else changes a task. The **Live** badge shows the connection; if it

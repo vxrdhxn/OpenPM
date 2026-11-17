@@ -182,7 +182,7 @@ Review/finalize:
 - [x] Organizations.
 - [ ] Organization memberships. — *partial:* one org per user (`users.org_id`); removal deactivates the row (`deactivated_at`, migration 013). No multi-org membership table
 - [x] Projects.
-- [ ] Project members.
+- [x] Project members. — `project_members` (migration 021)
 - [x] Tasks/issues.
 - [x] Status.
 - [x] Priority.
@@ -199,7 +199,7 @@ Review/finalize:
 - [x] Unique constraints.
 - [x] Appropriate indexes. — migration 008
 - [ ] Intentional cascade behavior.
-- [ ] Consistent timestamps. — *partial:* `projects` has no `updated_at` (`organizations` got one in migration 020)
+- [x] Consistent timestamps. — `organizations` (migration 020) and `projects` (021) have `updated_at`
 - [ ] Optimistic concurrency where needed.
 - [x] Reproducible migrations. — numbered up/down SQL; `migrate`, `migrate:down`, `migrate:status`; run by Docker Compose
 
@@ -250,11 +250,11 @@ Review/finalize:
 - [x] Archive project. — `status: archived` via PATCH
 - [x] Restore project. — `status: active` via PATCH
 - [x] Delete project. — also removes attachment files
-- [ ] Project members.
-- [ ] Project settings.
+- [x] Project members. — `project_members`; add, remove, leave (`docs/projects.md`)
+- [x] Project settings. — name, description, status, visibility in the project dialog; People dialog
 - [x] Project activity. — `GET /api/activity?project_id=`
 - [x] Project statistics. — tasks by status per project (`GET /api/dashboard`)
-- [ ] Project-level authorization.
+- [x] Project-level authorization. — private projects: members plus admins/owners; one gate for every nested route, filtered org-wide reads, guard test
 - [x] Project empty states. — Phase 10
 - [x] Project loading/error states. — Phase 10 (load errors with retry, "Project not found")
 
@@ -382,7 +382,7 @@ Actions:
 - [x] Authenticate WebSocket connections. — httpOnly cookie or Bearer header; never the query string
 - [x] Reject unauthenticated clients.
 - [x] Validate organization membership. — channel is derived from the JWT org
-- [ ] Validate project membership before channel subscription. — *partial:* no project membership model; one org-wide channel
+- [x] Validate project membership before channel subscription. — one org channel, filtered per connection: events about private projects the user cannot see are dropped
 - [x] Prevent arbitrary channel subscription.
 
 ## Events
@@ -1137,7 +1137,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] Organizations. — owners, settings, transfer, deletion, declinable invites
 - [x] Memberships. — list, role change, remove, leave, ownership transfer
-- [ ] Projects. — *partial:* CRUD/archive done; no project members or settings
+- [x] Projects. — CRUD, archive, private projects with members
 - [x] Tasks. — every field, including labels (no archive)
 - [x] Comments.
 - [x] Labels.
@@ -1302,9 +1302,9 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Authentication        | 🟡     | 24h JWT in an httpOnly cookie; secrets required, published ones refused in production; algorithm confusion tested. Password reset end to end; sessions revocable everywhere (WebSockets included); the current role is read on every request. Remaining: changing the password does not ask for the current one; sign-up can reveal a taken email until it verifies by email; no MFA or lockout. |
 | Authorization/RBAC    | 🟢     | `requireRole` (owner > admin > member > viewer) on every route, with authorization tests. Roles in `docs/user-guide.md`; per-route permissions not documented. |
 | Multi-tenancy         | 🟢     | Every query scoped to the session's `org_id` (directly or after an org-scoped ownership check, reviewed in Phase 11); IDOR tests against real Postgres in CI. Gap: no shared data-access layer. |
-| Database              | 🟡     | 20 reversible migrations, FKs, indexes, transactions; backup/restore scripts and a tested drill. No project-member tables; `projects` has no `updated_at`; no least-privilege DB user. |
+| Database              | 🟡     | 21 reversible migrations, FKs, indexes, transactions; backup/restore scripts and a tested drill. No least-privilege DB user. |
 | Organizations         | 🟢     | The creator owns the workspace and every workspace keeps an owner; rename, ownership transfer, and deletion (slug + password, full cascade including files); invite, accept, decline, revoke; member list, role change, remove and leave with rank rules and an audit trail. No reactivation of removed members (re-invite) or multi-workspace membership. |
-| Projects              | 🟡     | Create, edit, archive/restore and delete from the UI, with file cleanup. No project members, settings or project-level permissions. |
+| Projects              | 🟢     | Create, edit, archive/restore and delete from the UI, with file cleanup. Private projects (members plus admins/owners) enforced on every route, org-wide read, live event and notification (`docs/projects.md`). Actions inside a project still follow the workspace role; no per-project roles. |
 | Tasks                 | 🟢     | Every field editable in one dialog; labels, comments with @mentions, attachments, Kanban board with filters (labels included), keyboard moves, org-wide search, activity log. No task archive. |
 | Comments              | 🟢     | Post, edit, delete, mentions with notifications, pagination, live events, plain-text rendering (`docs/comments.md`). |
 | Search/filtering      | 🟢     | Keyset pagination on projects and task search; status, priority, assignee, label and due filters; measured on 50,000 tasks (`docs/load-testing.md`). |

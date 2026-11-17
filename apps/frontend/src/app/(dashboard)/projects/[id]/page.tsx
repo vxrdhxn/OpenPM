@@ -6,8 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
-import { Plus, GripVertical, AlertCircle, Pencil } from 'lucide-react';
+import { Plus, GripVertical, AlertCircle, Pencil, Lock, Users } from 'lucide-react';
 import ProjectDialog from '@/components/ProjectDialog';
+import ProjectPeopleDialog from '@/components/ProjectPeopleDialog';
 import TaskDetailModal, { CurrentUser } from '@/components/TaskDetailModal';
 import BoardFilters, { EMPTY_BOARD_FILTERS, isFiltering, type BoardFilterValues } from '@/components/BoardFilters';
 import { buildQuery } from '@/lib/query';
@@ -76,9 +77,16 @@ export default function KanbanBoard() {
     const timer = setTimeout(() => setDebouncedQ(filters.q.trim()), 300);
     return () => clearTimeout(timer);
   }, [filters.q]);
+  // Everyone who can see this project (all of the workspace, or a private project's people): the
+  // choices for assignee, @mentions and the assignee filter.
+  const fetchPeople = useCallback(
+    () => api.get(`/projects/${params.id}/members`).then(setMembers).catch(() => setMembers([])),
+    [params.id]
+  );
   useEffect(() => {
-    api.get('/members').then(setMembers).catch(() => setMembers([]));
-  }, []);
+    fetchPeople();
+  }, [fetchPeople]);
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   // The organization's labels, for the filter and the task dialog's picker.
   const [orgLabels, setOrgLabels] = useState<Label[]>([]);
@@ -193,6 +201,13 @@ export default function KanbanBoard() {
     }
 
     if (lastMessage.project_id === params.id) {
+      // Someone changed who can see this project: maybe us (the reload then says it is gone).
+      if (lastMessage.type === 'project_access_changed') {
+        fetchProject();
+        fetchPeople();
+        fetchTasks();
+        return;
+      }
       if (
         lastMessage.type === 'task_created' ||
         lastMessage.type === 'task_updated' ||
@@ -202,7 +217,7 @@ export default function KanbanBoard() {
         fetchTasks();
       }
     }
-  }, [lastMessage, params.id, fetchTasks, fetchLabels]);
+  }, [lastMessage, params.id, fetchTasks, fetchLabels, fetchProject, fetchPeople]);
 
   // Events published while the socket was down are not replayed, so catch up after a reconnect.
   // (Epoch 1 is the first connect, when the initial fetch above already ran.)
@@ -295,6 +310,11 @@ export default function KanbanBoard() {
             <h1 className="text-2xl font-bold break-words">
               {project?.name ?? <span className="inline-block h-7 w-48 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" aria-label="Loading project" />}
             </h1>
+            {project?.visibility === 'private' && (
+              <span className="flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40 px-2 py-1 rounded-full">
+                <Lock className="w-3 h-3" aria-hidden="true" /> Private
+              </span>
+            )}
             {isConnected ? (
               <span className="flex items-center text-xs font-medium text-green-800 bg-green-100 dark:text-green-300 dark:bg-green-900/40 px-2 py-1 rounded-full"><span className="w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse" aria-hidden="true"></span> Live</span>
             ) : (
@@ -303,18 +323,26 @@ export default function KanbanBoard() {
           </div>
           {project?.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{project.description}</p>}
         </div>
-        {canEdit && (
-          <div className="flex gap-2">
-            {project && (
+        {(canEdit || project?.visibility === 'private') && (
+          <div className="flex flex-wrap gap-2">
+            {project?.visibility === 'private' && me && (
+              <button onClick={() => setPeopleOpen(true)} className="btn-secondary">
+                <Users className="w-4 h-4" aria-hidden="true" />
+                People
+              </button>
+            )}
+            {canEdit && project && (
               <button onClick={() => setEditingProject(true)} className="btn-secondary">
                 <Pencil className="w-4 h-4" aria-hidden="true" />
                 Edit project
               </button>
             )}
-            <button onClick={() => setIsModalOpen(true)} className="btn-compact">
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              Add task
-            </button>
+            {canEdit && (
+              <button onClick={() => setIsModalOpen(true)} className="btn-compact">
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                Add task
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -330,7 +358,9 @@ export default function KanbanBoard() {
         </div>
       )}
 
-      <div className="flex-1 overflow-x-auto p-4 sm:p-8">
+      {/* Focusable so keyboard users can scroll the columns sideways even when no card is focusable
+          (an empty board), as WCAG asks of scrollable regions. */}
+      <div className="flex-1 overflow-x-auto p-4 sm:p-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500" tabIndex={0} role="region" aria-label="Board columns">
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-6 h-full items-start">
             {COLUMNS.map(col => (
@@ -442,12 +472,28 @@ export default function KanbanBoard() {
         <ProjectDialog
           project={project}
           canDelete={me?.role === 'admin' || me?.role === 'owner'}
+          canChangeVisibility={me?.role === 'admin' || me?.role === 'owner' || project.created_by === me?.user_id}
           onClose={() => setEditingProject(false)}
           onSaved={(saved) => {
             setProject(saved);
             setEditingProject(false);
+            fetchPeople();
+            fetchTasks();
           }}
           onDeleted={() => router.push('/projects')}
+        />
+      )}
+
+      {peopleOpen && project && me && (
+        <ProjectPeopleDialog
+          projectId={params.id}
+          projectName={project.name}
+          me={me}
+          onClose={() => setPeopleOpen(false)}
+          onChanged={() => {
+            fetchPeople();
+            fetchTasks();
+          }}
         />
       )}
 

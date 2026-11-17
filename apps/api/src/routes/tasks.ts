@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client';
 import { withTransaction } from '../db/transaction';
+import { userCanSeeProject } from '../security/projectAccess';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import { cache } from '../cache/redis';
 import { enqueue } from '../jobs/enqueue';
@@ -42,16 +43,16 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
   }
 
   // The foreign key only proves the user exists somewhere. Without this check a task could be assigned
-  // to another organization's user, whose name then shows on this org's board (and who gets the email).
-  async function assertAssigneeInOrg(client: any, assigneeId: string | null | undefined, orgId: string) {
+  // to another organization's user, whose name then shows on this org's board (and who gets the email),
+  // or to someone who cannot see this (private) project and so could never open the task.
+  async function assertAssigneeInOrg(client: any, assigneeId: string | null | undefined, orgId: string, projectId: string) {
     if (!assigneeId) return;
-    const res = await client.query('SELECT id FROM users WHERE id = $1 AND org_id = $2 AND deactivated_at IS NULL', [assigneeId, orgId]);
-    if (res.rows.length === 0) {
+    if (!(await userCanSeeProject(client, orgId, projectId, assigneeId))) {
       throw new Error('INVALID_ASSIGNEE');
     }
   }
 
-  const invalidAssignee = { error: 'Assignee must be a member of your organization' };
+  const invalidAssignee = { error: 'Assignee must be a member of your organization who can see this project' };
 
   // POST /projects/:projectId/tasks (Requires member role or higher)
   fastify.post('/:projectId/tasks', {
@@ -82,7 +83,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         if (projCheck.rows.length === 0) {
           throw new Error('PROJECT_NOT_FOUND');
         }
-        await assertAssigneeInOrg(client, assignee_id, org_id);
+        await assertAssigneeInOrg(client, assignee_id, org_id, projectId);
 
         const res = await client.query(
           `INSERT INTO tasks (org_id, project_id, title, description, priority, assignee_id, due_date, created_by)
@@ -255,7 +256,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const oldStatus = check.rows[0].status;
-        await assertAssigneeInOrg(client, updates.assignee_id, org_id);
+        await assertAssigneeInOrg(client, updates.assignee_id, org_id, projectId);
 
         const setClauses = [];
         const values = [];
@@ -363,8 +364,9 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
           throw new Error('NOT_FOUND');
         }
 
-        // The title is kept so the activity feed can still say what was deleted.
-        await logActivity(client, org_id, user_id, taskId, 'deleted', { title: res.rows[0].title });
+        // The title is kept so the activity feed can still say what was deleted, and the project so
+        // the feed can still tell who may see that (private projects).
+        await logActivity(client, org_id, user_id, taskId, 'deleted', { title: res.rows[0].title, project_id: projectId });
         return attachments.rows.map((r: { storage_key: string }) => r.storage_key);
       });
 
