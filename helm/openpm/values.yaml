@@ -11,6 +11,8 @@ global:
   logLevel: "info"
   # Domain name used for ingress config
   domain: "openpm.local"
+  # Pull secrets for the app images, e.g. [{ name: ghcr-pull }] when the registry is private.
+  imagePullSecrets: []
 
 # Security Context Configurations
 # Active across all pods/containers as requirements specify hardening
@@ -92,6 +94,8 @@ api:
   image:
     repository: "openpm-api"
     tag: "latest"
+    # sha256:... pins the exact image (releases set it); tag alone can be moved.
+    digest: ""
     pullPolicy: "IfNotPresent"
   port: 3000
   corsOrigin: "http://openpm.local"
@@ -133,6 +137,7 @@ worker:
   image:
     repository: "openpm-worker"
     tag: "latest"
+    digest: ""
     pullPolicy: "IfNotPresent"
   # Prometheus metrics endpoint (job outcomes/durations, queue depth and lag). The worker has no
   # other HTTP port. Queue gauges describe the queue, not the pod: use max(), not sum(), across replicas.
@@ -153,6 +158,7 @@ frontend:
   image:
     repository: "openpm-frontend"
     tag: "latest"
+    digest: ""
     pullPolicy: "IfNotPresent"
   port: 3001
   resources:
@@ -184,6 +190,12 @@ frontend:
 #   is enough. Controller-specific settings go in annotations, e.g. for ingress-nginx:
 #     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
 #   Do not also set the deprecated kubernetes.io/ingress.class annotation next to className.
+# Deployment verification: a Job that runs after every install/upgrade/Argo CD sync and checks the
+# API (database reachable, routes answer) and the frontend. Its failure fails the upgrade/sync.
+smokeTest:
+  enabled: true
+  timeoutSeconds: 180
+
 ingress:
   enabled: true
   className: ""

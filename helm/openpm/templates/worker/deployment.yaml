@@ -21,6 +21,7 @@ spec:
         {{- include "openpm.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: worker
     spec:
+      {{- include "openpm.imagePullSecrets" . | nindent 6 }}
       {{- with .Values.securityContext.pod }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -31,7 +32,7 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "openpm.image" (dict "image" .Values.worker.image "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.worker.image.pullPolicy | default "IfNotPresent" }}
           env:
             - name: NODE_ENV

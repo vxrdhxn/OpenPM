@@ -1,0 +1,114 @@
+{{- if .Values.smokeTest.enabled }}
+# Deployment verification: after every install/upgrade (Helm) or sync (Argo CD runs Helm hooks as
+# PostSync), check that the new release actually serves. A failure here fails the Helm upgrade or
+# marks the Argo CD sync as failed; the Job is kept for `kubectl logs`. Read-only: it creates no data.
+# Uses the API image (already pulled on the node), so no extra image is needed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openpm.fullname" . }}-smoke-test
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: smoke-test
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: {{ .Values.smokeTest.timeoutSeconds | default 180 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openpm.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: smoke-test
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- include "openpm.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.securityContext.pod }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: smoke-test
+          {{- with .Values.securityContext.container }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: {{ include "openpm.image" (dict "image" .Values.api.image "appVersion" .Chart.AppVersion) | quote }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy | default "IfNotPresent" }}
+          env:
+            - name: API_URL
+              value: "http://{{ include "openpm.api.fullname" . }}:{{ .Values.api.port | default 3000 }}"
+            - name: FRONTEND_URL
+              value: "http://{{ include "openpm.frontend.fullname" . }}:{{ .Values.frontend.port | default 3001 }}"
+          command: ["node", "-e"]
+          args:
+            - |
+              const checks = [
+                ['API ready (database reachable)', process.env.API_URL + '/health', (r, b) => r.status === 200 && JSON.parse(b).db === 'ok'],
+                ['API live', process.env.API_URL + '/health/live', (r) => r.status === 200],
+                ['API routes and auth', process.env.API_URL + '/api/projects', (r) => r.status === 401],
+                ['Frontend serves', process.env.FRONTEND_URL + '/login', (r) => r.status === 200],
+              ];
+              const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+              (async () => {
+                let failed = 0;
+                for (const [name, url, ok] of checks) {
+                  let last = '';
+                  for (let attempt = 1; attempt <= 6; attempt++) {
+                    try {
+                      const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(5000) });
+                      const body = await res.text();
+                      if (ok(res, body)) { last = ''; console.log('ok   ' + name + ' (' + res.status + ')'); break; }
+                      last = res.status + ' ' + body.slice(0, 200);
+                    } catch (err) { last = String(err); }
+                    await sleep(5000);
+                  }
+                  if (last) { failed++; console.log('FAIL ' + name + ': ' + url + ' -> ' + last); }
+                }
+                process.exit(failed ? 1 : 0);
+              })();
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 20m
+              memory: 64Mi
+---
+# The app namespace is default-deny; the smoke test may only reach the API and the frontend.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.fullname" . }}-smoke-test
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: smoke-test
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: api
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port | default 3000 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: frontend
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.frontend.port | default 3001 }}
+{{- end }}

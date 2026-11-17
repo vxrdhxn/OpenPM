@@ -84,3 +84,27 @@ Create fullname for redis
 {{- define "openpm.redis.fullname" -}}
 {{- printf "%s-redis" (include "openpm.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end }}
+
+{{/*
+Image reference for an app image: repository:tag, or repository:tag@digest when a digest is set.
+A digest makes the reference immutable (a moved tag cannot change what runs). Releases pin it.
+Usage: include "openpm.image" (dict "image" .Values.api.image "appVersion" .Chart.AppVersion)
+*/}}
+{{- define "openpm.image" -}}
+{{- $tag := .image.tag | default .appVersion -}}
+{{- if .image.digest -}}
+{{- printf "%s:%s@%s" .image.repository $tag .image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" .image.repository $tag -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+imagePullSecrets for app pods (e.g. a private registry). Indented for a pod spec.
+*/}}
+{{- define "openpm.imagePullSecrets" -}}
+{{- with .Values.global.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}

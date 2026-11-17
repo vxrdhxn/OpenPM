@@ -97,6 +97,34 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
     });
   });
 
+  it('pins app images by digest when one is set (releases do)', () => {
+    const objects = render('--set', 'api.image.repository=ghcr.io/o/openpm-api', '--set', 'api.image.tag=1.2.3', '--set', 'api.image.digest=sha256:' + 'a'.repeat(64));
+    const api = deployment(objects, 'api')!.spec.template.spec;
+    const ref = 'ghcr.io/o/openpm-api:1.2.3@sha256:' + 'a'.repeat(64);
+    expect(api.containers[0].image).toBe(ref);
+    expect(api.initContainers[0].image).toBe(ref); // migrations run the same build
+    expect(deployment(objects, 'worker')!.spec.template.spec.containers[0].image).toBe('openpm-worker:latest');
+  });
+
+  it('adds imagePullSecrets to every app pod, including the smoke test', () => {
+    const objects = render('--set', 'global.imagePullSecrets[0].name=ghcr-pull');
+    for (const c of ['api', 'worker', 'frontend']) {
+      expect(deployment(objects, c)!.spec.template.spec.imagePullSecrets).toEqual([{ name: 'ghcr-pull' }]);
+    }
+    const job = objects.find((o) => o.kind === 'Job' && o.metadata?.name === 'openpm-smoke-test')!;
+    expect(job.spec.template.spec.imagePullSecrets).toEqual([{ name: 'ghcr-pull' }]);
+  });
+
+  it('verifies each deployment with a post-sync smoke test that is allowed to reach the API and frontend', () => {
+    const objects = render();
+    const job = objects.find((o) => o.kind === 'Job' && o.metadata?.name === 'openpm-smoke-test') as K8sObject & { metadata: { annotations: Record<string, string> } };
+    expect(job.metadata.annotations['argocd.argoproj.io/hook']).toBe('PostSync');
+    expect(job.metadata.annotations['helm.sh/hook']).toBe('post-install,post-upgrade');
+    const policy = objects.find((o) => o.kind === 'NetworkPolicy' && o.metadata?.name === 'openpm-smoke-test')!;
+    expect(policy.spec.egress.map((e: any) => e.to[0].podSelector.matchLabels['app.kubernetes.io/component'])).toEqual(['api', 'frontend']);
+    expect(render('--set', 'smokeTest.enabled=false').some((o) => o.kind === 'Job')).toBe(false);
+  });
+
   it('appends extraEnv to the API and worker containers', () => {
     const objects = render('--set', 'api.extraEnv[0].name=BCRYPT_CONCURRENCY', '--set-string', 'api.extraEnv[0].value=4', '--set', 'worker.extraEnv[0].name=WORKER_CONCURRENCY', '--set-string', 'worker.extraEnv[0].value=10');
     const env = (c: string) => deployment(objects, c)!.spec.template.spec.containers[0].env as Array<{ name: string; value?: string }>;

@@ -23,6 +23,7 @@ spec:
         {{- include "openpm.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
     spec:
+      {{- include "openpm.imagePullSecrets" . | nindent 6 }}
       {{- with .Values.securityContext.pod }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -38,7 +39,7 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "openpm.image" (dict "image" .Values.api.image "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy | default "IfNotPresent" }}
           command: ["node", "apps/api/dist/db/migrate.js", "up"]
           env:
@@ -61,7 +62,7 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "openpm.image" (dict "image" .Values.api.image "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - name: http
