@@ -162,3 +162,28 @@ app's pinned images; "reverting it" was changing them back.
   (including shellcheck on every script) passes.
 - `argocd app rollback` (rolling back without a git revert) was not rehearsed; the documented path
   is the revert.
+
+## Production deployment and backup/restore (Phase 11): 2026-11-17
+
+The chart was installed on kind the way production is set up: `values.prod.yaml` with credentials
+from a Secret created beforehand (`existingSecret`), and none in values or Git. Images were built
+from the release candidate. Two changes from production: Postgres and Redis ran in-chart because
+there is no managed database on kind, and the Ingress had no TLS.
+
+| Check | Result |
+| --- | --- |
+| Install without credentials | `helm template` fails with the message naming what is missing, for each case (no JWT secret, a published one, under 32 characters, missing Postgres/Redis password). |
+| Install from an existing Secret | Deployed; the chart rendered no Secret of its own. All pods ready; the post-install smoke test passed. |
+| Through the Ingress | `/login` sent `frame-ancestors 'none'`, `X-Frame-Options: DENY` and no `X-Powered-By`. Sign-in and the project list worked. |
+| Rate limits per client | Two in-cluster pods called through Traefik. With `api.trustProxy: "1"`, client A was limited and client B was not. With trust off (the behavior before), A's burst locked B out too (5 × 429). |
+| Rate limits across pods | Before: counters were per pod, so with 2 API pods client A got 200 requests a minute. After moving them to Redis: exactly 100, then 429. |
+| Backup drill, Kubernetes | `scripts/test-backup-restore.sh` with `PG_EXEC`/`MIGRATE_EXEC` on the in-chart Postgres: 14 tables, 29 rows and 19 migrations restored identically; the migrator found the copy up to date. |
+| Disaster recovery | Backup → `DELETE FROM projects` (cascading to the tasks) → API and worker scaled to 0 → `restore-db.sh --replace` → scaled back. The project and its 3 tasks were back, and the same user signed in through the Ingress. |
+| Backup drill, Compose | 12 MB dump: 14 tables, 230,307 rows and 19 migrations restored identically. |
+
+### Found and fixed
+
+- **Default credentials** in the chart and Compose, and **rate limits shared by everyone behind the
+  Ingress and counted per pod**: see [security-review.md](security-review.md), findings 1–6.
+- **Node's `fetch` drops a custom `Host` header**, so the first test calls through Traefik got 404s.
+  This only affected the test client, which now uses `http.get`.

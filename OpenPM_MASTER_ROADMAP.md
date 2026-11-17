@@ -1226,14 +1226,14 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 ## Phase 11 — Release
 
-- [ ] Final security review.
-- [ ] Final architecture review.
-- [ ] Final test suite.
-- [ ] Backup/restore test.
-- [ ] Production deployment rehearsal.
-- [ ] Release checklist.
-- [ ] Version/tag.
-- [ ] Release notes.
+- [x] Final security review. — `docs/security-review.md`: 7 findings fixed (published default credentials in the chart and Compose, DB ports exposed, rate limits shared behind the Ingress and counted per pod, no framing headers, unencoded passwords)
+- [x] Final architecture review. — per-pod rate-limit state moved to Redis; credentials moved out of chart values (`existingSecret`); README architecture corrected (Next.js 16, per-request session checks)
+- [x] Final test suite. — 2026-11-17, locally: unit 649 (API 427, worker 113, frontend 109), repo 81, integration 126 (with a real Redis), browser 16 passed / 3 skipped
+- [x] Backup/restore test. — `scripts/backup-db.sh`, `restore-db.sh`, `test-backup-restore.sh`; drill on Compose and Kubernetes plus a disaster recovery (`docs/backup-restore.md`, `docs/rehearsal.md`)
+- [x] Production deployment rehearsal. — `values.prod.yaml` with an existing Secret on kind: install, smoke test, Ingress, rate limits, restore (`docs/rehearsal.md`)
+- [x] Release checklist. — `docs/release-checklist.md`
+- [ ] Version/tag. — `v0.1.0` not tagged yet: publishes the GitHub Release and GHCR images
+- [x] Release notes. — `docs/release-notes/v0.1.0.md` (the release workflow puts it on the GitHub Release)
 
 ---
 

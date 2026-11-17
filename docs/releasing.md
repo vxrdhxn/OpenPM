@@ -21,7 +21,11 @@ npm run release:version -- X.Y.Z  →  PR, CI, merge  →  tag vX.Y.Z  →  rele
 
 ## Cutting a release
 
-1. Bump the version on a branch, open a PR and merge it once CI passes:
+Work through [release-checklist.md](release-checklist.md); the steps below are its middle part.
+
+1. Write `docs/release-notes/vX.Y.Z.md` (what's new, upgrade steps, known limits; the workflow puts it
+   at the top of the GitHub Release) and bump the version on a branch. Open a PR and merge it once CI
+   passes:
 
    ```bash
    npm run release:version -- 1.2.0
@@ -41,7 +45,7 @@ npm run release:version -- X.Y.Z  →  PR, CI, merge  →  tag vX.Y.Z  →  rele
      image builds;
    - **builds, scans (Trivy, blocking) and pushes** the three images with an SBOM and build
      provenance;
-   - **creates the GitHub Release** with generated notes and the image digests;
+   - **creates the GitHub Release** with the release notes file, the image digests and generated notes;
    - **opens the PR "deploy: v1.2.0 to production"**, which pins `values.prod.yaml` to the new
      digests. It runs `helm lint` and checks the rendered chart first.
 
@@ -101,4 +105,7 @@ loses whatever the dropped columns held.
   fine-grained PAT or GitHub App token with *contents* and *pull requests* write) and the workflow
   uses it instead. Without it, the workflow's own `helm lint` and render check are the only checks
   on that PR.
+- **Credentials:** create the `openpm-secrets` Secret in `openpm-prod` (and `openpm-dev`) before the
+  first sync ([deploying.md](deploying.md#kubernetes-an-existing-secret-recommended)). Without it
+  the pods do not start.
 - **Argo CD:** apply `argocd/app-of-apps.yaml` once; `openpm-prod` tracks `main` with manual sync.

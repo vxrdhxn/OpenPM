@@ -52,12 +52,12 @@ Most project management tools are SaaS-only. Your data lives on someone else's s
 ## Tech Stack
 
 ```
-Frontend    Next.js 14 (App Router) + Tailwind CSS v4
-Backend     Node.js + Fastify + TypeScript (strict)
+Frontend    Next.js 16 (App Router) + React 19 + Tailwind CSS v4
+Backend     Node.js 22 + Fastify 5 + TypeScript (strict)
 Database    PostgreSQL 16
 Cache       Redis 7 + BullMQ
 Deploy      Docker multi-stage + Helm + ArgoCD
-CI/CD       GitHub Actions (lint, build, test, Helm, gitleaks, Trivy)
+CI/CD       GitHub Actions (lint, build, unit/integration/browser tests, Helm, gitleaks, Trivy, CodeQL)
 ```
 
 ---
@@ -75,12 +75,14 @@ CI/CD       GitHub Actions (lint, build, test, Helm, gitleaks, Trivy)
 ```bash
 git clone https://github.com/YOUR_ORG/openpm.git
 cd openpm
+echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env   # signs sessions; there is deliberately no default
 docker compose up --build
 ```
 
 Then open <http://localhost:3001> and register: the first account creates your organization.
-Database migrations run automatically (a one-shot `migrate` service runs before the API starts), and
-the defaults work without a `.env`. Stop it with `docker compose down` (add `-v` to also delete the data).
+Database migrations run automatically (a one-shot `migrate` service runs before the API starts).
+`JWT_SECRET` is the only setting you must provide. Stop it with `docker compose down` (add `-v` to
+also delete the data). Running it for real: [`docs/deploying.md`](docs/deploying.md).
 
 For development with hot reload, use the steps below instead.
 
@@ -125,7 +127,7 @@ Open [http://localhost:3001](http://localhost:3001) and register your first orga
 ### One-command production (Docker Compose)
 
 ```bash
-docker-compose up --build -d
+docker compose up --build -d     # after setting JWT_SECRET (and passwords) in .env: docs/deploying.md
 ```
 
 All 5 services start with health checks. Frontend at `:3001`, API at `:3000`.
@@ -137,7 +139,7 @@ All 5 services start with health checks. Frontend at `:3001`, API at `:3000`.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      Browser                            │
-│         Next.js 14 (App Router + Tailwind v4)           │
+│         Next.js 16 (App Router + Tailwind v4)           │
 └──────────────┬──────────────────────┬───────────────────┘
                │ REST (HTTPS)         │ WebSocket (WSS)
                ▼                      ▼
@@ -162,8 +164,8 @@ All 5 services start with health checks. Frontend at `:3001`, API at `:3000`.
 
 ### Key Design Decisions
 
-- **Multi-tenant isolation**: Every DB query includes `AND org_id = $org_id`. The `org_id` is extracted from the JWT - never from the request body.
-- **Stateless auth**: JWT carries identity. Any API pod can verify it. No shared session store needed for horizontal scaling.
+- **Multi-tenant isolation**: Every query is scoped to the caller's organization (`org_id`), directly or through an org-scoped ownership check in the same transaction. The `org_id` comes from the verified session, never from the request.
+- **Sessions**: A signed JWT in an httpOnly cookie carries identity, so any API pod can verify it. Each request also checks the user's current role and token version in Postgres (one indexed lookup), so sign-out-everywhere, removal and role changes take effect immediately. There is no separate session store.
 - **Cache-aside pattern**: Hot paths (project lists, task boards) are cached in Redis with TTL. Cache is invalidated on writes.
 - **Async processing**: Task notifications are queued in BullMQ and processed by a separate worker. API responds in ~20ms. The worker scales independently.
 - **Redis Pub/Sub**: Real-time updates bridge multiple API pods. User A on pod 1 updates a task → pod 2 receives via Redis → pushes to User B's WebSocket.
@@ -207,24 +209,27 @@ openpm/
 
 ## Deployment
 
+Full guide, including credentials and running behind a proxy: [`docs/deploying.md`](docs/deploying.md).
+Backups: [`docs/backup-restore.md`](docs/backup-restore.md).
+
 ### Docker Compose (small teams)
 
 ```bash
-cp .env.example .env
-# Edit .env with production secrets
-docker-compose up --build -d
+echo "JWT_SECRET=$(openssl rand -hex 32)" >> .env
+echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> .env
+echo "REDIS_PASSWORD=$(openssl rand -hex 16)" >> .env
+docker compose up --build -d
 ```
 
 ### Kubernetes (production)
 
+The chart has no default credentials. Create them as a Secret first, then install:
+
 ```bash
-# Create cluster (or use existing)
-kind create cluster
+kubectl create namespace openpm
+kubectl -n openpm create secret generic openpm-secrets   --from-literal=JWT_SECRET="$(openssl rand -hex 32)"   --from-literal=DATABASE_URL='postgresql://...' --from-literal=REDIS_URL='redis://...'
+helm install openpm ./helm/openpm -n openpm -f helm/openpm/values.prod.yaml
 
-# Install with Helm
-helm install openpm ./helm/openpm -f helm/openpm/values.prod.yaml
-
-# Verify
 kubectl get pods -n openpm
 kubectl get hpa -n openpm
 ```
@@ -272,8 +277,9 @@ See [`.env.example`](.env.example) for all available configurations. Key variabl
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql://openpm:openpm@localhost:5432/openpm` | PostgreSQL connection string |
 | `REDIS_URL` | `redis://:openpm@localhost:6379` | Redis connection string |
-| `JWT_SECRET` | dev key outside production | **Required when `NODE_ENV=production`** (the API refuses to start without it). Minimum 32 characters |
+| `JWT_SECRET` | dev key outside production | **Required when `NODE_ENV=production`**: the API refuses to start without it or with an example value from this repository. Minimum 32 characters |
 | `CORS_ORIGIN` | `http://localhost:3001` | Allowed CORS origins |
+| `TRUST_PROXY` | _(unset)_ | Proxies whose `X-Forwarded-For` the API believes: a hop count (`1` behind one Ingress; the chart sets it) or IPs/CIDRs. Needed for per-client rate limits behind a proxy ([docs/deploying.md](docs/deploying.md#behind-a-proxy)) |
 | `NODE_ENV` | `development` | `development` / `production` |
 | `APP_URL` | `http://localhost:3001` | Public frontend URL used in emailed links (invites). **Required for the worker in production** |
 | `RESEND_API_KEY` | _(empty)_ | Email delivery. Empty: emails are printed in development and not sent in production (Helm: `secrets.resendApiKey`) |
@@ -284,7 +290,7 @@ See [`.env.example`](.env.example) for all available configurations. Key variabl
 
 OpenPM is designed to be self-hosted and open-source. Security is defence-in-depth:
 
-- **Secrets**: Zero hardcoded secrets. All configuration via environment variables.
+- **Secrets**: No built-in credentials. Compose and the Helm chart refuse to start without them, and the API refuses example secrets from this repository in production. Kubernetes can read them from an existing Secret.
 - **Auth**: bcrypt (cost 12), httpOnly cookies (SameSite=Strict), JWT with expiry.
 - **Input**: Parameterised SQL queries, Fastify JSON Schema validation on all routes.
 - **API**: Rate limiting, Helmet security headers, strict CORS, 1MB body limit.
@@ -292,6 +298,8 @@ OpenPM is designed to be self-hosted and open-source. Security is defence-in-dep
 - **Network**: Kubernetes NetworkPolicy with default deny-all.
 - **CI**: gitleaks secret scanning, Trivy image scanning (report-only until the dependency advisories are cleared), Helm lint. CodeQL and an `npm audit` gate are not set up yet. See [docs/ci.md](docs/ci.md).
 - **Dependencies**: Dependabot auto-updates for npm, Actions, and Docker.
+
+The pre-release review, what it fixed and the known limits: [`docs/security-review.md`](docs/security-review.md).
 
 ### Reporting Vulnerabilities
 

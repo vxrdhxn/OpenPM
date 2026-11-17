@@ -206,6 +206,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
+            # Hand-written notes for this version, when there are any (docs/releasing.md).
+            if [ -f "docs/release-notes/$TAG.md" ]; then cat "docs/release-notes/$TAG.md"; echo; fi
             echo "## Images"
             echo
             echo "| App | Image (pinned by digest) |"
