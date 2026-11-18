@@ -45,6 +45,17 @@ const UPDATABLE_COLUMNS = new Set(['title', 'description', 'status', 'priority',
 
 export type TaskChanges = Partial<Pick<TaskRow, 'title' | 'description' | 'status' | 'priority' | 'assignee_id' | 'due_date'>>;
 
+/** What other features need of a task: it must be in this project, and both in the organization. */
+export type TaskRef = Pick<TaskRow, 'id' | 'title' | 'assignee_id' | 'created_by'>;
+
+/** The task if it is in this project of the organization, else null; inside a transaction, pass its client. */
+export async function findInProject(scope: TenantScope, projectId: string, taskId: string, client?: PoolClient): Promise<TaskRef | null> {
+  const sql = 'SELECT id, title, assignee_id, created_by FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3';
+  const params = [taskId, projectId, scope.orgId];
+  const rows = client ? (await client.query<TaskRef>(sql, params)).rows : await db.query<TaskRef>(sql, params);
+  return rows[0] ?? null;
+}
+
 export async function insert(client: PoolClient, scope: TenantScope, projectId: string, task: NewTaskFields): Promise<TaskRow> {
   const res = await client.query<TaskRow>(
     `INSERT INTO tasks (org_id, project_id, title, description, priority, assignee_id, due_date, created_by)

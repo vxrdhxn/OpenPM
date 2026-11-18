@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 import type { TenantScope } from './scope';
 
-export type ActivityEntity = 'project' | 'task';
+export type ActivityEntity = 'project' | 'task' | 'comment' | 'label';
 
 /**
  * Append to the activity feed (`activity_log`), as the scope's user in the scope's organization.
