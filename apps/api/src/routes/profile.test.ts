@@ -70,7 +70,7 @@ describe('Profile routes', () => {
   });
 
   describe('PATCH /me — valid updates', () => {
-    it('updates the name, filtering by the authenticated user id', async () => {
+    it('updates the name, filtering by the authenticated user id and organization', async () => {
       vi.mocked(db.query).mockResolvedValue([{ id: 'user-1', name: 'Ada', email: 'a@b.com', role: 'viewer' }]);
 
       const res = await patch({ name: 'Ada' });
@@ -78,8 +78,8 @@ describe('Profile routes', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ id: 'user-1', name: 'Ada' });
       const call = vi.mocked(db.query).mock.calls[0];
-      expect(sqlOf(call)).toBe('UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email, role, org_id, token_version');
-      expect(call![1]).toEqual(['Ada', 'user-1']);
+      expect(sqlOf(call)).toBe('UPDATE users SET name = $1 WHERE id = $2 AND org_id = $3 RETURNING id, name, email, role, org_id, token_version');
+      expect(call![1]).toEqual(['Ada', 'user-1', 'org-1']);
     });
 
     it('stores a hashed password in password_hash and never the plaintext', async () => {
@@ -90,9 +90,9 @@ describe('Profile routes', () => {
       expect(res.statusCode).toBe(200);
       const call = vi.mocked(db.query).mock.calls[0];
       expect(sqlOf(call)).toBe(
-        'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 RETURNING id, name, email, role, org_id, token_version'
+        'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 AND org_id = $3 RETURNING id, name, email, role, org_id, token_version'
       );
-      expect(call![1]).toEqual(['hashed:newpassword1', 'user-1']);
+      expect(call![1]).toEqual(['hashed:newpassword1', 'user-1', 'org-1']);
       expect(JSON.stringify(res.json())).not.toMatch(/password/);
     });
 
@@ -104,9 +104,9 @@ describe('Profile routes', () => {
       expect(res.statusCode).toBe(200);
       const call = vi.mocked(db.query).mock.calls[0];
       expect(sqlOf(call)).toBe(
-        'UPDATE users SET name = $1, password_hash = $2, token_version = token_version + 1 WHERE id = $3 RETURNING id, name, email, role, org_id, token_version'
+        'UPDATE users SET name = $1, password_hash = $2, token_version = token_version + 1 WHERE id = $3 AND org_id = $4 RETURNING id, name, email, role, org_id, token_version'
       );
-      expect(call![1]).toEqual(['Ada', 'hashed:newpassword1', 'user-1']);
+      expect(call![1]).toEqual(['Ada', 'hashed:newpassword1', 'user-1', 'org-1']);
     });
 
     it('returns 404 when the user no longer exists', async () => {
@@ -139,13 +139,14 @@ describe('Profile routes', () => {
   });
 
   describe('GET /me', () => {
-    it('returns the caller profile scoped to their own id', async () => {
+    it('returns the caller profile scoped to their own id and organization', async () => {
       vi.mocked(db.query).mockResolvedValue([{ id: 'user-1', name: 'Ada' }]);
 
       const res = await app.inject({ method: 'GET', url: '/profile/me', headers: headers() });
 
       expect(res.statusCode).toBe(200);
-      expect(vi.mocked(db.query).mock.calls[0]![1]).toEqual(['user-1']);
+      expect(String(vi.mocked(db.query).mock.calls[0]![0])).toContain('AND org_id = $2');
+      expect(vi.mocked(db.query).mock.calls[0]![1]).toEqual(['user-1', 'org-1']);
     });
   });
 });
