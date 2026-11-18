@@ -81,11 +81,11 @@ npm test
 
 ## Backend
 
-- [ ] Separate routes, validation, business logic, persistence, and infrastructure. — *partial:* SQL and business logic still live in route handlers
-- [ ] Keep route handlers thin.
+- [x] Separate routes, validation, business logic, persistence, and infrastructure. — `routes/` (schemas + wiring) → `services/` (rules, transactions, audit, cache, events) → `data/` (all SQL); read-only views call `data/` directly. Only `/health` queries directly (its `SELECT 1` probe)
+- [x] Keep route handlers thin. — each handler builds the scope, calls one service or read model, and picks the status code
 - [x] Centralize authentication middleware. — `fastify.authenticate` (`plugins/auth.ts`), applied per route plugin
 - [x] Centralize authorization. — `fastify.requireRole` (owner > admin > member > viewer)
-- [x] Centralize error handling. — `plugins/errors.ts` (H.1); routes still map a few thrown strings (`NOT_FOUND`) locally
+- [x] Centralize error handling. — `plugins/errors.ts` (H.1); services throw typed errors (`domain/errors.ts`) that carry their status, so no route maps errors itself
 - [x] Establish consistent API error responses. — `{ error }` everywhere, including validation, 404 and 429
 - [x] Add request/correlation IDs. — `X-Request-Id` in/out, propagated to worker jobs
 - [x] Implement graceful shutdown. — API and worker handle SIGTERM/SIGINT
@@ -94,7 +94,7 @@ npm test
 ## TypeScript
 
 - [x] Use strict TypeScript settings where practical. — `strict` plus `noUncheckedIndexedAccess` etc. in `tsconfig.base.json`
-- [ ] Remove unsafe `any` from important paths. — *partial:* route handlers still cast `request.body/params as any`
+- [x] Remove unsafe `any` from important paths. — routes, services and repositories are typed (route generics for body/params/query); `any` remains only in infrastructure helpers (cache payloads, `db.query`'s default row type, the realtime hub)
 - [ ] Avoid duplicated domain types.
 - [x] Validate external input at runtime. — bodies, query strings and path params by JSON Schema; NUL bytes refused; the WebSocket accepts no client messages
 - [ ] Validate environment variables at startup. — *partial:* API validates with zod (`config.ts`); the worker reads `process.env` directly
@@ -137,7 +137,7 @@ OpenPM must never allow one organization to access another organization's data.
 
 - [x] Derive organization identity from authenticated context.
 - [x] Never trust client-supplied `org_id` as authority.
-- [ ] Apply tenant filtering at the data-access layer. — *partial:* every query filters by the JWT `org_id`, but per query in route handlers, not in a shared layer
+- [x] Apply tenant filtering at the data-access layer. — every repository in `data/` takes a `TenantScope` built only from the verified session (`scopeOf(request.user)`) and filters each statement by its org, including joins that used to rely on an earlier check. Pre-session flows (sign-up, sign-in, reset, invite acceptance) are keyed by email or token hash in `data/accounts.ts` / `data/invites.ts`, with the org taken from the matched row
 - [x] Verify ownership before read.
 - [x] Verify ownership before update.
 - [x] Verify ownership before delete.

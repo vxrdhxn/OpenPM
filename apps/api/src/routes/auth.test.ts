@@ -26,6 +26,7 @@ import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 import { authFailuresTotal } from '../metrics';
 import authRoutes, { REGISTER_CONFLICT } from './auth';
+import errorsPlugin from '../plugins/errors';
 
 const mockClient = { query: vi.fn(), release: vi.fn() };
 const rows = (r: unknown[] = []) => ({ rows: r, rowCount: r.length });
@@ -37,6 +38,7 @@ describe('Auth routes', () => {
   beforeEach(async () => {
     vi.resetAllMocks();
     app = Fastify();
+    await app.register(errorsPlugin); // as in app.ts: typed errors become { error }
     await app.register(cookie);
     await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
     await app.register(authRoutes, { prefix: '/auth' });
