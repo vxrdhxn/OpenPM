@@ -209,6 +209,21 @@ describe('Task routes lifecycle', () => {
       expect(cache.del).toHaveBeenCalled();
     });
 
+    it('locks the task row before reading its status, so concurrent edits record the right transition', async () => {
+      mockClient.query.mockImplementation(async (sql: string) => {
+        if (sql.startsWith('SELECT status, assignee_id, created_by FROM tasks')) return rows([{ status: 'todo' }]);
+        if (sql.startsWith('UPDATE tasks')) return rows([{ id: T, status: 'done' }]);
+        return rows();
+      });
+
+      await app.inject({ method: 'PATCH', url, headers: auth(), payload: { status: 'done' } });
+
+      const lookup = mockClient.query.mock.calls.find((c) => sqlOf(c).startsWith('SELECT status, assignee_id, created_by FROM tasks'));
+      expect(sqlOf(lookup)).toMatch(/FOR UPDATE$/);
+      expect(lookup![1]).toEqual([T, P, 'org-1']);
+      expect(sqls().indexOf(sqlOf(lookup))).toBeLessThan(sqls().findIndex((s) => s.startsWith('UPDATE tasks')));
+    });
+
     it('rejects an empty body and an invalid status', async () => {
       const empty = await app.inject({ method: 'PATCH', url, headers: auth(), payload: {} });
       expect(empty.statusCode).toBe(400);

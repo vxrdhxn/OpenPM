@@ -75,6 +75,13 @@ export async function findById(scope: TenantScope, id: string): Promise<ProjectR
   return rows[0] ?? null;
 }
 
+/** Whether the project is in the organization; inside a transaction, pass its client. */
+export async function existsInOrg(scope: TenantScope, id: string, client?: PoolClient): Promise<boolean> {
+  const sql = 'SELECT id FROM projects WHERE id = $1 AND org_id = $2';
+  const rows = client ? (await client.query(sql, [id, scope.orgId])).rows : await db.query(sql, [id, scope.orgId]);
+  return rows.length > 0;
+}
+
 /** Lock a project row for the rest of the transaction; null if it is not in the organization. */
 export async function lockForUpdate(
   client: PoolClient,
