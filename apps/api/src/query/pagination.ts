@@ -69,7 +69,12 @@ export function decodeCursor(raw: string): Cursor {
  * Split `limit + 1` fetched rows into the page and the next cursor. Each row must carry `sort_key`
  * (the sort expression as text) and `id`; `sort_key` is removed from the returned items.
  */
-export function toPage<T extends { id: string; sort_key: string }>(rows: T[], limit: number) {
+export interface Page<T> {
+  items: T[];
+  next_cursor: string | null;
+}
+
+export function toPage<T extends { id: string; sort_key: string }>(rows: T[], limit: number): Page<Omit<T, 'sort_key'>> {
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
   const last = page[page.length - 1];

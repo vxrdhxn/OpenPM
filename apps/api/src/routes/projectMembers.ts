@@ -6,6 +6,7 @@ import { cache } from '../cache/redis';
 import { hasMinRole } from '../plugins/auth';
 import { unassignWithoutAccess, userSeesProjectSql } from '../security/projectAccess';
 import { audit, originOf } from '../security/audit';
+import { announceAccessChange } from '../realtime/announce';
 
 class ProjectMemberError extends Error {
   constructor(
@@ -23,9 +24,6 @@ async function logProjectActivity(client: PoolClient, orgId: string, actorId: st
   );
 }
 
-/** Live clients reload who may see what (routes/websocket.ts) and refresh the project. */
-export const announceAccessChange = (orgId: string, projectId: string) =>
-  cache.publish(`org:${orgId}:updates`, { type: 'project_access_changed', project_id: projectId });
 
 /**
  * People of a project: /api/projects/:projectId/members. The app-wide project gate (app.ts) has
