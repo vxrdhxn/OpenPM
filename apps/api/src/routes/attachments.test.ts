@@ -12,6 +12,7 @@ import { db } from '../db/client';
 import { config } from '../config';
 import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
+import uuidParams from '../plugins/uuidParams';
 import attachmentRoutes from './attachments';
 
 const P = '11111111-1111-1111-1111-111111111111';
@@ -81,6 +82,7 @@ describe('Attachment routes', () => {
 
     app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
     await app.register(authPlugin, TRUST_TOKEN_CLAIMS);
+    await app.register(uuidParams); // as in app.ts: ids are UUIDs app-wide
     await app.register(attachmentRoutes, { prefix: '/projects' });
     await app.ready();
   });
