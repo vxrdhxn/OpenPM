@@ -58,6 +58,8 @@ export default async function setup() {
   process.env.DATABASE_URL = appUrl.toString();
   process.env.TEST_OWNER_DATABASE_URL = url.toString();
   process.env.NODE_ENV = 'test';
+  // The real-Redis tests (redisLive.int.test.ts) use the app's own Redis clients, which read REDIS_URL.
+  if (process.env.TEST_REDIS_URL) process.env.REDIS_URL = process.env.TEST_REDIS_URL;
 
   return async () => {
     await admin.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`);

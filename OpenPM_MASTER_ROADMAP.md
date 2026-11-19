@@ -780,8 +780,8 @@ Track:
 - [x] Task CRUD. — route-level and against real Postgres
 - [x] Comments. — `comments.int.test.ts` (real Postgres)
 - [x] Notifications. — `notifications.int.test.ts` (real Postgres)
-- [ ] Redis. — *partial:* shared rate limits run against a real Redis (`rateLimitShared.int.test.ts`); cache and pub/sub are faked
-- [ ] Workers.
+- [x] Redis. — real Redis in CI: shared rate limits (`rateLimitShared.int.test.ts`), and the board cache plus live events end to end through Redis pub/sub to a WebSocket (`redisLive.int.test.ts`)
+- [x] Workers. — the worker's handler runs the jobs the real API queues against real Postgres: every job type, superseded links, tenant scoping, the scheduled sweeps, unknown and malformed jobs (`workerJobs.int.test.ts`)
 
 ## Security
 
