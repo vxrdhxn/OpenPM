@@ -180,7 +180,7 @@ Review/finalize:
 
 - [x] Users.
 - [x] Organizations.
-- [ ] Organization memberships. — *partial:* one org per user (`users.org_id`); removal deactivates the row (`deactivated_at`, migration 013). No multi-org membership table
+- [x] Organization memberships. — one org per user (`users.org_id`) by decision (Nov 2026): no multi-org membership table or org switcher; removal deactivates the row (`deactivated_at`, migration 013)
 - [x] Projects.
 - [x] Project members. — `project_members` (migration 021)
 - [x] Tasks/issues.
@@ -198,7 +198,7 @@ Review/finalize:
 - [x] Foreign keys.
 - [x] Unique constraints.
 - [x] Appropriate indexes. — migration 008
-- [ ] Intentional cascade behavior.
+- [x] Intentional cascade behavior. — every foreign key's ON DELETE rule pinned by `deletion.int.test.ts`; who-did-it columns refuse a user delete (migration 023 fixed `activity_log.user_id`, which cascaded) (`docs/data-deletion.md`)
 - [x] Consistent timestamps. — `organizations` (migration 020) and `projects` (021) have `updated_at`
 - [ ] Optimistic concurrency where needed.
 - [x] Reproducible migrations. — numbered up/down SQL; `migrate`, `migrate:down`, `migrate:status`; run by Docker Compose
