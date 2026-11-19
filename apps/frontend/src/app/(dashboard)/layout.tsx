@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BellRing, CheckSquare, FolderKanban, LayoutDashboard, Loader2, LogOut, Menu, Settings, ShieldCheck, User, X } from 'lucide-react';
+import { BellRing, CheckSquare, FolderKanban, LayoutDashboard, Loader2, Menu, Settings, ShieldCheck, User, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import WebsocketProvider from '@/hooks/WebsocketProvider';
 import NotificationsLink from '@/components/NotificationsLink';
+import AccountMenu from '@/components/AccountMenu';
 import { messageOf, OfflineBanner } from '@/components/ui/feedback';
 import { ErrorBlock } from '@/components/ui/states';
 
@@ -44,29 +45,6 @@ function Nav({ me, pathname }: { me: Me; pathname: string }) {
       {isManager && item('/settings/organization', 'Organization', Settings)}
       {isManager && item('/settings/security', 'Security log', ShieldCheck)}
     </nav>
-  );
-}
-
-function Account({ me, onLogout, loggingOut }: { me: Me; onLogout: () => void; loggingOut: boolean }) {
-  return (
-    <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{me.name}</p>
-        <p className="text-xs text-slate-500 truncate">
-          {me.email} · <span className="capitalize">{me.role}</span>
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onLogout}
-        disabled={loggingOut}
-        className="shrink-0 p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
-        aria-label="Sign out"
-        title="Sign out"
-      >
-        {loggingOut ? <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" /> : <LogOut className="w-5 h-5" aria-hidden="true" />}
-      </button>
-    </div>
   );
 }
 
@@ -163,7 +141,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Brand />
           </div>
           <Nav me={me} pathname={pathname} />
-          <Account me={me} onLogout={handleLogout} loggingOut={loggingOut} />
+          <AccountMenu me={me} onLogout={handleLogout} loggingOut={loggingOut} />
         </aside>
 
         {/* Drawer on narrow screens */}
@@ -190,7 +168,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </button>
               </div>
               <Nav me={me} pathname={pathname} />
-              <Account me={me} onLogout={handleLogout} loggingOut={loggingOut} />
+              <AccountMenu me={me} onLogout={handleLogout} loggingOut={loggingOut} />
             </div>
           </div>
         )}

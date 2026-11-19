@@ -29,6 +29,11 @@ The first scan found these problems, all now fixed:
   and moves focus to the main content.
 - **Navigation\*:** `nav` is labelled "Main" and the current page has `aria-current="page"`. On phones
   the menu button opens a drawer that closes on Escape and returns focus to the button.
+- **Account menu\*:** the WAI-ARIA menu button pattern (`components/AccountMenu.tsx`). Enter, Space
+  or Down Arrow open it on the first item, Up Arrow on the last. Arrows move and wrap, Home and End
+  jump, Escape closes it and returns focus to the button (inside the phone drawer it closes only the
+  menu), and Tab or a click outside closes it. The button's accessible name is its visible text with
+  "Account:" before it, so speech users can say what they see.
 - **Board\*:** each card's title is a button (Enter opens the task). The drag handle is keyboard
   operable (Space to lift, arrow keys to move, Space to drop, by `@hello-pangea/dnd`); a test moves a
   task to another column this way and checks it was saved. Status can also

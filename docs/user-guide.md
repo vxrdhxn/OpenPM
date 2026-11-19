@@ -72,4 +72,5 @@ your unread notifications (assignments and mentions).
 ## Your account
 
 Settings → Profile changes your name and password. Changing the password signs you out everywhere
-else. *Sign out* is at the bottom of the sidebar (in the menu on a phone).
+else. Your name at the bottom of the sidebar (in the menu on a phone) opens the account menu:
+*Profile*, *Notification settings* and *Sign out*. Signing out ends your sessions on every device.

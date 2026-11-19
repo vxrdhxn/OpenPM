@@ -330,7 +330,7 @@ Actions:
 - [x] Consistent application shell.
 - [ ] Organization switcher.
 - [ ] Project navigation.
-- [ ] User/account menu. — *partial:* name, email, role and sign out in the sidebar; no menu
+- [x] User/account menu. — `components/AccountMenu.tsx`: name and role, a menu with profile, notification settings and sign out; WAI-ARIA menu button keyboard; browser-tested on desktop and in the phone drawer
 - [x] Responsive navigation.
 - [x] Mobile behavior.
 - [x] Correct loading states.
