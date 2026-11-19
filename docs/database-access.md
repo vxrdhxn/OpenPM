@@ -72,3 +72,30 @@ onto a server where the app user does not exist yet works. The grants come back 
 Tests: the whole integration suite connects as an app user created this way
 (`test/integration/globalSetup.ts`), so every route is tested with exactly these rights.
 `databaseAccess.int.test.ts` checks what it must not be able to do.
+
+## Indexes
+
+Reviewed in November 2026 (migration 030) against the schema and the queries in `apps/api/src/data/`:
+
+- **Every column a frequent delete cascades through is indexed.** Deleting a task, project or
+  comment removes its notifications by `task_id`, `project_id` and `comment_id`, which now have
+  partial indexes. Before, each such delete scanned the whole `notifications` table.
+- **No duplicates.** Four indexes repeated the index Postgres keeps for a `UNIQUE` constraint and
+  were dropped (`users.email`, invite `org_id` and `token_hash`, reset `token_hash`).
+- **Deliberately not indexed:** foreign keys checked only when a user or a whole organization is
+  deleted. Users are never deleted, and organization deletion is rare and runs once. These are
+  `created_by`, `author_id`, `uploaded_by`, `actor_id`, `added_by`, `comment_mentions.user_id`, and
+  the `org_id` of `task_comments`, `task_labels`, `notifications` and `project_members`, which are
+  read through other indexes.
+
+To repeat the check, list foreign keys without a leading index, and indexes covered by another:
+
+```sql
+SELECT c.conrelid::regclass, a.attname FROM pg_constraint c
+  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+ WHERE c.contype = 'f'
+   AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.conrelid AND i.indkey[0] = c.conkey[1]);
+```
+
+Indexes are created inside the migration's transaction (no `CONCURRENTLY`), which blocks writes to
+the table while it is built. On a large `notifications` table, run the migration in a quiet window.

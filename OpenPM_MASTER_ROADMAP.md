@@ -899,7 +899,7 @@ Audit event
 
 - [x] Analyze slow queries.
 - [x] Use `EXPLAIN` where appropriate.
-- [ ] Review indexes.
+- [x] Review indexes. — migration 030: notifications indexed for the cascades from task/project/comment deletes; four duplicates of unique-constraint indexes dropped; the rest justified (`docs/database-access.md`)
 - [x] Review connection pooling. — exhaustion answered 503; 2 min idle timeout; bcrypt kept off the pool's DNS threads
 - [x] Test under realistic load. — Compose, single machine (a real cluster is G.5)
 
