@@ -25,6 +25,7 @@ describe('worker config', () => {
       WORKER_CONCURRENCY: 5,
       METRICS_PORT: 9100,
       DUE_REMINDER_INTERVAL_MINUTES: 15,
+      NOTIFICATION_RETENTION_DAYS: 90,
       APP_URL: 'http://localhost:3001',
       EMAIL_FROM_ADDRESS: 'notifications@openpm.local',
     });
@@ -65,6 +66,7 @@ describe('worker config', () => {
     ['METRICS_PORT', '70000'],
     ['METRICS_PORT', 'x'],
     ['DUE_REMINDER_INTERVAL_MINUTES', '0'],
+    ['NOTIFICATION_RETENTION_DAYS', '-1'],
     ['APP_URL', 'pm.example.com'],
     ['DATABASE_URL', 'not a url'],
     ['REDIS_URL', 'not a url'],

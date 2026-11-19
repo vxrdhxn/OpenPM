@@ -13,6 +13,7 @@ The API enqueues jobs on one BullMQ queue, `tasks`, in Redis (`apps/api/src/queu
 | `signup_verification` | `POST /api/auth/register` (verification on, new address) | `signup_id`, `token`, `request_id` | Emails the link that finishes the sign-up (`docs/signup.md`) |
 | `signup_existing_account` | `POST /api/auth/register` (verification on, address has an account) | `user_id`, `org_id`, `request_id` | Tells the account owner; at most one an hour (job id per hour) |
 | `due_reminders` | The worker's own job scheduler, every 15 min | none | Notifies assignees of tasks due within 24h (`docs/notifications.md`); 1 attempt, the next run catches up |
+| `notification_cleanup` | The worker's own job scheduler, every 6 h | none | Deletes notifications older than `NOTIFICATION_RETENTION_DAYS`, in batches; 1 attempt |
 
 - **Tenant scope.** Every lookup for `task_created` and `invite_created` is filtered by the job's `org_id`. A job that names a row from another organization finds nothing and sends nothing. `password_reset_requested` is keyed by the user and must match the token hash.
 - **Staleness.** Before sending, each job checks that its email still makes sense: the task and assignee still exist, and the invite or reset token is still current, unused and unexpired. Otherwise it completes without sending.
@@ -47,6 +48,7 @@ The worker checks its environment at startup (`apps/worker/src/config.ts`) and e
 | `APP_URL` | `http://localhost:3001` | URL; **required when `NODE_ENV=production`**, so emails never carry localhost links |
 | `WORKER_CONCURRENCY` | `5` | positive whole number |
 | `DUE_REMINDER_INTERVAL_MINUTES` | `15` | positive whole number (`docs/notifications.md`) |
+| `NOTIFICATION_RETENTION_DAYS` | `90` | positive whole number (`docs/notifications.md`) |
 | `METRICS_PORT` | `9100` | port number |
 | `LOG_LEVEL` | `info` | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent` |
 | `RESEND_API_KEY` | unset (emails not sent) | |

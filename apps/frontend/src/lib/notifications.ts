@@ -24,6 +24,24 @@ export const unreadCount = (): Promise<{ count: number }> => api.get('/notificat
 export const markRead = (id: string): Promise<void> => api.post(`/notifications/${id}/read`, {});
 export const markAllRead = (): Promise<{ marked: number }> => api.post('/notifications/read-all', {});
 
+/** Which types the user switched off (docs/notifications.md). */
+export interface NotificationPreferences {
+  types: string[];
+  muted: string[];
+}
+export const getPreferences = (): Promise<NotificationPreferences> => api.get('/notifications/preferences');
+export const savePreferences = (muted: string[]): Promise<NotificationPreferences> => api.put('/notifications/preferences', { muted });
+
+/** What each type is, as a "Notify me when…" line on the preferences page. */
+export const TYPE_LABELS: Record<NotificationType, string> = {
+  task_assigned: 'someone assigns me a task',
+  mentioned: 'someone @mentions me in a comment',
+  commented: 'someone comments on a task I created or am assigned',
+  status_changed: 'a task I created or am assigned moves to another column',
+  due_soon: 'a task assigned to me is due within 24 hours',
+};
+export const typeLabel = (type: string) => TYPE_LABELS[type as NotificationType] ?? type;
+
 
 /** One line for a notification: "Ada assigned you Fix login". The title is plain text. */
 export function describeNotification(n: Pick<AppNotification, 'type' | 'actor_name' | 'task_title' | 'data'>): string {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { CheckSquare, FolderKanban, LayoutDashboard, Loader2, LogOut, Menu, Settings, ShieldCheck, User, X } from 'lucide-react';
+import { BellRing, CheckSquare, FolderKanban, LayoutDashboard, Loader2, LogOut, Menu, Settings, ShieldCheck, User, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import WebsocketProvider from '@/hooks/WebsocketProvider';
 import NotificationsLink from '@/components/NotificationsLink';
@@ -40,6 +40,7 @@ function Nav({ me, pathname }: { me: Me; pathname: string }) {
       <NotificationsLink userId={me.id} active={isActive('/notifications')} />
       <p className="pt-4 pb-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Settings</p>
       {item('/settings/profile', 'Profile', User)}
+      {item('/settings/notifications', 'Notifications', BellRing)}
       {isManager && item('/settings/organization', 'Organization', Settings)}
       {isManager && item('/settings/security', 'Security log', ShieldCheck)}
     </nav>

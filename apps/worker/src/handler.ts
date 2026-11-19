@@ -5,6 +5,8 @@ import processTaskCreated from './processors/taskCreated';
 import processInviteCreated from './processors/inviteCreated';
 import processPasswordResetRequested from './processors/passwordResetRequested';
 import processDueReminders from './processors/dueReminders';
+import processNotificationCleanup from './processors/notificationCleanup';
+import { config } from './config';
 import processSignupVerification from './processors/signupVerification';
 import processSignupExistingAccount from './processors/signupExistingAccount';
 
@@ -53,6 +55,8 @@ export async function handleJob(job: Job, base: Logger = rootLogger): Promise<vo
       await processSignupExistingAccount(job, log);
     } else if (job.name === 'due_reminders') {
       await processDueReminders(log);
+    } else if (job.name === 'notification_cleanup') {
+      await processNotificationCleanup(config.NOTIFICATION_RETENTION_DAYS, log);
     } else {
       // A producer/consumer mismatch, typically mid-deploy (new API, old worker). Fail retryably so a
       // worker that knows this job can pick it up, instead of completing it and losing it.

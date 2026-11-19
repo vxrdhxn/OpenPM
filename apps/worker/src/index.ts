@@ -35,6 +35,13 @@ queue
     { name: 'due_reminders', data: {}, opts: { attempts: 1, removeOnComplete: true, removeOnFail: { age: 24 * 60 * 60 } } }
   )
   .catch((err) => logger.error({ err }, 'Could not schedule due-date reminders'));
+queue
+  .upsertJobScheduler(
+    'notification_cleanup',
+    { every: 6 * 60 * 60_000 },
+    { name: 'notification_cleanup', data: {}, opts: { attempts: 1, removeOnComplete: true, removeOnFail: { age: 24 * 60 * 60 } } }
+  )
+  .catch((err) => logger.error({ err }, 'Could not schedule notification cleanup'));
 const metricsPort = config.METRICS_PORT;
 const metricsServer = startMetricsServer(metricsPort).catch((err) => {
   // A port clash must not take the worker down: jobs matter more than metrics.

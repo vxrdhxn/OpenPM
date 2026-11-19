@@ -3,6 +3,7 @@ import { scopeOf } from '../data/scope';
 import * as notifications from '../data/notifications';
 import { NotFoundError } from '../domain/errors';
 import { paginationQuerySchema } from '../query/pagination';
+import { NOTIFICATION_TYPES } from '../notifications/notify';
 
 /** /api/notifications: the caller's own notifications (read model: data/notifications.ts). */
 const notificationRoutes: FastifyPluginAsync = async (fastify) => {
@@ -26,6 +27,29 @@ const notificationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>('/:id/read', async (request, reply) => {
     if (!(await notifications.markRead(scopeOf(request.user), request.params.id))) throw new NotFoundError('Notification not found');
     return reply.code(204).send();
+  });
+
+  // Preferences: which types the caller has switched off (docs/notifications.md).
+  fastify.get('/preferences', async (request) => ({
+    types: NOTIFICATION_TYPES,
+    muted: await notifications.mutedTypes(scopeOf(request.user)),
+  }));
+
+  fastify.put<{ Body: { muted: string[] } }>('/preferences', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['muted'],
+        properties: {
+          muted: { type: 'array', items: { type: 'string', enum: [...NOTIFICATION_TYPES] }, uniqueItems: true, maxItems: NOTIFICATION_TYPES.length },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request) => {
+    const scope = scopeOf(request.user);
+    if (!(await notifications.setMutedTypes(scope, request.body.muted))) throw new NotFoundError('User not found');
+    return { types: NOTIFICATION_TYPES, muted: request.body.muted };
   });
 
   // Mark everything read.

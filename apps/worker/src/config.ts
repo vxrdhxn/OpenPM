@@ -31,6 +31,12 @@ const envSchema = z
       .regex(/^[1-9]\d*$/, 'DUE_REMINDER_INTERVAL_MINUTES must be a positive whole number')
       .default('15')
       .transform(Number),
+    // Notifications older than this are deleted (docs/notifications.md).
+    NOTIFICATION_RETENTION_DAYS: z
+      .string()
+      .regex(/^[1-9]\d*$/, 'NOTIFICATION_RETENTION_DAYS must be a positive whole number')
+      .default('90')
+      .transform(Number),
     // Base URL of the frontend, for links in emails (invites, password resets).
     APP_URL: z.string().trim().url().optional(),
     // Unset: emails are logged instead of sent (development), or skipped with a warning (production).
@@ -55,6 +61,7 @@ const BLANK_MEANS_UNSET = new Set([
   'WORKER_CONCURRENCY',
   'METRICS_PORT',
   'DUE_REMINDER_INTERVAL_MINUTES',
+  'NOTIFICATION_RETENTION_DAYS',
   'APP_URL',
   'RESEND_API_KEY',
   'EMAIL_FROM_ADDRESS',

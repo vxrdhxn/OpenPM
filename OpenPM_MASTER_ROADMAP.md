@@ -490,10 +490,10 @@ Operational controls:
 - [x] In-app notifications. — sidebar badge and `/notifications`
 - [x] Mark read.
 - [x] Mark all read.
-- [ ] Notification preferences.
+- [x] Notification preferences. — per-user muted types (migration 027), never written when muted, Settings → Notifications (`docs/notifications.md`); not yet for emails
 - [x] Real-time delivery. — content-free `notification` event; clients fetch their own
 - [x] Tenant isolation. — recipients filtered to active org members in the INSERT; reads scoped to the caller
-- [ ] Retention/cleanup policy. — kept until the task is deleted
+- [x] Retention/cleanup policy. — the worker deletes notifications older than `NOTIFICATION_RETENTION_DAYS` (90) every 6 hours, in batches
 
 Triggers:
 
@@ -1313,7 +1313,7 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | WebSockets            | 🟢     | Cookie/Bearer auth, Origin check, per-org channel, heartbeat, expiry close, backoff; verified across two API instances and on kind through an Ingress. Payloads are not schema-validated; no per-user connection cap. |
 | Redis                 | 🟢     | Org-scoped cache, shared subscriber per pod, shared rate-limit counters; outage tested (reads from Postgres, writes succeed, rate limiting fails open). Eviction policy is the default, not set explicitly. |
 | BullMQ/Workers        | 🟢     | Three email jobs with retries, idempotent sends, payload validation, metrics and alerts (`docs/jobs.md`); retry verified through a Postgres outage. |
-| Notifications         | 🟢     | In-app: assignment, mention, comment, status change; live badge; mark read. No due-date reminders, preferences or retention policy. |
+| Notifications         | 🟢     | In-app: assignment, mention, comment, status change, due-date reminders; live badge; mark read; per-user preferences; 90-day retention. No email preferences or digests. |
 | Audit logging         | 🟢     | Security audit log (`audit_log`): sign-ins and failures, password changes, role, membership, invite and project-access changes, with IP and device; admin view and `GET /api/audit`; 365-day retention; append-only for the app (`docs/audit-log.md`). Product activity stays in `activity_log`. |
 | API hardening         | 🟡     | Body schemas, UUID params, 1 MB limit, rate limits per real client (`TRUST_PROXY`) shared across pods, helmet, strict CORS, one error shape, timeouts. Swagger is dev-only; routes lack response schemas. |
 | Security              | 🟡     | Threat model and security model (`docs/threat-model.md`, `docs/security-model.md`); pre-release review with 7 fixes. No default credentials, nonce-based CSP, security audit log, least-privilege DB user, hostile-input tests, `npm audit`, gitleaks, Trivy and CodeQL in CI. Open: no MFA or account lockout; sign-up still reveals registered emails; tenant filtering is per query, not in a shared data layer. |

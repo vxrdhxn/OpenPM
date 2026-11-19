@@ -12,7 +12,8 @@ export const REMINDER_WINDOW_HOURS = 24;
  * One statement claims the tasks and writes the notifications: `due_reminder_sent_for` is set to the
  * due date being reminded about, so each due date is reminded once even if sweeps overlap (the row
  * lock makes a second sweep re-check the condition and skip it), and a moved due date is reminded
- * again. Only active members who can still see the project are notified, as for every notification.
+ * again. Only active members who can still see the project and have not muted reminders are
+ * notified, as for every notification.
  */
 export const DUE_REMINDER_SQL = `
   WITH due AS (
@@ -20,6 +21,7 @@ export const DUE_REMINDER_SQL = `
        SET due_reminder_sent_for = t.due_date
       FROM users u, projects p
      WHERE u.id = t.assignee_id AND u.org_id = t.org_id AND u.deactivated_at IS NULL
+       AND NOT ('due_soon' = ANY(u.muted_notification_types))
        AND p.id = t.project_id AND p.org_id = t.org_id
        AND (p.visibility = 'workspace' OR u.role IN ('owner', 'admin')
             OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = u.id))

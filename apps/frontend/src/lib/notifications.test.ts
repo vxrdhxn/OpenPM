@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { badgeText, describeNotification, isForMe } from './notifications';
+import { badgeText, describeNotification, isForMe, TYPE_LABELS, typeLabel } from './notifications';
+
+describe('typeLabel', () => {
+  it('describes every type the API knows, and falls back to the raw name', () => {
+    expect(Object.keys(TYPE_LABELS)).toEqual(['task_assigned', 'mentioned', 'commented', 'status_changed', 'due_soon']);
+    expect(typeLabel('due_soon')).toMatch(/due within 24 hours/);
+    expect(typeLabel('something_new')).toBe('something_new');
+  });
+});
 
 describe('describeNotification', () => {
   const base = { actor_name: 'Ada', task_title: 'Fix login', data: {} };

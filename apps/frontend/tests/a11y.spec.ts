@@ -31,7 +31,7 @@ test.describe('accessibility', () => {
     // Scan lists with content, not only their empty states (a project card once failed contrast).
     const projectId = await createProject(page, 'A11y list');
     await createTask(page, projectId, 'Listed task', { priority: 'high' });
-    for (const path of ['/dashboard', '/projects', '/notifications', '/settings/profile', '/settings/organization']) {
+    for (const path of ['/dashboard', '/projects', '/notifications', '/settings/profile', '/settings/notifications', '/settings/organization']) {
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expectNoViolations(page);

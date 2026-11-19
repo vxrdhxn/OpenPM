@@ -70,3 +70,21 @@ export async function markAllRead(scope: TenantScope): Promise<number> {
   ]);
   return rows.length;
 }
+
+/** The notification types the user switched off. */
+export async function mutedTypes(scope: TenantScope): Promise<string[]> {
+  const rows = await db.query<{ muted: string[] }>(
+    'SELECT muted_notification_types AS muted FROM users WHERE id = $1 AND org_id = $2 AND deactivated_at IS NULL',
+    [scope.userId, scope.orgId]
+  );
+  return rows[0]?.muted ?? [];
+}
+
+/** Replace the user's muted types; false if the account is gone. Types are validated by the route (and a CHECK). */
+export async function setMutedTypes(scope: TenantScope, muted: string[]): Promise<boolean> {
+  const rows = await db.query(
+    'UPDATE users SET muted_notification_types = $1::text[] WHERE id = $2 AND org_id = $3 AND deactivated_at IS NULL RETURNING id',
+    [muted, scope.userId, scope.orgId]
+  );
+  return rows.length > 0;
+}

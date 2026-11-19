@@ -66,7 +66,29 @@ not done and is due within the next 24 hours, and sends the same live `notificat
 Code: `apps/worker/src/processors/dueReminders.ts`; tested against Postgres in
 `apps/api/src/test/integration/dueReminders.int.test.ts`.
 
+## Preferences
+
+Each user chooses which types they get, on **Settings → Notifications**:
+`GET /api/notifications/preferences` returns `{ types, muted }`, and `PUT` with `{ "muted": [...] }`
+replaces the list (known types only, no repeats). Everything is on by default.
+
+A muted type is **never written** for that user: the `INSERT ... SELECT` in `notify.ts` and the
+worker's due-date sweep both skip them. So turning a type back on brings no backlog, and a muted
+due-date reminder is not used up (it still arrives if reminders are switched back on before the due
+date). Stored as `users.muted_notification_types` (migration 027).
+
+Preferences cover in-app notifications. The email sent to the assignee of a newly created task is
+not affected yet.
+
+## Retention
+
+The worker deletes notifications older than `NOTIFICATION_RETENTION_DAYS` (default 90), read or not,
+every 6 hours, in batches of 5,000 so a run never locks much of the table
+(`apps/worker/src/processors/notificationCleanup.ts`, indexed by `created_at`). Deleting a task or
+project still removes its notifications at once.
+
+Tested against Postgres in `apps/api/src/test/integration/notificationPreferences.int.test.ts`.
+
 ## Not implemented yet
 
-- Per-user preferences (muting types, email digests).
-- A retention policy: notifications are kept until their task is deleted.
+- Email digests, and preferences for the emails the worker sends.
