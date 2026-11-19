@@ -29,6 +29,7 @@ export const AUDIT_FILTERS: { label: string; options: { value: string; label: st
       { value: 'auth.login_failed', label: 'Failed sign-in' },
       { value: 'auth.logout', label: 'Signed out' },
       { value: 'auth.password_changed', label: 'Password changed' },
+      { value: 'auth.password_change_failed', label: 'Failed password change' },
       { value: 'auth.password_reset_requested', label: 'Password reset requested' },
       { value: 'auth.password_reset', label: 'Password reset' },
       { value: 'auth.registered', label: 'Workspace created' },
@@ -79,6 +80,8 @@ export function describeAudit(entry: Pick<AuditEntry, 'action' | 'actor_name' | 
       return `${who} signed out on every device`;
     case 'auth.password_changed':
       return `${who} changed their password`;
+    case 'auth.password_change_failed':
+      return `${who} tried to change their password with a wrong current password`;
     case 'auth.password_reset_requested':
       return `A password reset link was requested for ${target}`;
     case 'auth.password_reset':
@@ -116,9 +119,9 @@ export function describeAudit(entry: Pick<AuditEntry, 'action' | 'actor_name' | 
   }
 }
 
-/** Failed sign-ins and ownership or access removals stand out in the list. */
+/** Failed sign-ins and password changes, and ownership or access removals stand out in the list. */
 export const isWarning = (action: string) =>
-  action === 'auth.login_failed' || action === 'member.removed' || action === 'member.ownership_transferred' || action === 'project.deleted';
+  action === 'auth.login_failed' || action === 'auth.password_change_failed' || action === 'member.removed' || action === 'member.ownership_transferred' || action === 'project.deleted';
 
 /** "Firefox on Windows"-style summary of a user agent, enough to spot an unfamiliar device. */
 export function deviceOf(userAgent: string | null): string {

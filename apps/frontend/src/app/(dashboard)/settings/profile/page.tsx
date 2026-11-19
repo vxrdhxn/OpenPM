@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 export default function ProfileSettings() {
   const [profile, setProfile] = useState({ name: '', email: '' });
   const [password, setPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -29,13 +30,16 @@ export default function ProfileSettings() {
 
     const updates: any = { name: profile.name };
     if (password.trim() !== '') {
+      // The API needs the current password to set a new one.
       updates.password = password;
+      updates.current_password = currentPassword;
     }
 
     try {
       await api.patch('/profile/me', updates);
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       setPassword('');
+      setCurrentPassword('');
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Failed to update profile' });
     } finally {
@@ -102,6 +106,27 @@ export default function ProfileSettings() {
             className="w-full px-4 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all dark:text-white"
           />
         </div>
+
+        {password !== '' && (
+          <div>
+            <label htmlFor="profile-current-password" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Current Password
+            </label>
+            <input
+              id="profile-current-password"
+              aria-describedby="profile-current-password-hint"
+              autoComplete="current-password"
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full px-4 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all dark:text-white"
+            />
+            <p id="profile-current-password-hint" className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+              Needed to set a new password. Changing it signs you out on every other device.
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-end pt-4">
           <button

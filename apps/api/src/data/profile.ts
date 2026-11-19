@@ -19,6 +19,15 @@ export async function findOwn(scope: TenantScope): Promise<Profile | null> {
   return rows[0] ?? null;
 }
 
+/** The account's password hash, to check the current password before changing it; undefined if gone. */
+export async function ownPasswordHash(scope: TenantScope): Promise<string | undefined> {
+  const rows = await db.query<{ password_hash: string }>(
+    'SELECT password_hash FROM users WHERE id = $1 AND org_id = $2 AND deactivated_at IS NULL',
+    [scope.userId, scope.orgId]
+  );
+  return rows[0]?.password_hash;
+}
+
 export interface ProfileChanges {
   name?: string;
   /** Already hashed. Setting it also bumps token_version, which ends every session (plugins/session.ts). */

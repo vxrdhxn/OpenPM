@@ -17,6 +17,7 @@ export const AUDIT_ACTIONS = [
   'auth.login_failed', // wrong password for an existing, active account
   'auth.logout',
   'auth.password_changed',
+  'auth.password_change_failed', // wrong current password when changing it
   'auth.password_reset_requested',
   'auth.password_reset',
   'member.role_changed',

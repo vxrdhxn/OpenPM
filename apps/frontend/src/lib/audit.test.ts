@@ -12,6 +12,7 @@ describe('describeAudit', () => {
   it.each([
     [entry('auth.login'), 'Ada signed in'],
     [entry('auth.login_failed'), "Failed sign-in to Bo's account (wrong password)"],
+    [entry('auth.password_change_failed'), 'Ada tried to change their password with a wrong current password'],
     [entry('member.role_changed', { from: 'member', to: 'admin' }), "Ada changed Bo's role from Member to Admin"],
     [entry('member.ownership_transferred'), 'Ada transferred ownership to Bo'],
     [entry('project.visibility_changed', { to: 'private' }, 'Payroll'), 'Ada made Payroll private'],
@@ -34,7 +35,7 @@ describe('AUDIT_FILTERS', () => {
   it('names every action once', () => {
     const values = AUDIT_FILTERS.flatMap((g) => g.options.map((o) => o.value));
     expect(new Set(values).size).toBe(values.length);
-    expect(values).toHaveLength(20);
+    expect(values).toHaveLength(21);
   });
 });
 

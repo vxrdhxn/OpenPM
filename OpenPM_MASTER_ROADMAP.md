@@ -125,6 +125,7 @@ npm test
 - [x] Rate-limit authentication endpoints. — login/register 10/min, forgot-password 5/min, reset-password 10/min, invite lookup/accept 20/10 per min
 - [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform; register answers a taken email and a taken slug identically (H.3), but still fails where a fresh email would succeed. Fully closing it needs verify-by-email sign-up
 - [x] Audit security-sensitive authentication events. — sign-ins, failed sign-ins for existing accounts, sign-outs, password changes and resets in `audit_log` (`docs/audit-log.md`)
+- [x] Require the current password to change it. — `PATCH /api/profile/me` needs `current_password` with `password`; a wrong one is a 403 that changes nothing, audited as `auth.password_change_failed`, rate-limited 10/min (Nov 2026)
 - [x] Add authentication bypass tests. — `security_rbac.test.ts`, `websocket.test.ts`
 
 ---

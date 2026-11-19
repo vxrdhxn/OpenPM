@@ -66,7 +66,7 @@ describe('security audit log (real Postgres)', () => {
     const viewer = await addUser(app, owner.orgId, 'viewer');
 
     // (The member's own session ends with the password change; the owner's must keep working here.)
-    expect((await call(member, 'PATCH', '/api/profile/me', { password: 'a-new-password-1' })).statusCode).toBe(200);
+    expect((await call(member, 'PATCH', '/api/profile/me', { password: 'a-new-password-1', current_password: 'password123' })).statusCode).toBe(200);
     expect((await call(owner, 'PATCH', `/api/members/${member.userId}`, { role: 'admin' })).statusCode).toBe(200);
     expect((await call(owner, 'DELETE', `/api/members/${viewer.userId}`)).statusCode).toBe(204);
 

@@ -52,7 +52,7 @@ describe('sessions and revocation (real Postgres)', () => {
       method: 'PATCH',
       url: '/api/profile/me',
       headers: bearer(current),
-      payload: { password: 'brand-new-password' },
+      payload: { password: 'brand-new-password', current_password: 'password123' },
     });
     expect(res.statusCode).toBe(200);
 
@@ -60,6 +60,27 @@ describe('sessions and revocation (real Postgres)', () => {
     expect((await me(reissued)).statusCode).toBe(200);
     expect((await me(current)).statusCode).toBe(401);
     expect((await me(other)).statusCode).toBe(401);
+  });
+
+  it('a stolen session cannot change the password without knowing the current one', async () => {
+    const admin = await registerOrg(app, 'password123');
+    const session = await login(admin.email, 'password123');
+    const change = (payload: object) => app.inject({ method: 'PATCH', url: '/api/profile/me', headers: bearer(session), payload });
+
+    expect((await change({ password: 'attacker-password' })).statusCode).toBe(400);
+    const wrong = await change({ password: 'attacker-password', current_password: 'a-guess' });
+    expect(wrong.statusCode).toBe(403);
+    expect(wrong.json()).toEqual({ error: 'Your current password is incorrect.' });
+
+    // Nothing changed: the old password still signs in, the session still works, and the attempt is audited.
+    expect((await me(session)).statusCode).toBe(200);
+    const attackerLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: admin.email, password: 'attacker-password' } });
+    expect(attackerLogin.statusCode).toBe(401);
+    expect((await me(await login(admin.email, 'password123'))).statusCode).toBe(200);
+    expect(await row('SELECT token_version FROM users WHERE id = $1', [admin.userId])).toEqual({ token_version: 0 });
+    await expect
+      .poll(async () => (await db.query("SELECT 1 FROM audit_log WHERE actor_id = $1 AND action = 'auth.password_change_failed'", [admin.userId])).length)
+      .toBe(1);
   });
 
   it('a password reset ends every existing session', async () => {

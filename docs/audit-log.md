@@ -19,7 +19,8 @@ on projects and tasks.
 | `auth.login` | A sign-in succeeds | them | them |
 | `auth.login_failed` | A wrong password for an **existing, active** account | none | the account |
 | `auth.logout` | Sign-out (ends every session of that user) | them | them |
-| `auth.password_changed` | From the profile page | them | them |
+| `auth.password_changed` | From the profile page (needs the current password) | them | them |
+| `auth.password_change_failed` | Wrong current password on the profile page | them | them |
 | `auth.password_reset_requested` | *Forgot password* for an existing account | none | the account |
 | `auth.password_reset` | A reset link is used | none | the account |
 | `member.role_changed` | `{ from, to }` | admin/owner | the member |

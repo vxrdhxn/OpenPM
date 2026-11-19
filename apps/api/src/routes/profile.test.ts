@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 
+const bcryptState = vi.hoisted(() => ({ matches: true }));
 vi.mock('bcrypt', () => {
-  const api = { hash: async (pw: string) => `hashed:${pw}`, compare: async () => true };
+  const api = { hash: async (pw: string) => `hashed:${pw}`, compare: async () => bcryptState.matches };
   return { default: api, ...api };
 });
 vi.mock('../db/client', () => ({
@@ -23,6 +24,7 @@ describe('Profile routes', () => {
 
   beforeEach(async () => {
     vi.resetAllMocks();
+    bcryptState.matches = true;
     // Same Ajv options as production (src/app.ts): unknown keys are NOT stripped.
     app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
     await app.register(cookie);
@@ -83,12 +85,14 @@ describe('Profile routes', () => {
     });
 
     it('stores a hashed password in password_hash and never the plaintext', async () => {
-      vi.mocked(db.query).mockResolvedValue([{ id: 'user-1', name: 'Ada', email: 'a@b.com', role: 'viewer', org_id: 'org-1', token_version: 3 }]);
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([{ password_hash: 'stored' }]) // current password check
+        .mockResolvedValue([{ id: 'user-1', name: 'Ada', email: 'a@b.com', role: 'viewer', org_id: 'org-1', token_version: 3 }]);
 
-      const res = await patch({ password: 'newpassword1' });
+      const res = await patch({ password: 'newpassword1', current_password: 'oldpassword1' });
 
       expect(res.statusCode).toBe(200);
-      const call = vi.mocked(db.query).mock.calls[0];
+      const call = vi.mocked(db.query).mock.calls[1];
       expect(sqlOf(call)).toBe(
         'UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 AND org_id = $3 RETURNING id, name, email, role, org_id, token_version'
       );
@@ -97,12 +101,14 @@ describe('Profile routes', () => {
     });
 
     it('updates name and password together with correct parameter order', async () => {
-      vi.mocked(db.query).mockResolvedValue([{ id: 'user-1', org_id: 'org-1', role: 'viewer', token_version: 1 }]);
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([{ password_hash: 'stored' }])
+        .mockResolvedValue([{ id: 'user-1', org_id: 'org-1', role: 'viewer', token_version: 1 }]);
 
-      const res = await patch({ name: 'Ada', password: 'newpassword1' });
+      const res = await patch({ name: 'Ada', password: 'newpassword1', current_password: 'oldpassword1' });
 
       expect(res.statusCode).toBe(200);
-      const call = vi.mocked(db.query).mock.calls[0];
+      const call = vi.mocked(db.query).mock.calls[1];
       expect(sqlOf(call)).toBe(
         'UPDATE users SET name = $1, password_hash = $2, token_version = token_version + 1 WHERE id = $3 AND org_id = $4 RETURNING id, name, email, role, org_id, token_version'
       );
@@ -116,11 +122,43 @@ describe('Profile routes', () => {
     });
   });
 
+  describe('PATCH /me — current password', () => {
+    it('requires the current password to set a new one', async () => {
+      const res = await patch({ password: 'newpassword1' });
+
+      expect(res.statusCode).toBe(400);
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('refuses a wrong current password, changes nothing (not even the name) and audits the attempt', async () => {
+      bcryptState.matches = false;
+      vi.mocked(db.query).mockResolvedValueOnce([{ password_hash: 'stored' }]).mockResolvedValue([]);
+
+      const res = await patch({ name: 'Ada', password: 'newpassword1', current_password: 'guess' });
+
+      expect(res.statusCode).toBe(403);
+      expect((res.cookies as Cookie[]).find((c) => c.name === 'auth_token')).toBeUndefined();
+      const sqls = vi.mocked(db.query).mock.calls.map(sqlOf);
+      expect(sqls.some((q) => q.startsWith('UPDATE users'))).toBe(false);
+      const audit = vi.mocked(db.query).mock.calls.find((c) => sqlOf(c).startsWith('INSERT INTO audit_log'));
+      expect(audit![1]).toContain('auth.password_change_failed');
+    });
+
+    it('does not ask for it to change only the name', async () => {
+      vi.mocked(db.query).mockResolvedValue([{ id: 'user-1', name: 'Ada', email: 'a@b.com', role: 'viewer' }]);
+
+      expect((await patch({ name: 'Ada' })).statusCode).toBe(200);
+      expect(sqlOf(vi.mocked(db.query).mock.calls[0])).toMatch(/^UPDATE users SET name = \$1/);
+    });
+  });
+
   describe('PATCH /me — sessions', () => {
     it('re-issues the caller session with the new token version after a password change', async () => {
-      vi.mocked(db.query).mockResolvedValue([{ id: 'user-1', name: 'Ada', email: 'a@b.com', role: 'viewer', org_id: 'org-1', token_version: 4 }]);
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([{ password_hash: 'stored' }])
+        .mockResolvedValue([{ id: 'user-1', name: 'Ada', email: 'a@b.com', role: 'viewer', org_id: 'org-1', token_version: 4 }]);
 
-      const res = await patch({ password: 'newpassword1' });
+      const res = await patch({ password: 'newpassword1', current_password: 'oldpassword1' });
 
       const cookie = (res.cookies as Cookie[]).find((c) => c.name === 'auth_token');
       expect(cookie?.httpOnly).toBe(true);
