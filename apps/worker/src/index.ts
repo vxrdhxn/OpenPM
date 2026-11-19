@@ -6,26 +6,23 @@ import { logger } from './lib/logger';
 import { handleJob, jobLogger } from './handler';
 import { registerQueueMetrics } from './metrics';
 import { startMetricsServer } from './metricsServer';
-import dotenv from 'dotenv';
+import { config } from './config';
 
-// Load env for local dev (ignored in K8s)
-dotenv.config({ path: '../../.env' });
-
-const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const redisConnection = new IORedis(config.REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 redisConnection.on('error', (err) => logger.error({ err }, 'Redis connection error'));
 
 // Jobs are I/O-bound (Postgres, email API), so several run at once per worker. Retries, backoff and
 // payload rules are described in docs/jobs.md.
-const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY) || 5);
+const concurrency = config.WORKER_CONCURRENCY;
 const worker = new Worker('tasks', (job) => handleJob(job), { connection: redisConnection, concurrency });
 
 // Metrics: process-level defaults, queue depth/lag (read from Redis at scrape time), and an HTTP
 // endpoint for Prometheus. A second Queue handle is used only for reading counts.
 client.collectDefaultMetrics();
 registerQueueMetrics(new Queue('tasks', { connection: redisConnection }));
-const metricsPort = Number(process.env.METRICS_PORT ?? 9100);
+const metricsPort = config.METRICS_PORT;
 const metricsServer = startMetricsServer(metricsPort).catch((err) => {
   // A port clash must not take the worker down: jobs matter more than metrics.
   logger.error({ err, port: metricsPort }, 'Could not start metrics server');

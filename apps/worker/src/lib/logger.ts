@@ -1,17 +1,11 @@
 import pino from 'pino';
+import { config } from '../config';
 
 /**
  * Structured (JSON) logging for the worker, matching the API's format so one query works across
  * both: `level` is a label, `time` is ISO-8601, `service` names the process, and jobs log with the
  * `request_id` of the HTTP request that enqueued them.
  */
-
-const LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
-
-/** An unrecognized LOG_LEVEL must not stop the worker from starting (pino throws on unknown levels). */
-export function resolveLevel(value: string | undefined): (typeof LEVELS)[number] {
-  return (LEVELS as readonly string[]).includes(value ?? '') ? (value as (typeof LEVELS)[number]) : 'info';
-}
 
 /** Paths whose values are replaced by "[Redacted]" before anything is written. */
 export const REDACT_PATHS = [
@@ -30,7 +24,7 @@ export const REDACT_PATHS = [
 ];
 
 export const loggerOptions: pino.LoggerOptions = {
-  level: resolveLevel(process.env.LOG_LEVEL),
+  level: config.LOG_LEVEL, // validated at startup (config.ts)
   base: { service: 'openpm-worker' },
   timestamp: pino.stdTimeFunctions.isoTime,
   formatters: { level: (label) => ({ level: label }) },

@@ -159,6 +159,7 @@ describe('sendEmailNotification', () => {
 
     it('in production never logs the address, subject or body, only a warning with the domain', async () => {
       vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('APP_URL', 'https://pm.example.com'); // required in production
       const { log, calls, all } = fakeLog();
 
       await run(log);
@@ -213,6 +214,7 @@ describe('email result metrics', () => {
   it.each(['development', 'production'])('counts a mail not sent for lack of a provider as skipped (%s)', async (env) => {
     vi.stubEnv('RESEND_API_KEY', '');
     vi.stubEnv('NODE_ENV', env);
+    vi.stubEnv('APP_URL', 'https://pm.example.com'); // required in production
     vi.useFakeTimers();
 
     const { sendEmailNotification } = await loadEmail();

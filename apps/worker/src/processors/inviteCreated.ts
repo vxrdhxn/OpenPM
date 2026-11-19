@@ -2,7 +2,7 @@ import { Job } from 'bullmq';
 import { pool } from '../lib/db';
 import { sendEmailNotification } from '../lib/email';
 import { logger, Logger } from '../lib/logger';
-import { appUrl } from '../lib/appUrl';
+import { config } from '../config';
 import { hashToken } from '../lib/tokens';
 import { jobIdempotencyKey, requireFields } from '../lib/jobs';
 
@@ -16,7 +16,7 @@ const oneLine = (value: string) => value.replace(/[\r\n]+/g, ' ').trim();
 export default async function processInviteCreated(job: Job, log: Logger = logger) {
   const { invite_id, org_id, token } = requireFields(job, ['invite_id', 'org_id', 'token']);
 
-  const link = `${appUrl()}/invite?token=${encodeURIComponent(token)}`;
+  const link = `${config.APP_URL}/invite?token=${encodeURIComponent(token)}`;
 
   const res = await pool.query(
     `SELECT i.email, i.role, i.token_hash, i.expires_at, o.name AS org_name

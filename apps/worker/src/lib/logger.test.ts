@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
-import { REDACT_PATHS, domainOf, loggerOptions, resolveLevel } from './logger';
+import { REDACT_PATHS, domainOf, loggerOptions } from './logger';
 
 function capture() {
   const raw: string[] = [];
@@ -46,17 +46,6 @@ describe('worker log format', () => {
     }
 
     expect(raw.join('')).not.toContain('LEAK-');
-  });
-});
-
-describe('resolveLevel', () => {
-  it.each(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])('accepts %s', (level) => {
-    expect(resolveLevel(level)).toBe(level);
-  });
-
-  it.each([undefined, '', 'verbose', 'INFO', 'warning'])('falls back to info for %j instead of crashing pino', (value) => {
-    expect(resolveLevel(value)).toBe('info');
-    expect(() => pino({ level: resolveLevel(value) })).not.toThrow();
   });
 });
 

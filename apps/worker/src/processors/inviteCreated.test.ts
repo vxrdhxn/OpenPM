@@ -7,6 +7,10 @@ const { query, sendEmailNotification } = vi.hoisted(() => ({ query: vi.fn(), sen
 
 vi.mock('../lib/db', () => ({ pool: { query } }));
 vi.mock('../lib/email', () => ({ sendEmailNotification }));
+vi.mock('../config', async (importOriginal) => {
+  const { config } = await importOriginal<typeof import('../config')>();
+  return { config: { ...config, APP_URL: 'https://pm.example.com' } };
+});
 
 import processInviteCreated from './inviteCreated';
 
@@ -32,12 +36,10 @@ describe('processInviteCreated', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.unstubAllEnvs();
     log = makeLog();
   });
 
   it('emails an accept link with the raw token to the invited address', async () => {
-    vi.stubEnv('APP_URL', 'https://pm.example.com/');
     query.mockResolvedValueOnce(rows([invite()]));
 
     await processInviteCreated(job({ invite_id: 'i1', org_id: 'o1', token: TOKEN }), asLogger(log));

@@ -34,6 +34,22 @@ Defaults are set on the queue (`DEFAULT_JOB_OPTIONS`):
 
 **No duplicate emails.** Each send carries an idempotency key, `openpm/<job name>/<job id>/<enqueued at>`. The key is the same for every retry of a job, and the provider sends each key at most once within 24 h. So a retry after a timeout, or after a worker crash mid-send, cannot deliver a second copy.
 
+## Configuration
+
+The worker checks its environment at startup (`apps/worker/src/config.ts`) and exits with a list of every invalid variable rather than starting with silent fallbacks:
+
+| Variable | Default | Rule |
+| --- | --- | --- |
+| `DATABASE_URL`, `REDIS_URL` | local development servers | URLs |
+| `APP_URL` | `http://localhost:3001` | URL; **required when `NODE_ENV=production`**, so emails never carry localhost links |
+| `WORKER_CONCURRENCY` | `5` | positive whole number |
+| `METRICS_PORT` | `9100` | port number |
+| `LOG_LEVEL` | `info` | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent` |
+| `RESEND_API_KEY` | unset (emails not sent) | |
+| `EMAIL_FROM_ADDRESS` | `notifications@openpm.local` | email address |
+
+Blank values (as in a freshly copied `.env.example`) count as unset, except for the connection URLs.
+
 ## Watching it
 
 - `worker_jobs_total{status}` counts each attempt:

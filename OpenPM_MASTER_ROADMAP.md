@@ -97,7 +97,7 @@ npm test
 - [x] Remove unsafe `any` from important paths. — routes, services and repositories are typed (route generics for body/params/query); `any` remains only in infrastructure helpers (cache payloads, `db.query`'s default row type, the realtime hub)
 - [ ] Avoid duplicated domain types.
 - [x] Validate external input at runtime. — bodies, query strings and path params by JSON Schema; NUL bytes refused; the WebSocket accepts no client messages
-- [ ] Validate environment variables at startup. — *partial:* API validates with zod (`config.ts`); the worker reads `process.env` directly
+- [x] Validate environment variables at startup. — API and worker both validate with zod (`apps/api/src/config.ts`, `apps/worker/src/config.ts`) and exit listing every invalid variable; the worker requires `APP_URL` in production (`docs/jobs.md`)
 
 ## Dependencies
 

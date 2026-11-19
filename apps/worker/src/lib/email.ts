@@ -1,13 +1,11 @@
 import { Resend } from 'resend';
 import { UnrecoverableError } from 'bullmq';
-import dotenv from 'dotenv';
 import { domainOf, logger, Logger } from './logger';
 import { emailsTotal } from '../metrics';
+import { config } from '../config';
 
-dotenv.config({ path: '../../.env' });
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const fromEmail = process.env.EMAIL_FROM_ADDRESS || 'notifications@openpm.local';
+const resend = config.RESEND_API_KEY ? new Resend(config.RESEND_API_KEY) : null;
+const fromEmail = config.EMAIL_FROM_ADDRESS;
 
 /** Give up on one provider call after this long; the job is retried (the idempotency key prevents duplicates). */
 export const EMAIL_SEND_TIMEOUT_MS = 15_000;
@@ -93,7 +91,7 @@ export async function sendEmailNotification(
 
     emailsTotal.inc({ result: 'sent' });
     log.info({ to_domain, message_id: data?.id }, 'Email sent');
-  } else if (process.env.NODE_ENV === 'production') {
+  } else if (config.NODE_ENV === 'production') {
     emailsTotal.inc({ result: 'skipped' });
     log.warn({ to_domain }, 'Email not sent: RESEND_API_KEY is not configured');
   } else {

@@ -2,7 +2,7 @@ import { Job } from 'bullmq';
 import { pool } from '../lib/db';
 import { sendEmailNotification } from '../lib/email';
 import { logger, Logger } from '../lib/logger';
-import { appUrl } from '../lib/appUrl';
+import { config } from '../config';
 import { hashToken } from '../lib/tokens';
 import { jobIdempotencyKey, requireFields } from '../lib/jobs';
 
@@ -13,7 +13,7 @@ import { jobIdempotencyKey, requireFields } from '../lib/jobs';
 export default async function processPasswordResetRequested(job: Job, log: Logger = logger) {
   const { user_id, token } = requireFields(job, ['user_id', 'token']);
 
-  const link = `${appUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+  const link = `${config.APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
 
   // Only send a link that still works: a newer request, a completed reset or expiry removes or
   // invalidates the row, and an email with a dead link would only confuse.

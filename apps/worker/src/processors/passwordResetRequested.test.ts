@@ -7,6 +7,10 @@ const { query, sendEmailNotification } = vi.hoisted(() => ({ query: vi.fn(), sen
 
 vi.mock('../lib/db', () => ({ pool: { query } }));
 vi.mock('../lib/email', () => ({ sendEmailNotification }));
+vi.mock('../config', async (importOriginal) => {
+  const { config } = await importOriginal<typeof import('../config')>();
+  return { config: { ...config, APP_URL: 'https://pm.example.com' } };
+});
 
 import processPasswordResetRequested from './passwordResetRequested';
 
@@ -21,12 +25,10 @@ describe('processPasswordResetRequested', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.unstubAllEnvs();
     log = makeLog();
   });
 
   it('emails a reset link with the raw token, only if that token is still valid', async () => {
-    vi.stubEnv('APP_URL', 'https://pm.example.com');
     query.mockResolvedValueOnce(rows([{ email: 'ada@example.com', name: 'Ada', expires_at: new Date() }]));
 
     await processPasswordResetRequested(job({ user_id: 'u1', token: TOKEN }), asLogger(log));
