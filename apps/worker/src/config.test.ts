@@ -39,8 +39,8 @@ describe('worker config', () => {
   it('reads every setting', () => {
     const c = config({
       NODE_ENV: 'production',
-      DATABASE_URL: 'postgresql://app:pw@db:5432/openpm',
-      REDIS_URL: 'redis://:pw@redis:6379/0',
+      DATABASE_URL: 'postgresql://openpm:openpm@localhost:5433/openpm',
+      REDIS_URL: 'redis://:openpm@localhost:6380/0',
       LOG_LEVEL: 'warn',
       WORKER_CONCURRENCY: '12',
       METRICS_PORT: '9200',

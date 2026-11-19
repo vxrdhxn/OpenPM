@@ -1,0 +1,6 @@
+# Known false positives, by fingerprint (commit:file:rule:line). Each must say why it is not a secret.
+# Prefer fixing the value; use this only for history that cannot be rewritten.
+
+# Placeholder URLs ("app:pw@db", ":pw@redis") in the worker's config test; replaced in a later commit.
+198c7e87f9b0b813a5423387336950d8e79ff785:apps/worker/src/config.test.ts:openpm-database-url:42
+198c7e87f9b0b813a5423387336950d8e79ff785:apps/worker/src/config.test.ts:openpm-redis-url:43
