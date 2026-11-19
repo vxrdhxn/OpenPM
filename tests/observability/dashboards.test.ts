@@ -42,7 +42,7 @@ const load = (file: string): Dashboard => JSON.parse(fs.readFileSync(path.join(D
 
 // Labels Prometheus/the Operator attach to every scraped series.
 const INFRA_LABELS = new Set(['namespace', 'job', 'pod', 'instance', 'service', 'container', 'endpoint']);
-const OURS = /\b(?:http_|db_|auth_|websocket_|active_websocket|redis_|worker_|emails_|nodejs_|process_)[a-z0-9_]*/g;
+const OURS = /\b(?:http_|db_|auth_|websocket_|active_websocket|redis_|rate_limited_|storage_|abandoned_|worker_|emails_|nodejs_|process_)[a-z0-9_]*/g;
 
 let metricLabels: Map<string, string[]>; // base metric name -> its label names
 let histograms: Set<string>;

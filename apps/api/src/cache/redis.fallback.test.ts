@@ -142,7 +142,7 @@ describe('cache when Redis is unavailable', () => {
 
 describe('withEnvelope', () => {
   it('stamps objects with a unique event id and the publish time, leaving other values alone', async () => {
-    const { withEnvelope } = await import('./redis');
+    const { withEnvelope } = await import('./redis.js');
     const a = withEnvelope({ type: 'labels_changed' }) as Record<string, string>;
     const b = withEnvelope({ type: 'labels_changed' }) as Record<string, string>;
     expect(a).toMatchObject({ type: 'labels_changed', event_id: expect.stringMatching(/^[0-9a-f-]{36}$/) });

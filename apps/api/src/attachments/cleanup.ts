@@ -1,7 +1,6 @@
-import client from 'prom-client';
 import { withTransaction } from '../db/transaction';
 import * as storageDeletions from '../data/storageDeletions';
-import { abandonedUploadsReapedTotal, storageDeletionsTotal } from '../metrics';
+import { abandonedUploadsReapedTotal, setStorageDeletionsOwedSource, storageDeletionsTotal } from '../metrics';
 import { getStorage, type ObjectStorage } from '../storage';
 
 interface Logger {
@@ -20,19 +19,8 @@ interface Logger {
  * rollback never loses a file that is still referenced, and no file is forgotten.
  */
 
-// Owed deletions right now, read at scrape time. A number that keeps growing means storage keeps
-// refusing deletes (credentials, permissions, an outage).
-new client.Gauge({
-  name: 'storage_deletions_owed',
-  help: 'Attachment objects whose delete from storage is still owed',
-  async collect() {
-    try {
-      this.set(await storageDeletions.countOwed());
-    } catch {
-      // Database unavailable: keep the last value; the scrape must not fail.
-    }
-  },
-});
+// The storage_deletions_owed gauge (metrics.ts) reads the table at scrape time.
+setStorageDeletionsOwedSource(storageDeletions.countOwed);
 
 /** Uploads still pending this long after they were started are abandoned (the upload URL lives 5 min). */
 export const ABANDONED_UPLOAD_MINUTES = 60;

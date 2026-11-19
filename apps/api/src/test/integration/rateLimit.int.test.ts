@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { rateLimitedTotal } from '../../metrics';
 import { startApp, type App } from './harness';
 
 // Its own file (and app): the rate-limit counters are per app instance.
@@ -26,6 +27,9 @@ describe('rate limiting (real app wiring)', () => {
     // Same error shape as every other response (plugins/errors.ts), and a hint for the client.
     expect(Object.keys(limited.json())).toEqual(['error']);
     expect(limited.headers['retry-after']).toBeDefined();
+    // Counted by route pattern for the rate-limit panel and alert.
+    const counted = (await rateLimitedTotal.get()).values.find((v) => v.labels.route === '/api/auth/login');
+    expect(counted?.value).toBeGreaterThanOrEqual(1);
   });
 
   it('limits forgot-password to 5 per minute per client', async () => {

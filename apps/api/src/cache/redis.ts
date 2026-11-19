@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { config } from '../config';
 import { logger } from '../logger';
-import { cacheBypassedTotal, redisErrorsTotal } from '../metrics';
+import { cacheBypassedTotal, redisCommandDurationSeconds, redisErrorsTotal } from '../metrics';
 import { RealtimeHub, Handler } from '../realtime/hub';
 
 /**
@@ -75,9 +75,13 @@ async function attempt<T>(operation: string, run: () => Promise<T>): Promise<T |
     cacheBypassedTotal.inc({ operation, reason: 'unavailable' });
     return FAILED;
   }
+  const stop = redisCommandDurationSeconds.startTimer({ operation });
   try {
-    return await withTimeout(run(), CACHE_COMMAND_TIMEOUT_MS);
+    const result = await withTimeout(run(), CACHE_COMMAND_TIMEOUT_MS);
+    stop({ outcome: 'ok' });
+    return result;
   } catch (err) {
+    stop({ outcome: err instanceof Error && err.message.startsWith('Redis command timed out') ? 'timeout' : 'error' });
     cacheBypassedTotal.inc({ operation, reason: 'error' });
     logger.warn({ err, operation }, 'Cache command failed; continuing without the cache');
     return FAILED;

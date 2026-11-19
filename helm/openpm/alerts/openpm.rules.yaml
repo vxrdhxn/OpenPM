@@ -63,13 +63,13 @@ groups:
           description: "p95 request latency in {{ $labels.namespace }} is {{ $value | humanizeDuration }} (10 minutes sustained)."
 
       - alert: OpenPMApiRateLimiting
-        expr: sum by (namespace) (rate(http_requests_total{code="429"}[5m])) > 1
+        expr: sum by (namespace, route) (rate(rate_limited_total[5m])) > 1
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "OpenPM API is rate limiting clients"
-          description: "{{ $value | humanize }} requests/s are being rejected with 429 in {{ $labels.namespace }}. Either a client is misbehaving or the limit is too low."
+          description: "{{ $value | humanize }} requests/s to {{ $labels.route }} are being rejected with 429 in {{ $labels.namespace }}. Either a client is misbehaving or the limit is too low."
 
       - alert: OpenPMLoginFailuresHigh
         expr: sum by (namespace) (rate(auth_failures_total{reason="bad_credentials"}[5m])) > 1
@@ -113,6 +113,27 @@ groups:
         annotations:
           summary: "OpenPM API sees Redis errors"
           description: "The {{ $labels.client }} Redis client in {{ $labels.namespace }} has been erroring for 5 minutes. Realtime updates and rate limiting depend on Redis."
+
+      - alert: OpenPMRedisSlow
+        expr: |
+          histogram_quantile(0.95, sum by (namespace, le) (rate(redis_command_duration_seconds_bucket[5m]))) > 0.05
+          and
+          sum by (namespace) (rate(redis_command_duration_seconds_count[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM cache commands to Redis are slow"
+          description: "p95 Redis command time in {{ $labels.namespace }} is {{ $value | humanizeDuration }} (normally under a few ms). Commands over 250 ms are skipped and requests fall back to Postgres."
+
+      - alert: OpenPMStorageDeletionsOwed
+        expr: max by (namespace) (storage_deletions_owed) > 100
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenPM cannot delete attachment files from storage"
+          description: "{{ $value | humanize }} attachment objects in {{ $labels.namespace }} have been waiting to be deleted for an hour. Check the storage credentials and bucket permissions (docs/attachments.md)."
 
       - alert: OpenPMWebsocketErrors
         expr: sum by (namespace) (rate(websocket_errors_total[5m])) > 0.5

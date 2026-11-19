@@ -741,12 +741,12 @@ Track:
 - [x] Active WebSocket connections.
 - [x] WebSocket errors.
 - [x] Database latency.
-- [ ] Redis latency/errors. — *partial:* errors counted; latency not measured
+- [x] Redis latency/errors. — `redis_command_duration_seconds{operation,outcome}` (timeouts too) and `redis_errors_total`; alerts `OpenPMRedisSlow`, `OpenPMRedisErrors`; dashboard panel
 - [x] Queue depth.
 - [x] Worker duration.
 - [x] Worker failures.
 - [x] Authentication failures.
-- [ ] Rate-limit events. — *partial:* 429s are counted in `http_requests_total` by route; no dedicated metric or alert
+- [x] Rate-limit events. — `rate_limited_total{route}`; `OpenPMApiRateLimiting` names the route; dashboard panel
 
 ## Prometheus/Grafana
 

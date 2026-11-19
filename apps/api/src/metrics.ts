@@ -117,3 +117,43 @@ export const abandonedUploadsReapedTotal = new client.Counter({
   name: 'abandoned_uploads_reaped_total',
   help: 'Pending attachment uploads removed because they were never completed',
 });
+
+/**
+ * Cache command time (operation: get | set | del | publish | ping; outcome: ok | error | timeout).
+ * Commands are cut off at 250 ms (cache/redis.ts), so the top bucket is a timeout.
+ */
+export const redisCommandDurationSeconds = new client.Histogram({
+  name: 'redis_command_duration_seconds',
+  help: 'Duration of cache commands sent to Redis',
+  labelNames: ['operation', 'outcome'],
+  buckets: [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25],
+});
+
+/** Requests refused with 429 (route: the route pattern, never the raw URL). */
+export const rateLimitedTotal = new client.Counter({
+  name: 'rate_limited_total',
+  help: 'Requests refused by a rate limit',
+  labelNames: ['route'],
+});
+
+/**
+ * Owed attachment deletions right now, read at scrape time from storage_deletions (the cleanup module
+ * plugs in the query, keeping this file free of database imports). A number that keeps growing means
+ * storage keeps refusing deletes: credentials, permissions or an outage.
+ */
+let storageDeletionsOwedSource: (() => Promise<number>) | null = null;
+export function setStorageDeletionsOwedSource(read: () => Promise<number>): void {
+  storageDeletionsOwedSource = read;
+}
+export const storageDeletionsOwed = new client.Gauge({
+  name: 'storage_deletions_owed',
+  help: 'Attachment objects whose delete from storage is still owed',
+  async collect() {
+    if (!storageDeletionsOwedSource) return;
+    try {
+      this.set(await storageDeletionsOwedSource());
+    } catch {
+      // Database unavailable: keep the last value; the scrape must not fail.
+    }
+  },
+});

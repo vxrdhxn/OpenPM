@@ -10,7 +10,7 @@ import swaggerUi from '@fastify/swagger-ui';
 
 import { config, trustProxySetting } from './config';
 import { corsOptions } from './corsOptions';
-import { httpRequestDurationMicroseconds, httpRequestsTotal } from './metrics';
+import { httpRequestDurationMicroseconds, httpRequestsTotal, rateLimitedTotal } from './metrics';
 import { genReqId, loggerOptions } from './logger';
 import requestIdPlugin from './plugins/requestId';
 import errorHandling from './plugins/errors';
@@ -132,6 +132,10 @@ export function buildApp(options: BuildAppOptions = {}) {
     // through: an outage turns rate limiting off rather than the API.
     ...(options.rateLimitRedis && { redis: options.rateLimitRedis, nameSpace: 'openpm:rate-limit:', skipOnError: true }),
     ...(exempt && { allowList: (request: { ip: string }) => exempt(request.ip) }),
+    // Counted by route pattern (bounded), for the rate-limit panel and alert.
+    onExceeded: (request) => {
+      rateLimitedTotal.inc({ route: request.routeOptions?.url ?? 'unknown' });
+    },
   });
 
   fastify.register(websocket, {
