@@ -619,12 +619,12 @@ If attachments are supported:
 - [x] Authorization before download.
 - [x] Authorization before deletion.
 - [x] Content-type validation. — magic bytes checked on completion
-- [ ] Malware scanning strategy.
+- [x] Malware scanning strategy. — no built-in scanner by design; scan at the bucket (GuardDuty Malware Protection for S3 or ClamAV on bucket events), on top of the allowlist, magic bytes and forced downloads (`docs/attachments.md`)
 - [x] Storage abstraction. — `storage/types.ts`
 - [x] Prevent executable exposure. — allowlist + forced-download headers
 - [x] Prevent path traversal.
-- [ ] Retention policy.
-- [ ] Orphan cleanup. — *partial:* files are deleted with their task/project; no reaper for abandoned pending uploads
+- [x] Retention policy. — kept as long as the task; deleted with the task, project or organization (`docs/attachments.md`)
+- [x] Orphan cleanup. — deletions owed in the deleting transaction (`storage_deletions`, migration 028) and retried with backoff; abandoned uploads reaped after 1 h; a storage sweep in every API pod (`attachments/cleanup.ts`)
 
 ---
 

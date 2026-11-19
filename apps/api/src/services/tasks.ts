@@ -3,6 +3,7 @@ import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 import { enqueue } from '../jobs/enqueue';
 import { deleteStoredObjects } from '../attachments/cleanup';
+import * as storageDeletions from '../data/storageDeletions';
 import { announce, notify } from '../notifications/notify';
 import { userCanSeeProject } from '../security/projectAccess';
 import { encodeCursor } from '../query/pagination';
@@ -211,6 +212,7 @@ export async function updateTask(
 export async function deleteTask(scope: TenantScope, projectId: string, taskId: string, log: Parameters<typeof deleteStoredObjects>[1]) {
   const orphanedKeys = await withTransaction(async (client) => {
     const keys = await tasks.deleteAttachments(client, scope, taskId);
+    await storageDeletions.owe(client, keys);
     const deleted = await tasks.remove(client, scope, projectId, taskId);
     if (!deleted) throw taskNotFound(); // the rollback restores the attachment rows
 

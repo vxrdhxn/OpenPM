@@ -71,6 +71,12 @@ describe('Attachment routes', () => {
   beforeEach(async () => {
     vi.resetAllMocks();
     getStorage.mockReturnValue(storage);
+    // Transactions (withTransaction) run their statements through the same scripted db.query, so
+    // dbSql() sees them too.
+    vi.mocked(db.getClient).mockImplementation((async () => ({
+      query: async (sql: string, params?: unknown[]) => ({ rows: await db.query(sql, params) }),
+      release: () => undefined,
+    })) as never);
     storage.presignUpload.mockResolvedValue({
       url: 'http://storage.test/upload?sig=1',
       headers: { 'Content-Type': 'image/png' },
@@ -390,7 +396,13 @@ describe('Attachment routes', () => {
       expect(res.statusCode).toBe(204);
       expect(storage.delete).toHaveBeenCalledWith(KEY);
       const sqls = dbSql();
-      expect(sqls.some((s) => s.startsWith('DELETE FROM task_attachments'))).toBe(true);
+      const removed = sqls.findIndex((s) => s.startsWith('DELETE FROM task_attachments'));
+      const owed = sqls.findIndex((s) => s.startsWith('INSERT INTO storage_deletions'));
+      expect(removed).toBeGreaterThan(-1);
+      // The object is owed in the same transaction as the row's delete, then settled once deleted.
+      expect(owed).toBeGreaterThan(removed);
+      expect(sqls.findIndex((s) => s === 'COMMIT')).toBeGreaterThan(owed);
+      expect(sqls.some((s) => s.startsWith('DELETE FROM storage_deletions'))).toBe(true);
       expect(sqls.some((s) => s.startsWith('INSERT INTO activity_log'))).toBe(true);
     });
 
@@ -411,13 +423,15 @@ describe('Attachment routes', () => {
       expect(storage.delete).not.toHaveBeenCalled();
     });
 
-    it('still succeeds if the object delete fails (the row is gone; the object is an orphan)', async () => {
+    it('still succeeds if the object delete fails, and leaves the object owed for the storage sweep', async () => {
       scriptDb({ attachment: row() });
       storage.delete.mockRejectedValue(new Error('storage down'));
 
       const res = await del();
 
       expect(res.statusCode).toBe(204);
+      expect(dbSql().some((s) => s.startsWith('INSERT INTO storage_deletions'))).toBe(true);
+      expect(dbSql().some((s) => s.startsWith('DELETE FROM storage_deletions'))).toBe(false);
     });
 
     it('does not log activity when discarding a never-completed upload', async () => {

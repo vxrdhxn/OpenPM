@@ -98,3 +98,19 @@ export const jobsEnqueueFailedTotal = new client.Counter({
   help: 'Background jobs that could not be queued',
   labelNames: ['job_name'],
 });
+
+/**
+ * Attachment objects deleted from storage (result: deleted | failed). A failed delete stays owed in
+ * storage_deletions and is retried by the storage sweep (attachments/cleanup.ts).
+ */
+export const storageDeletionsTotal = new client.Counter({
+  name: 'storage_deletions_total',
+  help: 'Attachment object deletions from storage, by result',
+  labelNames: ['result'],
+});
+
+/** Uploads that were started but never completed, removed by the storage sweep. */
+export const abandonedUploadsReapedTotal = new client.Counter({
+  name: 'abandoned_uploads_reaped_total',
+  help: 'Pending attachment uploads removed because they were never completed',
+});

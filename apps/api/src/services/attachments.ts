@@ -5,6 +5,9 @@ import { getStorage, type ObjectStorage } from '../storage';
 import { MAX_ATTACHMENTS_PER_TASK, SNIFF_BYTES, buildStorageKey, contentMatchesType, validateUpload } from '../attachments/policy';
 import { AppError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../domain/errors';
 import * as attachments from '../data/attachments';
+import * as storageDeletions from '../data/storageDeletions';
+import { withTransaction } from '../db/transaction';
+import { deleteStoredObjects } from '../attachments/cleanup';
 import type { AttachmentRow, PublicAttachment } from '../data/attachments';
 import type { TenantScope } from '../data/scope';
 import type { TaskPath } from '../data/tasks';
@@ -22,7 +25,7 @@ import type { TaskPath } from '../data/tasks';
 export const UPLOAD_URL_TTL_SECONDS = 300;
 export const DOWNLOAD_URL_TTL_SECONDS = 120;
 
-type Log = Pick<FastifyBaseLogger, 'error'>;
+type Log = Pick<FastifyBaseLogger, 'error' | 'warn'>;
 
 const attachmentNotFound = () => new NotFoundError('Attachment not found');
 
@@ -42,14 +45,13 @@ async function requireAttachment(scope: TenantScope, path: TaskPath, attachmentI
 const isUploaderOrAdmin = (scope: TenantScope, attachment: AttachmentRow) =>
   attachment.uploaded_by === scope.userId || hasMinRole(scope.role, 'admin');
 
-/** Remove an attachment's metadata, then its object. A failed object delete leaves a logged, harmless orphan. */
-async function removeAttachment(scope: TenantScope, storage: ObjectStorage, attachment: AttachmentRow, log: Log) {
-  await attachments.remove(scope, attachment.id);
-  try {
-    await storage.delete(attachment.storage_key);
-  } catch (err) {
-    log.error({ err, attachmentId: attachment.id }, 'Failed to delete attachment object (orphaned)');
-  }
+/** Remove an attachment's row (owing its object in the same transaction), then the object. */
+async function removeAttachment(scope: TenantScope, attachment: AttachmentRow, log: Log) {
+  await withTransaction(async (client) => {
+    await attachments.removeIn(client, scope, attachment.id);
+    await storageDeletions.owe(client, [attachment.storage_key]);
+  });
+  await deleteStoredObjects([attachment.storage_key], log);
 }
 
 export interface UploadRequest {
@@ -121,7 +123,7 @@ export async function completeUpload(scope: TenantScope, path: TaskPath, attachm
           ? 'File contents do not match the declared type'
           : null;
   if (mismatch) {
-    await removeAttachment(scope, storage, attachment, log);
+    await removeAttachment(scope, attachment, log);
     throw new AppError(422, mismatch);
   }
 
@@ -151,11 +153,11 @@ export async function downloadUrl(scope: TenantScope, path: TaskPath, attachment
 }
 
 export async function deleteAttachment(scope: TenantScope, path: TaskPath, attachmentId: string, log: Log): Promise<void> {
-  const storage = requireStorage();
+  requireStorage();
   const attachment = await requireAttachment(scope, path, attachmentId);
   if (!isUploaderOrAdmin(scope, attachment)) throw new ForbiddenError('Only the uploader or an admin can delete this attachment');
 
-  await removeAttachment(scope, storage, attachment, log);
+  await removeAttachment(scope, attachment, log);
   if (attachment.status === 'ready') {
     await attachments.logTaskActivity(scope, path.taskId, 'attachment_removed', { attachment_id: attachmentId, filename: attachment.filename });
   }

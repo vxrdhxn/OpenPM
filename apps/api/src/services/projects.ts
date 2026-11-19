@@ -1,6 +1,7 @@
 import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
 import { deleteStoredObjects } from '../attachments/cleanup';
+import * as storageDeletions from '../data/storageDeletions';
 import { announceAccessChange } from '../realtime/announce';
 import { audit, type RequestOrigin } from '../security/audit';
 import { seesAllProjects, unassignWithoutAccess, type Visibility } from '../security/projectAccess';
@@ -133,6 +134,7 @@ export async function deleteProject(
 ): Promise<void> {
   const orphanedKeys = await withTransaction(async (client) => {
     const keys = await projects.deleteAttachments(client, scope, id);
+    await storageDeletions.owe(client, keys);
     const deleted = await projects.remove(client, scope, id);
     if (!deleted) throw notFound(); // the rollback restores the attachment rows
 

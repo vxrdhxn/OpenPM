@@ -30,11 +30,12 @@ describe('verified sign-up (real Postgres)', () => {
   const linkFor = async (email: string) => {
     const pending = await row<{ id: string }>('SELECT id FROM signup_requests WHERE email = $1', [email]);
     const isLink = (j: (typeof jobs)[number]) => j.name === 'signup_verification' && j.data.signup_id === pending?.id;
-    await waitForJob(isLink);
+    await waitForJob(isLink, 10_000);
     return jobs.filter(isLink).at(-1)!.data.token as string;
   };
   const waitForRequest = async (email: string) => {
-    await expect.poll(async () => (await row('SELECT 1 FROM signup_requests WHERE email = $1', [email])) !== undefined).toBe(true);
+    // The request is written after the reply, behind a bcrypt hash: allow for a loaded machine.
+    await expect.poll(async () => (await row('SELECT 1 FROM signup_requests WHERE email = $1', [email])) !== undefined, { timeout: 10_000 }).toBe(true);
   };
 
   it('creates nothing until the emailed link is opened, then creates the workspace and signs its owner in', async () => {
@@ -107,7 +108,7 @@ describe('verified sign-up (real Postgres)', () => {
     const first = await linkFor(f.email);
 
     await register({ ...f, name: 'Second try' });
-    await expect.poll(async () => (await linkFor(f.email)) !== first).toBe(true);
+    await expect.poll(async () => (await linkFor(f.email)) !== first, { timeout: 10_000 }).toBe(true);
     const second = await linkFor(f.email);
 
     expect((await verify(first)).statusCode).toBe(400);

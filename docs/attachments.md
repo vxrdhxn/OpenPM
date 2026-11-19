@@ -100,15 +100,46 @@ The upload URL is valid for 5 minutes; download URLs for 2 minutes.
 - **Downloads are always attachments** (`Content-Disposition: attachment`), never rendered inline.
 - **Storage keys are never returned** by the API.
 
+## Files outside the database: nothing is forgotten
+
+Deleting an attachment, a task, a project or a whole organization deletes the rows in a transaction
+that also records their storage keys in `storage_deletions` (migration 028). After the commit the API
+deletes the objects and clears the keys. A delete that fails, or never runs (storage down, the pod
+stopped between commit and delete), stays owed. A rollback never deletes a file that is still
+referenced.
+
+Every API pod runs a **storage sweep** every 15 minutes (`apps/api/src/attachments/cleanup.ts`):
+
+- **Owed deletions** that are due are retried, backing off from 5 minutes up to a day per key.
+- **Abandoned uploads**, still `pending` an hour after they started (the upload URL lives 5 minutes),
+  are removed along with any object a client did upload.
+
+`FOR UPDATE SKIP LOCKED` lets the pods sweep at once without working on the same key. Metrics:
+`storage_deletions_total{result}`, `storage_deletions_owed` (a growing number means storage keeps
+refusing deletes: check credentials and bucket permissions) and `abandoned_uploads_reaped_total`.
+Tested against Postgres in `apps/api/src/test/integration/storageCleanup.int.test.ts`.
+
+## Retention
+
+An attachment is kept as long as its task. It is deleted with the task, its project or its
+organization, or by whoever may delete it (the uploader or an admin). There is no age-based expiry.
+
+## Malware scanning: strategy
+
+OpenPM does not scan files itself. Uploads go straight from the browser to the bucket, so scanning
+belongs there:
+
+- **What OpenPM already does:** a type allowlist (no executables, scripts or HTML), the first bytes
+  must match the declared type, a size limit, randomized storage keys, and downloads that are always
+  `Content-Disposition: attachment` from a different origin, so a file is never rendered in the app.
+- **What to add in production:** your storage provider's scanner on the bucket, for example Amazon
+  GuardDuty Malware Protection for S3, or a ClamAV job triggered by bucket events. Have it delete or
+  quarantine infected objects. A quarantined file then fails to download, and its attachment can be
+  removed in the app.
+
 ## Not covered yet
 
-- **Malware scanning.** There is none. Treat uploads as untrusted; magic-byte checks are a sanity
-  check, not a scanner.
-- **Orphan cleanup.** Files can be left behind if a client never completes an upload (a `pending`
-  row, indexed for a reaper) or if object deletion fails after a delete (logged as an error). There
-  is no scheduled reaper yet. Deleting a task or project does remove its files after the delete
-  commits, on a best-effort basis.
-- **Retention policy** and attachment quotas per organization.
+- Attachment quotas per organization.
 - **Browser verification.** The UI (click a task card to open it) has been type-checked, built and
   unit-tested for its upload logic, but not run in a browser against real storage. Do that, and
   confirm the bucket CORS rules above, before relying on it.

@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import { db } from '../db/client';
 import type { TenantScope } from './scope';
 
@@ -87,8 +88,9 @@ export async function listReady(scope: TenantScope, taskId: string): Promise<Pub
   );
 }
 
-export async function remove(scope: TenantScope, attachmentId: string): Promise<void> {
-  await db.query('DELETE FROM task_attachments WHERE id = $1 AND org_id = $2', [attachmentId, scope.orgId]);
+/** Delete the row inside the caller's transaction (which owes its object, data/storageDeletions.ts). */
+export async function removeIn(client: PoolClient, scope: TenantScope, attachmentId: string): Promise<void> {
+  await client.query('DELETE FROM task_attachments WHERE id = $1 AND org_id = $2', [attachmentId, scope.orgId]);
 }
 
 /** Activity entries for attachment changes are recorded against the task (outside any transaction). */

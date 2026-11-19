@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { withTransaction } from '../db/transaction';
 import { deleteStoredObjects } from '../attachments/cleanup';
+import * as storageDeletions from '../data/storageDeletions';
 import { verifyPassword } from '../security/passwords';
 import { audit, type RequestOrigin } from '../security/audit';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../domain/errors';
@@ -60,12 +61,14 @@ export async function deleteOrganization(
     }
 
     const files = await organizations.allStorageKeys(client, scope);
+    // Owed deletions are not tied to the organization, so they outlive the cascade below.
+    await storageDeletions.owe(client, files);
     await organizations.remove(client, scope);
     return files;
   });
 
-  // After the commit, as for project deletion: a storage failure leaves (logged) orphaned files, never
-  // data that points at deleted files.
+  // After the commit, as for project deletion: what storage fails to delete stays owed and is retried
+  // by the storage sweep (attachments/cleanup.ts).
   await deleteStoredObjects(keys, log);
   // The organization's audit log is deleted with it, so this log line is the only record left.
   log.warn({ event: 'organization_deleted', org_id: scope.orgId, user_id: scope.userId, ip, files: keys.length }, 'Organization deleted');
