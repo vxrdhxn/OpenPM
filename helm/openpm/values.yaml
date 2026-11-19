@@ -138,6 +138,8 @@ api:
     digest: ""
     pullPolicy: "IfNotPresent"
   port: 3000
+  # Seconds a stopping pod keeps serving, so it leaves the Service before it stops (preStop).
+  preStopSeconds: 5
   corsOrigin: "http://openpm.local"
   # Proxies whose X-Forwarded-For the API believes (TRUST_PROXY): "1" = the Ingress controller in
   # front of it, so rate limits are per client rather than one bucket for everyone. Add a hop per
@@ -210,6 +212,8 @@ frontend:
     digest: ""
     pullPolicy: "IfNotPresent"
   port: 3001
+  # Seconds a stopping pod keeps serving, so it leaves the Service before it stops (preStop).
+  preStopSeconds: 5
   # Origins the browser may connect to besides this host, for the Content-Security-Policy (space-
   # separated). Set it to your object storage's public origin (the API's S3_PUBLIC_ENDPOINT) when
   # attachments are on, or uploads are blocked. Example: "https://files.example.com".

@@ -29,8 +29,17 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      # Room for the preStop pause plus a clean shutdown (Next.js finishes in-flight requests on SIGTERM).
+      terminationGracePeriodSeconds: 30
       containers:
         - name: frontend
+          # Keep serving for a few seconds after Kubernetes starts removing the pod, until it is out of
+          # the Service's endpoints everywhere. Without it, requests routed in that moment fail
+          # (measured on kind: one failed request per evicted or deleted API pod).
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "{{ .Values.frontend.preStopSeconds | default 5 }}"]
           {{- with .Values.securityContext.container }}
           securityContext:
             {{- toYaml . | nindent 12 }}

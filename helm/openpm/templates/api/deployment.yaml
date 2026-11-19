@@ -65,8 +65,17 @@ spec:
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
       {{- end }}
+      # Room for the preStop pause plus a clean shutdown (the API's own shutdown deadline is 25 s (shutdown.ts)).
+      terminationGracePeriodSeconds: 40
       containers:
         - name: api
+          # Keep serving for a few seconds after Kubernetes starts removing the pod, until it is out of
+          # the Service's endpoints everywhere. Without it, requests routed in that moment fail
+          # (measured on kind: one failed request per evicted or deleted API pod).
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "{{ .Values.api.preStopSeconds | default 5 }}"]
           {{- with .Values.securityContext.container }}
           securityContext:
             {{- toYaml . | nindent 12 }}

@@ -364,6 +364,11 @@
               "description": "A count or a percentage, e.g. 1 or \"25%\"."
             }
           }
+        },
+        "preStopSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
         }
       }
     },
@@ -520,6 +525,11 @@
               "description": "A count or a percentage, e.g. 1 or \"25%\"."
             }
           }
+        },
+        "preStopSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
         }
       }
     },

@@ -12,12 +12,20 @@ import { cache } from '../cache/redis';
  *   without it). Redis is not: without it the API runs degraded (no cache, no live updates), so the
  *   answer is still 200, with `status: "degraded"` and `redis: "error"`.
  */
+/**
+ * Never rate-limited. Kubernetes probes come from the node's kubelet, one address for every pod on
+ * that node, and the limit is shared across pods (Redis): enough pods per node would push the probes
+ * past it, readiness would fail with 429 and the pods would be taken out of service. These routes
+ * are not under /api, so the Ingress does not expose them; only the cluster reaches them.
+ */
+const NO_RATE_LIMIT = { config: { rateLimit: false } } as const;
+
 const healthRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/health/live', async (_request, reply) => {
+  fastify.get('/health/live', NO_RATE_LIMIT, async (_request, reply) => {
     return reply.send({ status: 'ok' });
   });
 
-  fastify.get('/health', async (_request, reply) => {
+  fastify.get('/health', NO_RATE_LIMIT, async (_request, reply) => {
     let dbStatus: 'ok' | 'error' = 'ok';
     try {
       await db.query('SELECT 1');

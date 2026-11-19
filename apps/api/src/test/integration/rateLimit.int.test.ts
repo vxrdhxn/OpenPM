@@ -41,3 +41,29 @@ describe('rate limiting (real app wiring)', () => {
     expect(codes).toEqual([200, 200, 200, 200, 200, 429]);
   });
 });
+
+describe('health and metrics are never rate-limited', () => {
+  let app: App;
+
+  beforeAll(async () => {
+    app = await startApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('answers far more probes from one address than the general limit allows', async () => {
+    // The general limit is 100 per minute per client; Kubernetes probes for every pod on a node share
+    // the kubelet's address.
+    for (const url of ['/health/live', '/health', '/metrics']) {
+      const codes = new Set<number>();
+      for (let i = 0; i < 120; i++) codes.add((await app.inject({ method: 'GET', url, remoteAddress: '10.1.2.3' })).statusCode);
+      expect([...codes], url).not.toContain(429);
+    }
+    // Everything else from that address is limited as before.
+    const api = new Set<number>();
+    for (let i = 0; i < 105; i++) api.add((await app.inject({ method: 'GET', url: '/api/projects', remoteAddress: '10.1.2.3' })).statusCode);
+    expect(api.has(429)).toBe(true);
+  });
+});

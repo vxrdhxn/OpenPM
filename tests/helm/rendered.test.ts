@@ -100,6 +100,14 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       }
     });
 
+    it('lets stopping API and frontend pods leave the Service before they stop (preStop), within the grace period', () => {
+      for (const [app, grace] of [['api', 40], ['frontend', 30]] as const) {
+        const spec = deployment(objects, app)!.spec.template.spec;
+        expect(spec.containers[0].lifecycle.preStop.exec.command).toEqual(['sleep', '5']);
+        expect(spec.terminationGracePeriodSeconds).toBe(grace);
+      }
+    });
+
     it('checks worker liveness over its /healthz, which does not depend on Postgres or Redis', () => {
       const worker = deployment(objects, 'worker')!.spec.template.spec.containers[0];
       expect(worker.livenessProbe.httpGet).toEqual({ path: '/healthz', port: 9100 });
