@@ -30,7 +30,35 @@ For a **managed database** (what `values.prod.yaml` expects), use the provider's
 with point-in-time recovery as the main protection, and take a `pg_dump` before each release as a
 portable copy that does not depend on the provider.
 
-For the **in-chart Postgres**, schedule the script (cron or a CI job). The chart has no backup job.
+For the **in-chart Postgres**, the chart runs a backup **CronJob** (`postgres.backup`, on by default
+whenever `postgres.enabled`):
+
+- **Schedule:** daily at 03:00 (`postgres.backup.schedule`, optional `timeZone`). Never two at once.
+- **Each run** takes one `pg_dump` in custom format to a temporary name, checks it with
+  `pg_restore --list`, then renames it to `openpm-<UTC time>.dump`. A dump that cannot be read never
+  replaces a good one.
+- **Retention:** the newest `postgres.backup.keep` (7) dumps are kept; older ones, and leftovers of
+  interrupted runs, are deleted after each successful run.
+- **Storage:** a volume of its own, `<release>-postgres-backups` (5Gi, `postgres.backup.size`),
+  kept when the release is uninstalled (`helm.sh/resource-policy: keep`).
+- **Locked down:** runs as the postgres image's non-root user with a read-only root filesystem, and
+  its NetworkPolicy lets it reach only Postgres on 5432.
+- **Alert:** `OpenPMBackupMissing` fires when no run has succeeded for 26 hours (needs
+  kube-state-metrics, part of kube-prometheus-stack).
+
+Verified on kind: three runs with `keep: 2` wrote three dumps and deleted the oldest. A pod that
+is not the backup job could not reach Postgres.
+
+**The volume is in the same cluster as the database.** Copy the dumps somewhere else too, such as
+object storage in another account or region. A lost cluster or storage system takes this volume
+with it:
+
+```bash
+kubectl -n openpm create job copy-backups --from=cronjob/openpm-postgres-backup   # run one now
+kubectl -n openpm cp <a pod mounting the backups volume>:/backups ./backups      # then copy off-cluster
+```
+
+To restore from one of these dumps, follow *Restore* below with that file.
 
 ## Restore
 

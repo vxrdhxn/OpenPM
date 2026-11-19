@@ -1,0 +1,122 @@
+{{- if and .Values.postgres.enabled .Values.postgres.backup.enabled -}}
+# Scheduled backups of the in-chart Postgres (docs/backup-restore.md). Each run takes one consistent
+# pg_dump (custom format), refuses to keep a file pg_restore cannot read, and keeps the newest
+# `postgres.backup.keep`. The dumps sit on their own volume in the cluster: copy them off the cluster
+# too (a lost cluster or storage system takes this volume with it).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "openpm.postgres.fullname" . }}-backups
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-backup
+  annotations:
+    # Keep the backups when the release is uninstalled: they are what you restore from.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.postgres.backup.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.postgres.backup.size | default "5Gi" }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "openpm.postgres.fullname" . }}-backup
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-backup
+spec:
+  schedule: {{ .Values.postgres.backup.schedule | quote }}
+  {{- with .Values.postgres.backup.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
+  # Never two dumps at once; a run that missed its slot by over an hour waits for the next one.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: {{ .Values.postgres.backup.timeoutSeconds | default 3600 }}
+      template:
+        metadata:
+          labels:
+            {{- include "openpm.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: postgres-backup
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # The postgres image's own user, like the database pod.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: {{ .Values.postgres.image | default "postgres:16-alpine" }}
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              env:
+                - name: PGHOST
+                  value: {{ include "openpm.postgres.fullname" . }}
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "openpm.secretName" . }}
+                      key: POSTGRES_USER
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "openpm.secretName" . }}
+                      key: POSTGRES_PASSWORD
+                - name: PGDATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "openpm.secretName" . }}
+                      key: POSTGRES_DB
+                - name: KEEP
+                  value: {{ .Values.postgres.backup.keep | quote }}
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  file="/backups/openpm-$(date -u +%Y%m%dT%H%M%SZ).dump"
+                  # A temporary name first, so an interrupted dump never looks like a backup.
+                  pg_dump --format=custom --no-owner --file="$file.partial"
+                  # A dump that pg_restore cannot list is not a backup.
+                  pg_restore --list "$file.partial" > /dev/null
+                  mv "$file.partial" "$file"
+                  echo "backed up to $file ($(wc -c < "$file") bytes)"
+                  # Keep the newest $KEEP finished dumps; leftovers of interrupted runs go too.
+                  rm -f /backups/*.partial
+                  ls -1t /backups/openpm-*.dump | tail -n +"$((KEEP + 1))" | while read -r old; do
+                    rm -f -- "$old" && echo "removed $old"
+                  done
+              resources:
+                {{- toYaml .Values.postgres.backup.resources | nindent 16 }}
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ include "openpm.postgres.fullname" . }}-backups
+            - name: tmp
+              emptyDir: {}
+{{- end }}

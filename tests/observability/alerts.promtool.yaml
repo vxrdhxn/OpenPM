@@ -85,6 +85,30 @@ tests:
               summary: "OpenPM cache commands to Redis are slow"
               description: "p95 Redis command time in ns is 97.5ms (normally under a few ms). Commands over 250 ms are skipped and requests fall back to Postgres."
 
+  - name: a backup that has not succeeded for over 26 hours fires OpenPMBackupMissing
+    interval: 1m
+    input_series:
+      # Last success at t=0 (epoch seconds), never again.
+      - series: 'kube_cronjob_status_last_successful_time{namespace="ns",cronjob="openpm-postgres-backup"}'
+        values: '0x1800'
+      # A healthy one whose last success keeps moving forward.
+      - series: 'kube_cronjob_status_last_successful_time{namespace="ok",cronjob="openpm-postgres-backup"}'
+        values: '0+60x1800'
+    alert_rule_test:
+      - eval_time: 24h
+        alertname: OpenPMBackupMissing
+        exp_alerts: []
+      - eval_time: 28h
+        alertname: OpenPMBackupMissing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: ns
+              cronjob: openpm-postgres-backup
+            exp_annotations:
+              summary: "No successful OpenPM database backup for over a day"
+              description: "openpm-postgres-backup in ns last succeeded 1d 4h 0m 0s ago. Check the job's logs (kubectl logs job/...) and the backup volume (docs/backup-restore.md)."
+
   - name: owed storage deletions fire only once they have piled up for an hour
     interval: 5m
     input_series:

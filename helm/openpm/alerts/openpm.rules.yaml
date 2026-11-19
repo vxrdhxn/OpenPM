@@ -126,6 +126,16 @@ groups:
           summary: "OpenPM cache commands to Redis are slow"
           description: "p95 Redis command time in {{ $labels.namespace }} is {{ $value | humanizeDuration }} (normally under a few ms). Commands over 250 ms are skipped and requests fall back to Postgres."
 
+      # Needs kube-state-metrics (part of kube-prometheus-stack). Only for the in-chart Postgres.
+      - alert: OpenPMBackupMissing
+        expr: time() - max by (namespace, cronjob) (kube_cronjob_status_last_successful_time{cronjob=~".*-postgres-backup"}) > 26 * 3600
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No successful OpenPM database backup for over a day"
+          description: "{{ $labels.cronjob }} in {{ $labels.namespace }} last succeeded {{ $value | humanizeDuration }} ago. Check the job's logs (kubectl logs job/...) and the backup volume (docs/backup-restore.md)."
+
       - alert: OpenPMStorageDeletionsOwed
         expr: max by (namespace) (storage_deletions_owed) > 100
         for: 1h

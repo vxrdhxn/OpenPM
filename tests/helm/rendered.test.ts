@@ -180,6 +180,28 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
   });
 
   describe('credentials', () => {
+    it('backs up the in-chart Postgres on a schedule, reachable only by its job, and not with a managed database', () => {
+      const objects = render();
+      const cron = objects.find((o) => o.kind === 'CronJob') as K8sObject & { spec: any };
+      expect(cron.metadata!.name).toBe('openpm-postgres-backup');
+      expect(cron.spec.concurrencyPolicy).toBe('Forbid');
+      const pod = cron.spec.jobTemplate.spec.template.spec;
+      expect(pod.securityContext.runAsNonRoot).toBe(true);
+      expect(pod.containers[0].securityContext.readOnlyRootFilesystem).toBe(true);
+      expect(pod.containers[0].env.find((e: { name: string }) => e.name === 'PGPASSWORD').valueFrom.secretKeyRef.key).toBe('POSTGRES_PASSWORD');
+      const pvc = objects.find((o) => o.kind === 'PersistentVolumeClaim' && o.metadata?.name === 'openpm-postgres-backups')!;
+      expect(pvc.metadata!.annotations!['helm.sh/resource-policy']).toBe('keep');
+      // The database accepts the backup job; the job may reach only the database.
+      const dbPolicy = objects.find((o) => o.kind === 'NetworkPolicy' && o.metadata?.name === 'openpm-postgres') as K8sObject & { spec: any };
+      const allowed = dbPolicy.spec.ingress[0].from.map((f: { podSelector: { matchLabels: Record<string, string> } }) => f.podSelector.matchLabels['app.kubernetes.io/component']);
+      expect(allowed).toEqual(['api', 'worker', 'postgres-backup']);
+      const jobPolicy = objects.find((o) => o.kind === 'NetworkPolicy' && o.metadata?.name === 'openpm-postgres-backup') as K8sObject & { spec: any };
+      expect(jobPolicy.spec.egress).toEqual([{ to: [{ podSelector: { matchLabels: { 'app.kubernetes.io/component': 'postgres', 'app.kubernetes.io/instance': 'openpm' } } }], ports: [{ protocol: 'TCP', port: 5432 }] }]);
+
+      expect(render('-f', path.join(CHART, 'values.prod.yaml')).some((o) => o.kind === 'CronJob')).toBe(false);
+      expect(render('--set', 'postgres.backup.enabled=false').some((o) => o.kind === 'CronJob')).toBe(false);
+    });
+
     it('refuses mistyped keys and invalid settings (values.schema.json)', () => {
       expect(renderError(...TEST_SECRETS, '--set', 'api.replicaCnt=3')).toMatch(/additional properties 'replicaCnt' not allowed/);
       expect(renderError(...TEST_SECRETS, '--set', 'api.signupVerification=maybe')).toMatch(/signupVerification/);

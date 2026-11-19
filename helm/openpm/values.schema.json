@@ -150,6 +150,40 @@
         },
         "resources": {
           "type": "object"
+        },
+        "backup": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "schedule": {
+              "type": "string",
+              "pattern": "^(@(yearly|annually|monthly|weekly|daily|midnight|hourly)|(\\S+\\s+){4}\\S+)$",
+              "description": "Cron schedule, e.g. \"0 3 * * *\"."
+            },
+            "timeZone": {
+              "type": "string"
+            },
+            "keep": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 60
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
         }
       }
     },

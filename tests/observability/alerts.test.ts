@@ -35,6 +35,9 @@ const rules = doc.groups.flatMap((g) => g.rules);
 const INFRA_LABELS = new Set(['namespace', 'job', 'pod', 'instance', 'service', 'container', 'endpoint']);
 const OURS = /\b(?:http_|db_|auth_|websocket_|active_websocket|redis_|rate_limited_|storage_|abandoned_|worker_|emails_|overload_|jobs_|cache_|nodejs_|process_)[a-z0-9_]*/g;
 
+/** Not registered by OpenPM: kube-state-metrics (needed for OpenPMBackupMissing). */
+const EXTERNAL_METRICS: Array<[string, string[]]> = [['kube_cronjob_status_last_successful_time', ['cronjob']]];
+
 let metricLabels: Map<string, string[]>;
 let histograms: Set<string>;
 
@@ -48,6 +51,8 @@ beforeAll(() => {
     metricLabels.set(meta.name, meta.labelNames ?? []);
     if (String(meta.type).toLowerCase() === 'histogram') histograms.add(meta.name);
   }
+  // Metrics from other exporters that rules use, with the labels they document.
+  for (const [name, labels] of EXTERNAL_METRICS) metricLabels.set(name, labels);
 });
 
 function resolveMetric(token: string): { base: string; known: boolean } {
@@ -111,7 +116,7 @@ describe('alert rules', () => {
     const problems: string[] = [];
     for (const r of rules) {
       const allowed = new Set<string>([...INFRA_LABELS, 'le']);
-      for (const t of r.expr.match(OURS) ?? []) {
+      for (const t of [...(r.expr.match(OURS) ?? []), ...selectors(r.expr).map((x) => x.metric)]) {
         for (const l of metricLabels.get(resolveMetric(t).base) ?? []) allowed.add(l);
       }
       for (const m of r.expr.matchAll(/\bby\s*\(([^)]*)\)/g)) {

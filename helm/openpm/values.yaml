@@ -84,6 +84,25 @@ postgres:
     requests:
       cpu: 100m
       memory: 256Mi
+  # Scheduled pg_dump backups of this in-chart database (docs/backup-restore.md). With a managed
+  # database (postgres.enabled: false) use the provider's backups instead; this then renders nothing.
+  backup:
+    enabled: true
+    schedule: "0 3 * * *"
+    # IANA time zone for the schedule (e.g. "Europe/Berlin"); empty = the controller's (usually UTC).
+    timeZone: ""
+    # Finished dumps kept on the volume; older ones are deleted after each successful run.
+    keep: 7
+    size: 5Gi
+    storageClass: ""
+    timeoutSeconds: 3600
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
 
 redis:
   enabled: true

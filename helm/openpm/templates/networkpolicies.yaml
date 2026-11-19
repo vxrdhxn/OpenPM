@@ -233,9 +233,41 @@ spec:
             matchLabels:
               app.kubernetes.io/component: worker
               app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- if .Values.postgres.backup.enabled }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres-backup
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 5432
+{{- if .Values.postgres.backup.enabled }}
+---
+# 6b. The backup job reaches only Postgres (and DNS, policy 2).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openpm.postgres.fullname" . }}-backup
+  labels:
+    {{- include "openpm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: postgres-backup
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
 {{- end }}
 
 {{- if .Values.redis.enabled }}

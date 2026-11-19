@@ -220,7 +220,7 @@ Review/finalize:
 - [x] Credentials from secrets. — Helm Secrets
 - [x] Database not publicly exposed. — ClusterIP + NetworkPolicy
 - [x] Least-privilege DB user. — the API and worker connect as a user that cannot change the schema, the migration history or the audit log; `migrate up` creates and grants it (`docs/database-access.md`). Compose by default, Helm opt-in
-- [ ] Automated backups in production. — *partial:* production expects a managed database with provider backups (`docs/backup-restore.md`); the in-chart Postgres has no backup job
+- [x] Automated backups in production. — managed database: the provider's backups with point-in-time recovery; in-chart Postgres: a daily backup CronJob, verified on kind (`docs/backup-restore.md`)
 - [x] Restore procedure documented and tested. — `docs/backup-restore.md`; drill and disaster recovery on Compose and kind (`docs/rehearsal.md`)
 - [x] Migration/rollback strategy documented. — expand/contract, forward-only rollback (`docs/releasing.md`)
 
@@ -934,8 +934,8 @@ Define:
 # 28. Backup, Recovery & Data Protection
 
 - [x] PostgreSQL backup strategy. — `docs/backup-restore.md`
-- [ ] Automated production backups. — *partial:* managed-database backups expected; no job for the in-chart Postgres
-- [ ] Backup retention.
+- [x] Automated production backups. — provider backups for a managed database; the chart's `postgres.backup` CronJob for the in-chart one, alerted by `OpenPMBackupMissing`
+- [x] Backup retention. — newest `postgres.backup.keep` (7) dumps kept; provider retention for a managed database (`docs/backup-restore.md`)
 - [x] Restore test. — `scripts/test-backup-restore.sh`, run on Compose and kind
 - [x] Disaster-recovery procedure. — restore over the live database, rehearsed on kind
 - [x] Redis persistence strategy if needed. — not backed up by design: cache and queue refill; jobs queued at the moment of loss are lost (documented)
