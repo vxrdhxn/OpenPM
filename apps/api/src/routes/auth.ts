@@ -25,6 +25,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           password: { type: 'string', minLength: 8 },
           name: { type: 'string', minLength: 2 },
         },
+        additionalProperties: false,
       },
     },
   }, async (request, reply) => {
@@ -71,6 +72,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           email: { type: 'string', format: 'email' },
           password: { type: 'string' },
         },
+        additionalProperties: false,
       },
     },
   }, async (request, reply) => {

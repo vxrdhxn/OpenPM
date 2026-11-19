@@ -153,17 +153,19 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
 
   if (config.NODE_ENV !== 'production') {
+    // The spec is generated from the routes' JSON Schemas; docs/openapi.json is the committed copy
+    // (kept current by test/openapi.test.ts) and docs/api.md explains it.
     fastify.register(swagger, {
-      swagger: {
-        info: {
-          title: 'OpenPM API',
-          version: '0.1.0'
+      openapi: {
+        info: { title: 'OpenPM API', version: '0.1.0', description: 'See docs/api.md for authentication, errors, pagination and conventions.' },
+        components: {
+          securitySchemes: {
+            cookie: { type: 'apiKey', in: 'cookie', name: 'auth_token' },
+            bearer: { type: 'http', scheme: 'bearer' },
+          },
         },
-        host: 'localhost:3000',
-        schemes: ['http'],
-        consumes: ['application/json'],
-        produces: ['application/json'],
-      }
+        security: [{ cookie: [] }, { bearer: [] }],
+      },
     });
 
     fastify.register(swaggerUi, {

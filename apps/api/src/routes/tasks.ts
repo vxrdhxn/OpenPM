@@ -37,6 +37,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
           assignee_id: { type: 'string', format: 'uuid' },
           due_date: { type: 'string', format: 'date-time' },
         },
+        additionalProperties: false,
       },
     },
   }, async (request, reply) => {

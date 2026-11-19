@@ -549,7 +549,7 @@ metadata
 - [x] Consistent error structure. — `{ error }` (H.1)
 - [x] Consistent pagination. — one helper for every paged endpoint
 - [x] Consistent filtering. — shared task filters for the board and search
-- [ ] Consistent validation.
+- [x] Consistent validation. — every body refuses unknown keys, every path parameter is declared; enforced for all routes by `test/openapi.test.ts` (it found and fixed register, login and task create, which ignored unknown keys)
 - [x] Consistent authorization.
 - [x] Validate path parameters. — every `:id`/`:*Id` must be a UUID (`plugins/uuidParams.ts`)
 - [x] Validate query parameters. — JSON schema, unknown keys rejected
@@ -561,8 +561,8 @@ metadata
 - [x] Security headers where appropriate. — `@fastify/helmet`
 - [x] Request timeouts. — 30s `requestTimeout`, 10s Postgres `statement_timeout`
 - [x] Safe error responses. — 5xx bodies are generic; details only in the log
-- [ ] OpenAPI documentation. — *partial:* Swagger UI in non-production only; routes lack response schemas
-- [ ] Authentication documentation.
+- [x] OpenAPI documentation. — OpenAPI 3 generated from the route schemas, committed as `docs/openapi.json` and kept current by a test; Swagger UI outside production. Response bodies are described in `docs/api.md` and the feature docs, not as schemas
+- [x] Authentication documentation. — `docs/api.md`: cookie or bearer, 24 h sessions checked against the database on every request, revocation, CSRF, roles
 - [x] WebSocket event documentation. — `docs/realtime.md`
 
 ---
@@ -1009,8 +1009,8 @@ For every threat: impact, likelihood, mitigation, detection and a security test.
 - [x] Environment variables.
 - [x] Database migrations. — running them (README, CONTRIBUTING), rollback and compatibility (`docs/releasing.md`)
 - [x] Testing. — CONTRIBUTING, `docs/frontend-testing.md`, `docs/ci.md`
-- [ ] API development.
-- [ ] Worker development. — *partial:* `docs/jobs.md` covers jobs, retries and recovery
+- [x] API development. — `docs/api.md`: layers, schemas, tests, migrations, events and jobs for a new route
+- [x] Worker development. — `docs/jobs.md` (jobs, retries, recovery) and `docs/api.md` (adding a job, scoping, tests)
 - [x] WebSocket architecture. — `docs/realtime.md`
 - [x] Redis architecture. — `docs/realtime.md` (what Redis holds, eviction, behavior when it is down)
 
