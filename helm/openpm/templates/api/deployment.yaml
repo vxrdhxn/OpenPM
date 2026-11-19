@@ -109,6 +109,18 @@ spec:
                 secretKeyRef:
                   name: {{ include "openpm.secretName" . }}
                   key: JWT_SECRET
+            # Sign-up verification (docs/signup.md). The API only checks whether an email provider is
+            # configured ("auto"); the worker sends the mail.
+            - name: SIGNUP_VERIFICATION
+              value: {{ .Values.api.signupVerification | default "auto" | quote }}
+            {{- if or .Values.secrets.resendApiKey .Values.secrets.existingSecret }}
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "openpm.secretName" . }}
+                  key: RESEND_API_KEY
+                  optional: true
+            {{- end }}
             {{- with .Values.api.trustProxy }}
             - name: TRUST_PROXY
               value: {{ . | quote }}

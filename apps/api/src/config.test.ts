@@ -128,3 +128,13 @@ describe('config: TRUST_PROXY', () => {
     expect(trustProxySetting('10.0.0.0/8, 192.168.1.4')).toEqual(['10.0.0.0/8', '192.168.1.4']);
   });
 });
+
+describe('signupNeedsVerification', () => {
+  it('verifies in auto mode exactly when an email provider is configured', async () => {
+    const { signupNeedsVerification } = await import('./config.js');
+    expect(signupNeedsVerification({ SIGNUP_VERIFICATION: 'auto', RESEND_API_KEY: undefined })).toBe(false);
+    expect(signupNeedsVerification({ SIGNUP_VERIFICATION: 'auto', RESEND_API_KEY: 're_123' })).toBe(true);
+    expect(signupNeedsVerification({ SIGNUP_VERIFICATION: 'required', RESEND_API_KEY: undefined })).toBe(true);
+    expect(signupNeedsVerification({ SIGNUP_VERIFICATION: 'off', RESEND_API_KEY: 're_123' })).toBe(false);
+  });
+});

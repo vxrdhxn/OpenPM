@@ -16,6 +16,11 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long').optional(),
   CORS_ORIGIN: z.string().url().default('http://localhost:3001'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  // Verify-by-email sign-up (docs/signup.md): "auto" (the default) verifies whenever an email provider
+  // is configured, "required" always, "off" never (a workspace is created at once).
+  SIGNUP_VERIFICATION: z.enum(['auto', 'required', 'off']).default('auto'),
+  // Only its presence is used here (the worker sends the mail): it is what "auto" checks.
+  RESEND_API_KEY: z.string().min(1).optional(),
 
   // Attachment storage: any S3-compatible service (AWS S3, MinIO, ...).
   // Deliberately no defaults for credentials: if these are unset, attachments are disabled
@@ -53,6 +58,8 @@ const PUBLISHED_JWT_SECRETS = new Set([
 // not an invalid URL/size. Other variables keep strict semantics: a blank JWT_SECRET must still fail.
 const BLANK_MEANS_UNSET = new Set([
   'LOG_LEVEL',
+  'SIGNUP_VERIFICATION',
+  'RESEND_API_KEY',
   'DATABASE_MIGRATION_URL',
   'S3_ENDPOINT',
   'S3_PUBLIC_ENDPOINT',
@@ -79,6 +86,12 @@ if (!parsed.success) {
 }
 
 export const config = parsed.data;
+
+/** Whether sign-up waits for the emailed link (SIGNUP_VERIFICATION). Read at call time, so tests can switch it. */
+export function signupNeedsVerification(c: Pick<typeof config, 'SIGNUP_VERIFICATION' | 'RESEND_API_KEY'> = config): boolean {
+  if (c.SIGNUP_VERIFICATION === 'auto') return Boolean(c.RESEND_API_KEY);
+  return c.SIGNUP_VERIFICATION === 'required';
+}
 
 /**
  * Fastify's trustProxy option from TRUST_PROXY: false when unset, a list of trusted proxy addresses,

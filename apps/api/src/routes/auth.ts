@@ -3,6 +3,7 @@ import { clearSessionCookie, issueSession, revokeSessions } from '../plugins/ses
 import { TOKEN_PATTERN } from '../security/tokens';
 import { auditBestEffort, originOf } from '../security/audit';
 import * as authService from '../services/auth';
+import { signupNeedsVerification } from '../config';
 import type { Registration } from '../services/auth';
 
 /** /api/auth: sign-up, sign-in, sign-out and password reset. Rules: services/auth.ts. */
@@ -27,7 +28,35 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async (request, reply) => {
-    const claims = await authService.register(request.body, originOf(request));
+    if (!signupNeedsVerification()) {
+      const claims = await authService.register(request.body, originOf(request));
+      const token = issueSession(fastify, reply, claims);
+      return reply.code(201).send({ token });
+    }
+
+    // Verify-by-email (docs/signup.md). Only the organization URL is checked before replying; the
+    // rest depends on whether the address has an account, so it runs after the reply, like
+    // forgot-password, and every address gets the same 202.
+    await authService.checkSignupSlug(request.body.org_slug);
+    void authService.sendSignupLink(request.body, request.id).catch((err) => {
+      request.log.error({ err }, 'Could not send the sign-up link');
+    });
+    return reply.code(202).send({ verification: 'email', message: 'Check your email for a link to finish creating your workspace.' });
+  });
+
+  // Finish a verified sign-up from the emailed link: creates the workspace and signs its owner in.
+  fastify.post<{ Body: { token: string } }>('/verify-signup', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: { token: { type: 'string', pattern: TOKEN_PATTERN } },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    const claims = await authService.completeSignup(request.body.token, originOf(request));
     const token = issueSession(fastify, reply, claims);
     return reply.code(201).send({ token });
   });

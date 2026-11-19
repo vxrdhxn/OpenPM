@@ -13,6 +13,17 @@ export async function slugTaken(client: PoolClient, slug: string): Promise<boole
   return res.rows.length > 0;
 }
 
+/** slugTaken outside a transaction (a quick pre-check; the transaction that creates the organization checks again). */
+export async function slugTakenNow(slug: string): Promise<boolean> {
+  return (await db.query('SELECT id FROM organizations WHERE slug = $1', [slug])).length > 0;
+}
+
+/** The active account with this email, if any. */
+export async function findActiveByEmail(email: string): Promise<{ id: string; org_id: string } | null> {
+  const rows = await db.query<{ id: string; org_id: string }>('SELECT id, org_id FROM users WHERE email = $1 AND deactivated_at IS NULL', [email]);
+  return rows[0] ?? null;
+}
+
 export async function emailTaken(client: PoolClient, email: string): Promise<boolean> {
   const res = await client.query('SELECT id FROM users WHERE email = $1', [email]);
   return res.rows.length > 0;

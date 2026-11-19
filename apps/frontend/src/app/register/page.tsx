@@ -10,6 +10,8 @@ export default function Register() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // With verify-by-email on, the API answers 202 and emails a link instead of signing in.
+  const [sentTo, setSentTo] = useState('');
   
   const [formData, setFormData] = useState({
     org_name: '',
@@ -29,7 +31,11 @@ export default function Register() {
     setError('');
 
     try {
-      await api.post('/auth/register', formData);
+      const res = await api.post('/auth/register', formData);
+      if (res?.verification === 'email') {
+        setSentTo(formData.email);
+        return;
+      }
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Registration failed');
@@ -56,6 +62,22 @@ export default function Register() {
           <p className="text-slate-500 dark:text-slate-400 mt-2">Set up your organization and admin account</p>
         </div>
 
+        {sentTo ? (
+          <div className="glass-panel p-8 rounded-2xl space-y-4 text-center" role="status">
+            <h2 className="text-xl font-semibold">Check your email</h2>
+            <p className="text-slate-600 dark:text-slate-300">
+              We sent a link to <strong>{sentTo}</strong>. Open it within 24 hours to finish creating your workspace.
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Nothing arrived? Check your spam folder, or{' '}
+              <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline font-medium" onClick={() => setSentTo('')}>
+                sign up again
+              </button>
+              . If you already have an account,{' '}
+              <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">sign in</Link>.
+            </p>
+          </div>
+        ) : (
         <form onSubmit={handleRegister} className="glass-panel p-8 rounded-2xl space-y-6">
           {error && (
             <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm">
@@ -109,6 +131,7 @@ export default function Register() {
             </Link>
           </p>
         </form>
+        )}
       </div>
     </main>
   );

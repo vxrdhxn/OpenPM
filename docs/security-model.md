@@ -42,9 +42,10 @@ threat is handled; [security-review.md](security-review.md) is the v0.1.0 review
 - **Audited:** sign-ins, failed sign-ins for existing accounts, sign-outs, password changes and
   resets ([audit-log.md](audit-log.md)).
 
-Not provided: multi-factor authentication, account lockout, single sign-on. Sign-up still reveals
-whether an email is registered (it fails where a new address would succeed); closing that needs
-verify-by-email sign-up.
+Not provided: multi-factor authentication, account lockout, single sign-on. Sign-up does not reveal
+whether an email is registered when verify-by-email is on ([signup.md](signup.md); the default
+whenever an email provider is configured). With `SIGNUP_VERIFICATION=off`, or no email provider, it
+still fails where a new address would succeed.
 
 ## Authorization
 

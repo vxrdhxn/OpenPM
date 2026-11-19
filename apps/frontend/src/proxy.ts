@@ -5,7 +5,7 @@ import { buildCsp, newNonce } from './lib/csp';
 // Only for signed-out users: signed-in users are sent to the dashboard.
 const publicPaths = ['/login', '/register'];
 // Reachable whether or not you are signed in: these are opened from links in emails.
-const openPaths = ['/invite', '/forgot-password', '/reset-password'];
+const openPaths = ['/invite', '/forgot-password', '/reset-password', '/verify-signup'];
 
 /**
  * Render the page with a per-request Content-Security-Policy (lib/csp.ts). The policy goes on the

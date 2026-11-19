@@ -20,7 +20,7 @@ test.describe('accessibility', () => {
   test('signed-out pages', async ({ browser }) => {
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
-    for (const path of ['/login', '/register', '/forgot-password']) {
+    for (const path of ['/login', '/register', '/forgot-password', '/verify-signup']) {
       await page.goto(path);
       await expectNoViolations(page);
     }

@@ -73,6 +73,9 @@ services:
       - PORT=3000
       - CORS_ORIGIN=http://localhost:3001
       - NODE_ENV=production
+      # Sign-up waits for an emailed link once an email provider is set (docs/signup.md).
+      - SIGNUP_VERIFICATION=${SIGNUP_VERIFICATION:-auto}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health || exit 1"]
       interval: 10s

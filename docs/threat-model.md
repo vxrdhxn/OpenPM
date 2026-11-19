@@ -57,8 +57,9 @@ Accepted, with what would change them:
 
 - **No MFA or account lockout.** Guessing is slowed per address, not per account: a distributed
   guessing run is limited only by bcrypt and the global rate limit. MFA would close it.
-- **Sign-up reveals whether an email is registered** (threat 1). Verify-by-email sign-up would close
-  it.
+- **Sign-up reveals whether an email is registered** (threat 1), but only on installs without email
+  verification: with an email provider configured, sign-up is verified by email and answers every
+  address the same ([signup.md](signup.md)).
 - **A stolen session works for up to 24 hours** unless the user signs out or changes their password
   (threat 2). Shorter sessions with refresh would reduce it.
 - **No malware scanning** of uploads (threat 7). Files are only ever downloaded, never opened by

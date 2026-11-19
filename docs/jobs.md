@@ -10,6 +10,8 @@ The API enqueues jobs on one BullMQ queue, `tasks`, in Redis (`apps/api/src/queu
 | `task_created` | `POST /api/projects/:id/tasks` | `task_id`, `org_id`, `assignee_id`?, `request_id` | Emails the assignee, if there is one |
 | `invite_created` | `POST /api/invites` | `invite_id`, `org_id`, `token`, `request_id` | Emails the invite link |
 | `password_reset_requested` | `POST /api/auth/forgot-password` | `user_id`, `token`, `request_id` | Emails the reset link |
+| `signup_verification` | `POST /api/auth/register` (verification on, new address) | `signup_id`, `token`, `request_id` | Emails the link that finishes the sign-up (`docs/signup.md`) |
+| `signup_existing_account` | `POST /api/auth/register` (verification on, address has an account) | `user_id`, `org_id`, `request_id` | Tells the account owner; at most one an hour (job id per hour) |
 | `due_reminders` | The worker's own job scheduler, every 15 min | none | Notifies assignees of tasks due within 24h (`docs/notifications.md`); 1 attempt, the next run catches up |
 
 - **Tenant scope.** Every lookup for `task_created` and `invite_created` is filtered by the job's `org_id`. A job that names a row from another organization finds nothing and sends nothing. `password_reset_requested` is keyed by the user and must match the token hash.

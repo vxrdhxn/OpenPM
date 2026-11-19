@@ -5,6 +5,8 @@ import processTaskCreated from './processors/taskCreated';
 import processInviteCreated from './processors/inviteCreated';
 import processPasswordResetRequested from './processors/passwordResetRequested';
 import processDueReminders from './processors/dueReminders';
+import processSignupVerification from './processors/signupVerification';
+import processSignupExistingAccount from './processors/signupExistingAccount';
 
 /** Logger for one job: every line carries the job, and the originating request when known. */
 export function jobLogger(job: Job, base: Logger = rootLogger): Logger {
@@ -45,6 +47,10 @@ export async function handleJob(job: Job, base: Logger = rootLogger): Promise<vo
       await processInviteCreated(job, log);
     } else if (job.name === 'password_reset_requested') {
       await processPasswordResetRequested(job, log);
+    } else if (job.name === 'signup_verification') {
+      await processSignupVerification(job, log);
+    } else if (job.name === 'signup_existing_account') {
+      await processSignupExistingAccount(job, log);
     } else if (job.name === 'due_reminders') {
       await processDueReminders(log);
     } else {

@@ -122,6 +122,10 @@ api:
   # proxy in front of the controller that also appends the header (e.g. "2" behind a cloud L7 load
   # balancer). "" = trust none. The NetworkPolicy lets only the Ingress reach the API.
   trustProxy: "1"
+  # Verify-by-email sign-up (docs/signup.md): "auto" verifies whenever an email provider is
+  # configured (secrets.resendApiKey or RESEND_API_KEY in existingSecret), "required" always (sign-up
+  # then needs working email), "off" never.
+  signupVerification: "auto"
   # Run database migrations in an init container before each API pod starts. Disable only if you
   # apply migrations another way (e.g. a CI job running `node apps/api/dist/db/migrate.js up`).
   migrations:

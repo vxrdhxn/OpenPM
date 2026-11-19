@@ -89,7 +89,7 @@ What still stands between the project and production:
 
 | Area | Current state | Gap |
 | :--- | :--- | :--- |
-| Auth | 24h JWT, revocable via token_version (H.3) | Register can still be told apart from success without email verification. |
+| Auth | 24h JWT, revocable via token_version (H.3) | Verify-by-email sign-up when email is configured (`docs/signup.md`); without email, register can still be told apart from success. |
 | Input validation | Body and path-param schemas (H.1) | WebSocket payloads are not validated. |
 | Audit log | `activity_log` for project/task changes | Project deletion, auth and membership events are not recorded; there is no `request_id` column and no read endpoint. |
 | Attachments | See `docs/attachments.md` | No malware scanning, no reaper for abandoned pending uploads, no retention or quotas. |
@@ -193,7 +193,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
 | **API Backend & RBAC** | 🟢 Solid | Load-tested and failure-tested (Phase 9); next: a real cluster |
 | **Organizations & Invites** | 🟢 Solid | Ownership transfer, org deletion |
-| **Authentication** | 🟢 Solid | Verify-by-email sign-up |
+| **Authentication** | 🟢 Solid | MFA |
 | **Background Worker** | 🟢 Solid | Crash-tested (Phase 9); a transactional outbox for guaranteed emails |
 | **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
 | **Kubernetes & DevOps** | 🟢 Verified on kind | A real cloud cluster |

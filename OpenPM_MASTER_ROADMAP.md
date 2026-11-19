@@ -123,7 +123,7 @@ npm test
 - [x] Define token rotation/revocation. — `users.token_version` (migration 012), checked on every request and WebSocket heartbeat; bumped by logout, password change and reset
 - [x] Define logout behavior. — clears the cookie and ends all of the user's sessions on every device (H.3)
 - [x] Rate-limit authentication endpoints. — login/register 10/min, forgot-password 5/min, reset-password 10/min, invite lookup/accept 20/10 per min
-- [ ] Prevent account enumeration. — *partial:* login and forgot-password are uniform; register answers a taken email and a taken slug identically (H.3), but still fails where a fresh email would succeed. Fully closing it needs verify-by-email sign-up
+- [x] Prevent account enumeration. — login and forgot-password are uniform; sign-up is verified by email whenever an email provider is configured (`SIGNUP_VERIFICATION=auto`, Nov 2026), answering every address with the same 202 and doing the email-dependent work after replying (`docs/signup.md`). Without email, register still fails where a fresh address would succeed
 - [x] Audit security-sensitive authentication events. — sign-ins, failed sign-ins for existing accounts, sign-outs, password changes and resets in `audit_log` (`docs/audit-log.md`)
 - [x] Require the current password to change it. — `PATCH /api/profile/me` needs `current_password` with `password`; a wrong one is a 403 that changes nothing, audited as `auth.password_change_failed`, rate-limited 10/min (Nov 2026)
 - [x] Add authentication bypass tests. — `security_rbac.test.ts`, `websocket.test.ts`
