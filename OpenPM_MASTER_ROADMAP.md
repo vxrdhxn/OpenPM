@@ -101,10 +101,10 @@ npm test
 
 ## Dependencies
 
-- [ ] Remove unused dependencies.
+- [x] Remove unused dependencies. — every workspace's dependencies checked against its imports and scripts (Nov 2026); the frontend's never-imported `clsx`, `date-fns`, `tailwind-merge` and `zustand` removed
 - [x] Review dependency vulnerabilities. — npm audit cleared (Nov 2026 upgrades), Dependabot enabled
 - [x] Keep dependency versions intentional. — Dependabot, Node 22 LTS, majors upgraded deliberately
-- [ ] Avoid unnecessary packages.
+- [x] Avoid unnecessary packages. — what remains is imported, a type package for one, or tooling run by a script
 
 ---
 
