@@ -1,5 +1,17 @@
 import { apiBaseUrl } from './endpoints';
 
+/** A non-2xx answer from the API: `message` is its `error`, `data` the whole JSON body (if any). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly data: Record<string, any> | null
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 // Base API client
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const url = `${apiBaseUrl()}${endpoint}`;
@@ -36,7 +48,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const data = isJson ? await response.json() : null;
 
   if (!response.ok) {
-    throw new Error(data?.error || response.statusText || 'API Error');
+    throw new ApiError(data?.error || response.statusText || 'API Error', response.status, data);
   }
 
   return data;

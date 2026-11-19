@@ -26,6 +26,8 @@ export interface TaskRow {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Bumped by every update; a PATCH may name the version it was based on (docs/concurrency.md). */
+  version: number;
 }
 
 export interface NewTaskFields {
@@ -72,18 +74,19 @@ export async function insert(client: PoolClient, scope: TenantScope, projectId: 
 }
 
 /**
- * Lock a task for the rest of the transaction and return what an update compares against; null if it
- * is not in this project of the organization. The lock makes concurrent edits queue, so each one sees
- * the status the previous one left (the activity feed and status notifications stay right).
+ * Lock a task for the rest of the transaction and return it as it is before the update; null if it is
+ * not in this project of the organization. The lock makes concurrent edits queue, so each one sees the
+ * status and version the previous one left (the activity feed, notifications and the version check
+ * stay right).
  */
 export async function lockForUpdate(
   client: PoolClient,
   scope: TenantScope,
   projectId: string,
   taskId: string
-): Promise<Pick<TaskRow, 'status' | 'assignee_id' | 'created_by'> | null> {
-  const res = await client.query<Pick<TaskRow, 'status' | 'assignee_id' | 'created_by'>>(
-    'SELECT status, assignee_id, created_by FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 FOR UPDATE',
+): Promise<TaskRow | null> {
+  const res = await client.query<TaskRow>(
+    'SELECT * FROM tasks WHERE id = $1 AND project_id = $2 AND org_id = $3 FOR UPDATE',
     [taskId, projectId, scope.orgId]
   );
   return res.rows[0] ?? null;
@@ -104,7 +107,7 @@ export async function update(
     setClauses.push(`${column} = $${values.length}`);
   }
   if (setClauses.length === 0) throw new BadRequestError('No fields to update');
-  setClauses.push('updated_at = NOW()');
+  setClauses.push('updated_at = NOW()', 'version = version + 1');
   values.push(taskId, projectId, scope.orgId);
   const n = values.length;
 

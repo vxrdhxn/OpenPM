@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 import AttachmentsPanel from './AttachmentsPanel';
 import CommentsPanel from './CommentsPanel';
@@ -8,8 +8,8 @@ import TaskLabels from './TaskLabels';
 import TaskForm, { type Assignable } from './TaskForm';
 import Dialog from './ui/Dialog';
 import { messageOf, useConfirm, useToast } from './ui/feedback';
-import { api } from '@/lib/api';
-import { changesOf, draftOf, priorityLabel, statusLabel, toDateInput, type TaskDraft } from '@/lib/tasks';
+import { changesOf, draftOf, priorityLabel, rebaseDraft, statusLabel, toDateInput, type TaskDraft } from '@/lib/tasks';
+import { api, ApiError } from '@/lib/api';
 import type { Label } from '@/lib/labels';
 import type { Mentionable } from '@/lib/mentions';
 import type { CommentEvent } from '@/lib/comments';
@@ -24,6 +24,8 @@ export interface TaskSummary {
   assignee_name?: string | null;
   due_date?: string | null;
   labels?: Label[];
+  /** Bumped by every update; sent with a save so a concurrent edit is caught (docs/concurrency.md). */
+  version?: number;
 }
 
 /** Stable empty list: a fresh `[]` each render would look like new board data to TaskLabels. */
@@ -58,21 +60,26 @@ export default function TaskDetailModal({ task, projectId, me, lastMessage = nul
   const isAdmin = role === 'admin' || role === 'owner';
 
   const formId = useId();
+  // `base` is the version of the task the draft started from. Only the fields changed from it are
+  // saved, together with its version, so a save never sends back values someone else has since changed.
+  const [base, setBase] = useState<TaskSummary>(task);
   const [draft, setDraft] = useState<TaskDraft>(() => draftOf(task));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [titleError, setTitleError] = useState('');
-  const changes = changesOf(task, draft);
+  const changes = changesOf(base, draft);
   const dirty = Object.keys(changes).length > 0;
 
-  // Someone else changed the task while it is open: show their version unless we have unsaved edits.
-  const lastSeen = useRef(task);
-  useEffect(() => {
-    if (lastSeen.current === task) return;
-    const wasClean = Object.keys(changesOf(lastSeen.current, draft)).length === 0;
-    lastSeen.current = task;
-    if (wasClean) setDraft(draftOf(task));
-  }, [task, draft]);
+  // Someone else changed the task while it is open: show their version unless we have unsaved edits
+  // (then the save is checked against the version we started from). A copy older than the one we just
+  // saved (the board has not refetched yet) is ignored.
+  // (State adjusted while rendering, React's pattern for following a prop, not in an effect.)
+  const [seen, setSeen] = useState(task);
+  if (seen !== task && !dirty && (task.version ?? 0) >= (base.version ?? 0)) {
+    setSeen(task);
+    setBase(task);
+    setDraft(draftOf(task));
+  }
 
   const requestClose = async () => {
     if (dirty && !(await confirm({ title: 'Discard your changes?', message: 'Your edits to this task have not been saved.', confirmLabel: 'Discard', destructive: true }))) return;
@@ -89,11 +96,22 @@ export default function TaskDetailModal({ task, projectId, me, lastMessage = nul
     if (!dirty) return;
     setSaving(true);
     try {
-      await api.patch(`/projects/${projectId}/tasks/${task.id}`, changes);
+      const body = base.version ? { ...changes, version: base.version } : changes;
+      const saved = await api.patch(`/projects/${projectId}/tasks/${task.id}`, body);
+      setBase((b) => ({ ...b, ...saved }));
       toast('Task saved');
       onChanged?.();
     } catch (err) {
-      toast(messageOf(err, 'Could not save the task'), 'error');
+      if (err instanceof ApiError && err.status === 409 && err.data?.task) {
+        // Someone saved first. Show their changes with ours; the next save is based on their version.
+        const current: TaskSummary = { ...base, ...err.data.task };
+        setDraft(rebaseDraft(base, current, draft));
+        setBase(current);
+        toast('Someone else changed this task while you were editing. Their changes are now shown with yours: review and save again.', 'error');
+        onChanged?.();
+      } else {
+        toast(messageOf(err, 'Could not save the task'), 'error');
+      }
     } finally {
       setSaving(false);
     }

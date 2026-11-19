@@ -9,7 +9,7 @@ import { encodeCursor } from '../query/pagination';
 import { hasTaskFilters, TASK_STATUSES, type TaskFilters } from '../query/taskFilters';
 import { labelsForTasks } from '../query/taskLabels';
 import type { TaskLabel } from '../data/labels';
-import { BadRequestError, NotFoundError } from '../domain/errors';
+import { BadRequestError, ConflictError, NotFoundError } from '../domain/errors';
 import { logActivity } from '../data/activity';
 import * as projects from '../data/projects';
 import * as tasks from '../data/tasks';
@@ -135,13 +135,26 @@ export async function getBoard(scope: TenantScope, projectId: string, filters: T
 /**
  * Change a task. Notifies a newly assigned person, and on a status change the assignee and the
  * creator (never the person making the change; see notifications/notify.ts).
+ *
+ * With `expectedVersion` (the version the client's edit was based on), the update is refused with a
+ * 409 carrying the current task if someone changed it since, so their change is not overwritten
+ * (docs/concurrency.md). Without it the update applies to whatever is current.
  */
-export async function updateTask(scope: TenantScope, projectId: string, taskId: string, changes: TaskChanges): Promise<TaskRow> {
+export async function updateTask(
+  scope: TenantScope,
+  projectId: string,
+  taskId: string,
+  changes: TaskChanges,
+  expectedVersion?: number
+): Promise<TaskRow> {
   let notified: string[] = [];
 
   const updated = await withTransaction(async (client) => {
     const before = await tasks.lockForUpdate(client, scope, projectId, taskId);
     if (!before) throw taskNotFound();
+    if (expectedVersion !== undefined && expectedVersion !== before.version) {
+      throw new ConflictError('Someone else changed this task while you were editing it', { task: before });
+    }
     await assertAssignable(client, scope, projectId, changes.assignee_id);
 
     const task = await tasks.update(client, scope, projectId, taskId, changes);

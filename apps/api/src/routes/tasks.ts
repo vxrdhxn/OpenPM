@@ -56,7 +56,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request) => taskService.getBoard(scopeOf(request.user), request.params.projectId, request.query));
 
   // PATCH /:projectId/tasks/:taskId (member or higher)
-  fastify.patch<{ Params: TaskParams; Body: TaskChanges }>('/:projectId/tasks/:taskId', {
+  fastify.patch<{ Params: TaskParams; Body: TaskChanges & { version?: number } }>('/:projectId/tasks/:taskId', {
     preHandler: fastify.requireRole('member'),
     schema: {
       body: {
@@ -68,15 +68,18 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
           priority: PRIORITY,
           assignee_id: { type: 'string', format: 'uuid', nullable: true },
           due_date: { type: 'string', format: 'date-time', nullable: true },
+          // The version the edit is based on: refused with 409 if the task changed since (docs/concurrency.md).
+          version: { type: 'integer', minimum: 1 },
         },
         // Reject unknown keys (the app runs Ajv with removeAdditional: false) and empty bodies.
         minProperties: 1,
         additionalProperties: false,
       },
     },
-  }, async (request) =>
-    taskService.updateTask(scopeOf(request.user), request.params.projectId, request.params.taskId, request.body)
-  );
+  }, async (request) => {
+    const { version, ...changes } = request.body;
+    return taskService.updateTask(scopeOf(request.user), request.params.projectId, request.params.taskId, changes, version);
+  });
 
   // DELETE /:projectId/tasks/:taskId (admin or higher)
   fastify.delete<{ Params: TaskParams }>('/:projectId/tasks/:taskId', {

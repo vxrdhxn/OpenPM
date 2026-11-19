@@ -200,7 +200,7 @@ Review/finalize:
 - [x] Appropriate indexes. — migration 008
 - [x] Intentional cascade behavior. — every foreign key's ON DELETE rule pinned by `deletion.int.test.ts`; who-did-it columns refuse a user delete (migration 023 fixed `activity_log.user_id`, which cascaded) (`docs/data-deletion.md`)
 - [x] Consistent timestamps. — `organizations` (migration 020) and `projects` (021) have `updated_at`
-- [ ] Optimistic concurrency where needed.
+- [x] Optimistic concurrency where needed. — tasks carry a `version` (migration 024); a PATCH based on an old version gets 409 with the current task, and the task dialog saves only the user's edits with their base version (it used to revert teammates' changes). Other resources: `docs/concurrency.md`
 - [x] Reproducible migrations. — numbered up/down SQL; `migrate`, `migrate:down`, `migrate:status`; run by Docker Compose
 
 ## Query quality

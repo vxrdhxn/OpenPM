@@ -9,7 +9,9 @@
 export class AppError extends Error {
   constructor(
     readonly statusCode: number,
-    message: string
+    message: string,
+    /** Extra fields for the response body, next to `error` (e.g. the current version of a resource). */
+    readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = new.target.name;
@@ -42,7 +44,7 @@ export class NotFoundError extends AppError {
 
 /** 409: the request conflicts with the current state (a duplicate, a stale update). */
 export class ConflictError extends AppError {
-  constructor(message: string) {
-    super(409, message);
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(409, message, details);
   }
 }

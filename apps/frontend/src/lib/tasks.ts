@@ -88,6 +88,21 @@ export function changesOf(task: TaskFields, draft: TaskDraft): Record<string, st
   return out;
 }
 
+/**
+ * Someone saved the task while the user was editing it (the API answered 409 with the current task).
+ * Keep the fields the user changed from `base` (what they started from) and take everything else from
+ * `current`, so saving again applies only their edits on top of the other person's.
+ */
+export function rebaseDraft(base: TaskFields, current: TaskFields, draft: TaskDraft): TaskDraft {
+  const before = draftOf(base);
+  const theirs = draftOf(current);
+  const out = { ...theirs };
+  for (const key of Object.keys(draft) as (keyof TaskDraft)[]) {
+    if (draft[key] !== before[key]) out[key] = draft[key];
+  }
+  return out;
+}
+
 /** Body for POST /projects/:id/tasks from a create form (empty optional fields are left out; new tasks start in To Do). */
 export function newTaskBody(draft: TaskDraft): Record<string, string> {
   const body: Record<string, string> = { title: draft.title.trim(), priority: draft.priority || 'medium' };

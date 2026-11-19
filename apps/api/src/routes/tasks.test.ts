@@ -195,7 +195,7 @@ describe('Task routes lifecycle', () => {
 
     it('updates, records the status transition and notifies subscribers', async () => {
       mockClient.query.mockImplementation(async (sql: string) => {
-        if (sql.startsWith('SELECT status, assignee_id, created_by FROM tasks')) return rows([{ status: 'todo' }]);
+        if (sql.startsWith('SELECT * FROM tasks WHERE id')) return rows([{ status: 'todo' }]);
         if (sql.startsWith('UPDATE tasks')) return rows([{ id: T, status: 'done' }]);
         return rows();
       });
@@ -211,14 +211,14 @@ describe('Task routes lifecycle', () => {
 
     it('locks the task row before reading its status, so concurrent edits record the right transition', async () => {
       mockClient.query.mockImplementation(async (sql: string) => {
-        if (sql.startsWith('SELECT status, assignee_id, created_by FROM tasks')) return rows([{ status: 'todo' }]);
+        if (sql.startsWith('SELECT * FROM tasks WHERE id')) return rows([{ status: 'todo' }]);
         if (sql.startsWith('UPDATE tasks')) return rows([{ id: T, status: 'done' }]);
         return rows();
       });
 
       await app.inject({ method: 'PATCH', url, headers: auth(), payload: { status: 'done' } });
 
-      const lookup = mockClient.query.mock.calls.find((c) => sqlOf(c).startsWith('SELECT status, assignee_id, created_by FROM tasks'));
+      const lookup = mockClient.query.mock.calls.find((c) => sqlOf(c).startsWith('SELECT * FROM tasks WHERE id'));
       expect(sqlOf(lookup)).toMatch(/FOR UPDATE$/);
       expect(lookup![1]).toEqual([T, P, 'org-1']);
       expect(sqls().indexOf(sqlOf(lookup))).toBeLessThan(sqls().findIndex((s) => s.startsWith('UPDATE tasks')));
@@ -444,17 +444,18 @@ describe('Task routes lifecycle', () => {
 
     it('only ever interpolates whitelisted column names into the UPDATE', async () => {
       mockClient.query.mockImplementation(async (sql: string) => {
-        if (sql.startsWith('SELECT status, assignee_id, created_by FROM tasks')) return rows([{ status: 'todo' }]);
+        if (sql.startsWith('SELECT * FROM tasks WHERE id')) return rows([{ status: 'todo', version: 3 }]);
         if (sql.startsWith('UPDATE tasks')) return rows([{ id: T }]);
         return rows();
       });
 
-      const res = await patch({ title: 'New', description: 'd', status: 'done', priority: 'high' });
+      // `version` is checked, never written as a column.
+      const res = await patch({ title: 'New', description: 'd', status: 'done', priority: 'high', version: 3 });
 
       expect(res.statusCode).toBe(200);
       const update = mockClient.query.mock.calls.find((c) => sqlOf(c).startsWith('UPDATE tasks'));
       expect(sqlOf(update)).toBe(
-        'UPDATE tasks SET title = $1, description = $2, status = $3, priority = $4, updated_at = NOW() ' +
+        'UPDATE tasks SET title = $1, description = $2, status = $3, priority = $4, updated_at = NOW(), version = version + 1 ' +
           'WHERE id = $5 AND project_id = $6 AND org_id = $7 RETURNING *'
       );
       expect(update![1]).toEqual(['New', 'd', 'done', 'high', T, P, 'org-1']);

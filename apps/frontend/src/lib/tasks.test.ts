@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changesOf, draftOf, EMPTY_DRAFT, fromDateInput, newTaskBody, toDateInput } from './tasks';
+import { changesOf, draftOf, EMPTY_DRAFT, fromDateInput, newTaskBody, rebaseDraft, toDateInput } from './tasks';
 
 const task = {
   title: 'Write docs',
@@ -51,6 +51,26 @@ describe('changesOf', () => {
   it('sends the description as a string, even when cleared', () => {
     const described = { ...task, description: 'old' };
     expect(changesOf(described, { ...draftOf(described), description: '' })).toEqual({ description: '' });
+  });
+});
+
+describe('rebaseDraft', () => {
+  const base = { title: 'Fix login', description: 'old', status: 'todo', priority: 'medium', assignee_id: null, due_date: null };
+
+  it("keeps the user's edits and takes everyone else's changes, so saving again reverts nothing", () => {
+    // The user rewrote the description; meanwhile someone raised the priority and moved the task.
+    const draft = { ...draftOf(base), description: 'mine' };
+    const current = { ...base, priority: 'urgent', status: 'in_progress' };
+
+    const rebased = rebaseDraft(base, current, draft);
+
+    expect(rebased).toEqual({ ...draftOf(current), description: 'mine' });
+    expect(changesOf(current, rebased)).toEqual({ description: 'mine' });
+  });
+
+  it("keeps the user's value where both changed the same field", () => {
+    const draft = { ...draftOf(base), priority: 'low' };
+    expect(rebaseDraft(base, { ...base, priority: 'urgent' }, draft).priority).toBe('low');
   });
 });
 

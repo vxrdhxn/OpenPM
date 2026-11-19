@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import type { FastifyError } from 'fastify';
 import { overloadRejectionsTotal } from '../metrics';
+import { AppError } from '../domain/errors';
 
 /**
  * The database pool is exhausted: every connection is busy and none freed up within
@@ -62,7 +63,8 @@ export default fp(async function errorHandling(fastify) {
 
     if (status < 500) {
       request.log.info({ err: { message: err.message, code: err.code }, statusCode: status }, 'Request rejected');
-      return reply.code(status).send({ error: err.message || 'Bad request' });
+      const details = err instanceof AppError ? err.details : undefined;
+      return reply.code(status).send({ ...details, error: err.message || 'Bad request' });
     }
 
     if (isPoolExhausted(err)) {
