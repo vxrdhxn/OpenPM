@@ -1,5 +1,6 @@
 import { api } from './api';
 import { buildQuery, type Page } from './query';
+import { statusLabel } from './tasks';
 
 export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed';
 
@@ -23,7 +24,6 @@ export const unreadCount = (): Promise<{ count: number }> => api.get('/notificat
 export const markRead = (id: string): Promise<void> => api.post(`/notifications/${id}/read`, {});
 export const markAllRead = (): Promise<{ marked: number }> => api.post('/notifications/read-all', {});
 
-const STATUS_NAMES: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', done: 'Done' };
 
 /** One line for a notification: "Ada assigned you Fix login". The title is plain text. */
 export function describeNotification(n: Pick<AppNotification, 'type' | 'actor_name' | 'task_title' | 'data'>): string {
@@ -37,7 +37,7 @@ export function describeNotification(n: Pick<AppNotification, 'type' | 'actor_na
     case 'commented':
       return `${who} commented on ${what}`;
     case 'status_changed':
-      return `${who} moved ${what} to ${STATUS_NAMES[n.data.to ?? ''] ?? n.data.to ?? 'a new status'}`;
+      return `${who} moved ${what} to ${n.data.to ? statusLabel(n.data.to) : 'a new status'}`;
     default:
       return `${who} updated ${what}`;
   }

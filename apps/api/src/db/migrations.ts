@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import type { Queryable } from './queryable';
 
 /**
  * Migration engine.
@@ -13,11 +14,6 @@ export interface Migration {
   version: string; // up-file name, e.g. 001_organizations.sql
   upPath: string;
   downPath: string | null;
-}
-
-/** Minimal surface of pg.PoolClient we depend on (eases testing). */
-export interface Queryable {
-  query(text: string, params?: unknown[]): Promise<{ rows: any[] }>;
 }
 
 // Arbitrary constant; serialises concurrent runners (e.g. several pods starting).

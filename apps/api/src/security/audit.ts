@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger, FastifyRequest } from 'fastify';
 import { db } from '../db/client';
+import type { Queryable } from '../db/queryable';
 import { config } from '../config';
 import { logger } from '../logger';
 
@@ -46,11 +47,6 @@ export interface AuditEvent {
   metadata?: Record<string, unknown>;
 }
 
-/** Anything with pg's `query(text, values)`: a transaction client, or the pool (via `db`). */
-export interface Queryable {
-  query(text: string, values?: unknown[]): Promise<unknown>;
-}
-
 /** Where a request came from. `request.ip` honours TRUST_PROXY, so behind the Ingress it is the client. */
 export interface RequestOrigin {
   ip?: string | null;
@@ -93,7 +89,7 @@ export async function audit(q: Queryable, origin: RequestOrigin | null, event: A
  */
 export async function auditBestEffort(origin: RequestOrigin | null, event: AuditEvent, log: FastifyBaseLogger = logger): Promise<void> {
   try {
-    await audit({ query: (text, values) => db.query(text, values as unknown[]) }, origin, event);
+    await audit({ query: async (text, values) => ({ rows: await db.query(text, values) }) }, origin, event);
   } catch (err) {
     log.error({ err, audit_action: event.action, org_id: event.orgId }, 'Could not write the audit log');
   }

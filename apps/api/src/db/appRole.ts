@@ -1,4 +1,5 @@
 import { escapeIdentifier, escapeLiteral } from 'pg';
+import type { Queryable } from './queryable';
 
 /**
  * Least-privilege database user (docs/database-access.md).
@@ -10,10 +11,6 @@ import { escapeIdentifier, escapeLiteral } from 'pg';
  *
  * Called after every `migrate up`, so tables added by new migrations are granted too.
  */
-
-export interface Queryable {
-  query(text: string): Promise<{ rows: Array<Record<string, unknown>> }>;
-}
 
 export interface AppRole {
   user: string;

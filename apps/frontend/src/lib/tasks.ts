@@ -17,6 +17,7 @@ export const PRIORITIES = [
   { value: 'urgent', label: 'Urgent' },
 ] as const;
 
+export const isStatus = (s: string) => STATUSES.some((x) => x.value === s);
 export const statusLabel = (s: string) => STATUSES.find((x) => x.value === s)?.label ?? s;
 export const priorityLabel = (p: string) => PRIORITIES.find((x) => x.value === p)?.label ?? p;
 

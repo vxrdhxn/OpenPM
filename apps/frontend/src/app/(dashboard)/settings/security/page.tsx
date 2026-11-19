@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
+import type { Page } from "@/lib/query";
 import {
   AUDIT_FILTERS,
   describeAudit,
@@ -18,11 +19,6 @@ import {
   Field,
   LoadingBlock,
 } from "@/components/ui/states";
-
-interface Page {
-  items: AuditEntry[];
-  next_cursor: string | null;
-}
 
 /**
  * Security log: sign-ins, failed sign-ins, password changes, and changes to who can do or see what
@@ -40,7 +36,7 @@ export default function SecurityLogPage() {
       const params = new URLSearchParams({ limit: "50" });
       if (action) params.set("action", action);
       if (cursor) params.set("cursor", cursor);
-      return api.get(`/audit?${params}`) as Promise<Page>;
+      return api.get(`/audit?${params}`) as Promise<Page<AuditEntry>>;
     },
     [action],
   );

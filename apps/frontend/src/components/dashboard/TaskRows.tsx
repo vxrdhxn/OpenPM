@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AlertCircle } from 'lucide-react';
 import LabelChip from '@/components/LabelChip';
 import type { Label } from '@/lib/labels';
+import { statusLabel } from '@/lib/tasks';
 
 export interface TaskRow {
   id: string;
@@ -16,7 +17,6 @@ export interface TaskRow {
   labels?: Label[];
 }
 
-const STATUS_NAMES: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', done: 'Done' };
 
 export const isOverdue = (t: Pick<TaskRow, 'due_date' | 'status'>, now = Date.now()) =>
   t.status !== 'done' && t.due_date !== null && new Date(t.due_date).getTime() < now;
@@ -39,7 +39,7 @@ export default function TaskRows({ tasks, empty, showAssignee = false }: { tasks
                 {t.title}
               </Link>
               <p className="text-xs text-slate-500 truncate">
-                {t.project_name} · {STATUS_NAMES[t.status] ?? t.status} · <span className="capitalize">{t.priority}</span>
+                {t.project_name} · {statusLabel(t.status)} · <span className="capitalize">{t.priority}</span>
                 {showAssignee && ` · ${t.assignee_name ?? 'Unassigned'}`}
               </p>
               {t.labels && t.labels.length > 0 && (

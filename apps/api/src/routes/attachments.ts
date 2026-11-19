@@ -1,7 +1,8 @@
 import { FastifyPluginAsync } from 'fastify';
 import { scopeOf } from '../data/scope';
 import * as attachmentService from '../services/attachments';
-import type { TaskPath, UploadRequest } from '../services/attachments';
+import type { UploadRequest } from '../services/attachments';
+import type { TaskPath } from '../data/tasks';
 
 /**
  * /api/projects/:projectId/tasks/:taskId/attachments. HTTP only; the upload flow and its checks are in

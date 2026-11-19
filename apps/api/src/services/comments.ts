@@ -9,7 +9,7 @@ import { logActivity } from '../data/activity';
 import * as comments from '../data/comments';
 import type { Comment } from '../data/comments';
 import * as tasks from '../data/tasks';
-import type { TaskRef } from '../data/tasks';
+import type { TaskPath, TaskRef } from '../data/tasks';
 import type { TenantScope } from '../data/scope';
 
 /**
@@ -24,11 +24,6 @@ import type { TenantScope } from '../data/scope';
 export const MAX_COMMENT_LENGTH = 10_000;
 /** Most people one comment can mention. */
 export const MAX_MENTIONS = 20;
-
-export interface TaskPath {
-  projectId: string;
-  taskId: string;
-}
 
 const taskNotFound = () => new NotFoundError('Task not found');
 const commentNotFound = () => new NotFoundError('Comment not found');

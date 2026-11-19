@@ -1,3 +1,5 @@
+import { isStatus, statusLabel } from './tasks';
+
 export interface ActivityEntry {
   id: string;
   entity_type: 'project' | 'task' | 'comment' | string;
@@ -13,13 +15,6 @@ export interface ActivityEntry {
   /** For task updates: { changes: [...], from?, to? }. */
   changes: { changes?: string[]; from?: string; to?: string } | null;
 }
-
-const STATUS_NAMES: Record<string, string> = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  in_review: 'In Review',
-  done: 'Done',
-};
 
 /**
  * The verb phrase for an activity entry, without the actor: "created the task", "moved the task to
@@ -39,7 +34,7 @@ export function describeActivity(entry: Pick<ActivityEntry, 'entity_type' | 'act
     if (action === 'deleted') return 'deleted the task';
     if (action === 'labels_changed') return 'changed the labels of';
     if (action === 'updated') {
-      if (changes?.to && STATUS_NAMES[changes.to]) return `moved to ${STATUS_NAMES[changes.to]}:`;
+      if (changes?.to && isStatus(changes.to)) return `moved to ${statusLabel(changes.to)}:`;
       if (changes?.changes?.length === 1 && changes.changes[0] === 'assignee_id') return 'reassigned';
       return 'updated the task';
     }

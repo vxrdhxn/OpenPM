@@ -7,6 +7,7 @@ import { AppError, BadRequestError, ConflictError, ForbiddenError, NotFoundError
 import * as attachments from '../data/attachments';
 import type { AttachmentRow, PublicAttachment } from '../data/attachments';
 import type { TenantScope } from '../data/scope';
+import type { TaskPath } from '../data/tasks';
 
 /**
  * Task attachments. Bytes go browser -> object storage via presigned URLs; the API only issues URLs
@@ -22,11 +23,6 @@ export const UPLOAD_URL_TTL_SECONDS = 300;
 export const DOWNLOAD_URL_TTL_SECONDS = 120;
 
 type Log = Pick<FastifyBaseLogger, 'error'>;
-
-export interface TaskPath {
-  projectId: string;
-  taskId: string;
-}
 
 const attachmentNotFound = () => new NotFoundError('Attachment not found');
 

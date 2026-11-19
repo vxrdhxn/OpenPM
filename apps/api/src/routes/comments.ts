@@ -2,7 +2,8 @@ import { FastifyPluginAsync } from 'fastify';
 import { scopeOf } from '../data/scope';
 import { paginationQuerySchema } from '../query/pagination';
 import * as commentService from '../services/comments';
-import { MAX_COMMENT_LENGTH, MAX_MENTIONS, type TaskPath } from '../services/comments';
+import { MAX_COMMENT_LENGTH, MAX_MENTIONS } from '../services/comments';
+import type { TaskPath } from '../data/tasks';
 
 /**
  * /api/projects/:projectId/tasks/:taskId/comments. HTTP only; the rules (who may edit or delete,

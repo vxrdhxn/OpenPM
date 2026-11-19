@@ -95,7 +95,7 @@ npm test
 
 - [x] Use strict TypeScript settings where practical. — `strict` plus `noUncheckedIndexedAccess` etc. in `tsconfig.base.json`
 - [x] Remove unsafe `any` from important paths. — routes, services and repositories are typed (route generics for body/params/query); `any` remains only in infrastructure helpers (cache payloads, `db.query`'s default row type, the realtime hub)
-- [ ] Avoid duplicated domain types.
+- [ ] Avoid duplicated domain types. — *partial:* duplicates within each app removed (one `Queryable`, `TaskLabel` and `TaskPath` in the API; one status-name table in the frontend). The API and frontend still each declare the wire types (task status/priority, roles, labels, notifications); sharing them needs a `packages/` workspace that all three Docker builds copy
 - [x] Validate external input at runtime. — bodies, query strings and path params by JSON Schema; NUL bytes refused; the WebSocket accepts no client messages
 - [x] Validate environment variables at startup. — API and worker both validate with zod (`apps/api/src/config.ts`, `apps/worker/src/config.ts`) and exit listing every invalid variable; the worker requires `APP_URL` in production (`docs/jobs.md`)
 

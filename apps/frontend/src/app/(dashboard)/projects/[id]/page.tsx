@@ -19,14 +19,16 @@ import TaskForm from '@/components/TaskForm';
 import Dialog from '@/components/ui/Dialog';
 import { messageOf, useToast } from '@/components/ui/feedback';
 import { ErrorBlock } from '@/components/ui/states';
-import { EMPTY_DRAFT, newTaskBody, priorityLabel, type TaskDraft } from '@/lib/tasks';
+import { EMPTY_DRAFT, STATUSES, newTaskBody, priorityLabel, type TaskDraft } from '@/lib/tasks';
 
-const COLUMNS = [
-  { id: 'todo', title: 'To Do', color: 'bg-slate-200 dark:bg-slate-800' },
-  { id: 'in_progress', title: 'In Progress', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' },
-  { id: 'in_review', title: 'In Review', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' },
-  { id: 'done', title: 'Done', color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' },
-];
+const COLUMN_COLORS: Record<(typeof STATUSES)[number]['value'], string> = {
+  todo: 'bg-slate-200 dark:bg-slate-800',
+  in_progress: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+  in_review: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
+  done: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
+};
+
+const COLUMNS = STATUSES.map((s) => ({ id: s.value, title: s.label, color: COLUMN_COLORS[s.value] }));
 
 export default function KanbanBoard() {
   // Next 15+ passes `params` to pages as a Promise, so read the route param with the hook instead.

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { listMigrations, migrateDown, migrateUp, migrationStatus, Queryable } from './migrations';
+import { listMigrations, migrateDown, migrateUp, migrationStatus } from './migrations';
+import type { Queryable } from './queryable';
 
 /** In-memory stand-in for a pg client that tracks schema_migrations and executed SQL. */
 class FakeClient implements Queryable {

@@ -45,6 +45,12 @@ const UPDATABLE_COLUMNS = new Set(['title', 'description', 'status', 'priority',
 
 export type TaskChanges = Partial<Pick<TaskRow, 'title' | 'description' | 'status' | 'priority' | 'assignee_id' | 'due_date'>>;
 
+/** A task's place in the URL (`/projects/:projectId/tasks/:taskId/...`), as its sub-resources receive it. */
+export interface TaskPath {
+  projectId: string;
+  taskId: string;
+}
+
 /** What other features need of a task: it must be in this project, and both in the organization. */
 export type TaskRef = Pick<TaskRow, 'id' | 'title' | 'assignee_id' | 'created_by'>;
 

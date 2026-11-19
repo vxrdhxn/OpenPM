@@ -1,10 +1,5 @@
 import { db } from '../db/client';
-
-export interface TaskLabel {
-  id: string;
-  name: string;
-  color: string;
-}
+import type { TaskLabel } from '../data/labels';
 
 /**
  * The labels of many tasks in one query, by task id (sorted by name). Cheaper than a per-row
