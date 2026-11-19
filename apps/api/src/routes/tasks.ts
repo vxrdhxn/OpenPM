@@ -3,6 +3,7 @@ import { scopeOf } from '../data/scope';
 import type { TaskChanges } from '../data/tasks';
 import { taskFilterQuerySchema, type TaskFilters } from '../query/taskFilters';
 import * as taskService from '../services/tasks';
+import { sendJson } from './send';
 import { MAX_DESCRIPTION_LENGTH, type NewTask } from '../services/tasks';
 
 /**
@@ -53,7 +54,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         additionalProperties: false,
       },
     },
-  }, async (request) => taskService.getBoard(scopeOf(request.user), request.params.projectId, request.query));
+  }, async (request, reply) => sendJson(reply, await taskService.getBoard(scopeOf(request.user), request.params.projectId, request.query)));
 
   // PATCH /:projectId/tasks/:taskId (member or higher)
   fastify.patch<{ Params: TaskParams; Body: TaskChanges & { version?: number } }>('/:projectId/tasks/:taskId', {

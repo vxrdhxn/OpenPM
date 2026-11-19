@@ -4,6 +4,7 @@ import { config } from '../config';
 import { logger } from '../logger';
 import { cacheBypassedTotal, redisCommandDurationSeconds, redisErrorsTotal } from '../metrics';
 import { RealtimeHub, Handler } from '../realtime/hub';
+import { CachedJson } from './cachedJson';
 
 /**
  * The cache is an optimization: when Redis is down, requests carry on without it (reads go to the
@@ -94,7 +95,16 @@ export function withEnvelope(message: unknown): unknown {
   return { ...(message as Record<string, unknown>), event_id: randomUUID(), published_at: new Date().toISOString() };
 }
 
+export { CachedJson };
+
 export const cache = {
+  /** The stored JSON text, or null on a miss or when Redis is unavailable. */
+  async getRaw(key: string): Promise<CachedJson | null> {
+    const data = await attempt('get', () => client.get(key));
+    if (data === FAILED || !data) return null;
+    return new CachedJson(data);
+  },
+
   /** The cached value, or null on a miss, an unreadable entry, or when Redis is unavailable. */
   async get<T>(key: string): Promise<T | null> {
     const data = await attempt('get', () => client.get(key));

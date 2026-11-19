@@ -5,7 +5,7 @@ vi.mock('../db/client', () => ({
   db: { query: vi.fn(), getClient: vi.fn() },
 }));
 vi.mock('../cache/redis', () => ({
-  cache: { get: vi.fn(), set: vi.fn(), del: vi.fn(), publish: vi.fn(), subscribe: vi.fn() },
+  cache: { get: vi.fn(), getRaw: vi.fn(), set: vi.fn(), del: vi.fn(), publish: vi.fn(), subscribe: vi.fn() },
 }));
 const { queueAdd } = vi.hoisted(() => ({ queueAdd: vi.fn() }));
 vi.mock('../queue', () => ({ getJobQueue: () => ({ add: queueAdd }) }));
@@ -14,6 +14,7 @@ vi.mock('../storage', () => ({ getStorage }));
 
 import { db } from '../db/client';
 import { cache } from '../cache/redis';
+import { CachedJson } from '../cache/cachedJson';
 import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin from '../plugins/auth';
 import { genReqId } from '../logger';
@@ -120,17 +121,19 @@ describe('Task routes lifecycle', () => {
   describe('list', () => {
     it('serves from cache when present', async () => {
       const cached = { todo: [], in_progress: [], in_review: [], done: [] };
-      vi.mocked(cache.get).mockResolvedValue(cached);
+      vi.mocked(cache.getRaw).mockResolvedValue(new CachedJson(JSON.stringify(cached)));
 
       const res = await app.inject({ method: 'GET', url: `/projects/${P}/tasks`, headers: auth('viewer') });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual(cached);
+      // Sent as stored, as JSON.
+      expect(res.headers['content-type']).toMatch(/^application\/json/);
+      expect(res.body).toBe(JSON.stringify(cached));
       expect(db.query).not.toHaveBeenCalled();
     });
 
     it('returns each column with totals and cursors, and caches the unfiltered board', async () => {
-      vi.mocked(cache.get).mockResolvedValue(null);
+      vi.mocked(cache.getRaw).mockResolvedValue(null);
       vi.mocked(db.query).mockImplementation((async (sql: string) => {
         if (sql.startsWith('SELECT id FROM projects')) return [{ id: P }];
         if (sql.includes('CROSS JOIN LATERAL')) {
@@ -159,7 +162,7 @@ describe('Task routes lifecycle', () => {
     });
 
     it('limits each column and returns a cursor for the rest', async () => {
-      vi.mocked(cache.get).mockResolvedValue(null);
+      vi.mocked(cache.getRaw).mockResolvedValue(null);
       const many = Array.from({ length: BOARD_COLUMN_LIMIT + 1 }, (_, i) => ({
         id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
         status: 'todo',
@@ -181,7 +184,7 @@ describe('Task routes lifecycle', () => {
     });
 
     it('returns 404 when the project is not in the caller org', async () => {
-      vi.mocked(cache.get).mockResolvedValue(null);
+      vi.mocked(cache.getRaw).mockResolvedValue(null);
       vi.mocked(db.query).mockResolvedValueOnce([]);
 
       const res = await app.inject({ method: 'GET', url: `/projects/${P}/tasks`, headers: auth('viewer') });

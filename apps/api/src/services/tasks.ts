@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
+import type { CachedJson } from '../cache/cachedJson';
 import { enqueue } from '../jobs/enqueue';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import * as storageDeletions from '../data/storageDeletions';
@@ -99,11 +100,12 @@ export type Board = Record<string, unknown> & {
  * GET /api/tasks?project_id=&status=<column>&sort=created_at&order=asc&cursor=<it> (same filters).
  * Only the unfiltered board is cached; every task write clears it.
  */
-export async function getBoard(scope: TenantScope, projectId: string, filters: TaskFilters): Promise<Board> {
+export async function getBoard(scope: TenantScope, projectId: string, filters: TaskFilters): Promise<Board | CachedJson> {
   const cacheable = !hasTaskFilters(filters);
   const cacheKey = boardCacheKey(scope.orgId, projectId);
   if (cacheable) {
-    const cached = await cache.get<Board>(cacheKey);
+    // Sent as stored: no parse and re-serialize of up to 400 tasks on every hit.
+    const cached = await cache.getRaw(cacheKey);
     if (cached) return cached;
   }
 

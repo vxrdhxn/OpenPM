@@ -883,7 +883,7 @@ Audit event
 - [x] Optimize DB queries. — board per column, search trigrams, dashboard progress
 - [x] Add evidence-based indexes.
 - [x] Cache appropriate reads.
-- [ ] Avoid unnecessary serialization. — *partial:* boards bounded to 400 tasks; cached responses are still parsed and re-serialized
+- [x] Avoid unnecessary serialization. — cached boards and project lists are sent as stored JSON text (`CachedJson`, `routes/send.ts`): no parse and re-serialize per hit; boards bounded to 400 tasks
 - [x] Request timeouts.
 
 ## Frontend

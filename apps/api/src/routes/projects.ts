@@ -5,6 +5,7 @@ import { paginationQuerySchema, searchQuerySchema } from '../query/pagination';
 import { originOf } from '../security/audit';
 import { VISIBILITIES, type Visibility } from '../security/projectAccess';
 import * as projectService from '../services/projects';
+import { sendJson } from './send';
 import type { NewProject } from '../services/projects';
 
 /**
@@ -57,7 +58,7 @@ const projectRoutes: FastifyPluginAsync = async (fastify) => {
         additionalProperties: false,
       },
     },
-  }, async (request) => projectService.listProjects(scopeOf(request.user), request.query));
+  }, async (request, reply) => sendJson(reply, await projectService.listProjects(scopeOf(request.user), request.query)));
 
   // GET /:id (viewer or higher)
   fastify.get<{ Params: { id: string } }>('/:id', {

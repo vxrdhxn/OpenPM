@@ -15,6 +15,7 @@ vi.mock('../db/client', () => ({
 vi.mock('../cache/redis', () => ({
     cache: {
         get: vi.fn(),
+        getRaw: vi.fn(),
         set: vi.fn(),
         del: vi.fn(),
         publish: vi.fn(),
@@ -77,7 +78,7 @@ describe('Project routes', () => {
         const adminToken = () => app.jwt.sign({ user_id: 'user-1', org_id: 'org-1', role: 'admin' });
 
         it('caches the plain first page as { items, next_cursor } for admins, who see every project', async () => {
-            vi.mocked(cache.get).mockResolvedValue(null);
+            vi.mocked(cache.getRaw).mockResolvedValue(null);
             vi.mocked(db.query).mockResolvedValue([{ id: 'p1', name: 'A', sort_key: 'k' }]);
 
             const res = await list('', adminToken());
@@ -92,7 +93,7 @@ describe('Project routes', () => {
 
             await list();
 
-            expect(cache.get).not.toHaveBeenCalled();
+            expect(cache.getRaw).not.toHaveBeenCalled();
             expect(cache.set).not.toHaveBeenCalled();
             const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
             expect(sql).toContain("p.visibility = 'workspace' OR EXISTS");
@@ -106,7 +107,7 @@ describe('Project routes', () => {
             await list('?status=archived');
             await list('?limit=10');
 
-            expect(cache.get).not.toHaveBeenCalled();
+            expect(cache.getRaw).not.toHaveBeenCalled();
             expect(cache.set).not.toHaveBeenCalled();
         });
     });

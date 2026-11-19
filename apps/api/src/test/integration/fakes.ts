@@ -1,3 +1,5 @@
+import { CachedJson } from '../../cache/cachedJson';
+
 /**
  * In-memory stand-ins for Redis (cache + pub/sub) and the BullMQ queue, so the integration suite needs
  * only Postgres. Tests read `published` and `jobs` to see what the API emitted.
@@ -15,6 +17,10 @@ const store = new Map<string, unknown>();
 export const redisOutage = { active: false };
 
 export const fakeCache = {
+  async getRaw(key: string) {
+    if (redisOutage.active || !store.has(key)) return null;
+    return new CachedJson(JSON.stringify(store.get(key)));
+  },
   async get(key: string) {
     if (redisOutage.active) return null;
     return store.has(key) ? structuredClone(store.get(key)) : null;

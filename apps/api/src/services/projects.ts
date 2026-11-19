@@ -1,5 +1,6 @@
 import { withTransaction } from '../db/transaction';
 import { cache } from '../cache/redis';
+import type { CachedJson } from '../cache/cachedJson';
 import { deleteStoredObjects } from '../attachments/cleanup';
 import * as storageDeletions from '../data/storageDeletions';
 import { announceAccessChange } from '../realtime/announce';
@@ -50,12 +51,12 @@ export async function createProject(scope: TenantScope, input: NewProject): Prom
  * page loads), and only for admins and owners: they see every project, so one cached list is right for
  * all of them. Everyone else gets the list filtered for them, straight from Postgres.
  */
-export async function listProjects(scope: TenantScope, filter: ProjectListFilter): Promise<Page<ProjectListItem>> {
+export async function listProjects(scope: TenantScope, filter: ProjectListFilter): Promise<Page<ProjectListItem> | CachedJson> {
   const cacheable =
     seesAllProjects(scope.role) && !filter.cursor && !filter.q && !filter.status && filter.limit === DEFAULT_PAGE_SIZE;
 
   if (cacheable) {
-    const cached = await cache.get<Page<ProjectListItem>>(listCacheKey(scope.orgId));
+    const cached = await cache.getRaw(listCacheKey(scope.orgId));
     if (cached) return cached;
   }
 
