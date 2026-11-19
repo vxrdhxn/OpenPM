@@ -18,6 +18,11 @@ import type { TenantScope } from '../data/scope';
  */
 
 export const INVITE_TTL_DAYS = 7;
+/**
+ * Most invites an organization holds at once, pending, expired and declined together (all are listed
+ * until revoked or accepted). Keeps the list bounded without paging it.
+ */
+export const MAX_INVITES_PER_ORG = 500;
 
 const inviteGone = () => new NotFoundError('Invite not found or expired');
 
@@ -48,6 +53,9 @@ export async function createInvite(
   const invite = await withTransaction(async (client) => {
     if (await invites.isMemberEmail(client, scope, email)) {
       throw new ConflictError('This person is already a member of your organization');
+    }
+    if ((await invites.lockAndCountOthers(client, scope, email)) >= MAX_INVITES_PER_ORG) {
+      throw new ConflictError(`An organization can have at most ${MAX_INVITES_PER_ORG} invites; revoke expired or declined ones first`);
     }
     const created = await invites.upsert(client, scope, { email, tokenHash, role, expiresAt });
     await record(client, scope, origin, created.id, 'created', { role });

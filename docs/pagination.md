@@ -69,5 +69,12 @@ filters (the board's "Show more"). The board takes the same filters as task sear
 Unknown query parameters are rejected (400), so a typo never silently returns unfiltered data. Every
 value becomes a bind parameter. Sort columns come from a fixed list, never from the request.
 
-Not paginated yet: `GET /api/members` and `GET /api/invites` (bounded by organization size) and a
-task's attachments.
+Not paginated, on purpose, because each is bounded:
+
+| List | Bound |
+| --- | --- |
+| `GET /api/members` | The organization's active members. Not paged because the assignee and @mention pickers need all of them. |
+| `GET /api/invites` | At most 500 per organization (`docs/members.md`). |
+| `GET /api/labels` | At most 200 per organization. |
+| A task's attachments | At most 25 per task. |
+| A project's people | The organization's members. |

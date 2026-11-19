@@ -205,10 +205,10 @@ Review/finalize:
 
 ## Query quality
 
-- [ ] Find N+1 queries.
-- [ ] Add pagination to collections. — *partial:* projects and task search; members, invites and attachments are bounded by org/task size, not paged
+- [x] Find N+1 queries. — none found (Nov 2026): board labels load in one batched query (`query/taskLabels.ts`), notifications in one `INSERT … SELECT`, the dashboard's queries run in parallel; the frontend has no per-item fetch loops
+- [x] Add pagination to collections. — projects, task search, activity, notifications, comments, audit log are paged; the rest are bounded instead: invites ≤ 500 per org (new), labels ≤ 200, attachments ≤ 25 per task; members are deliberately unpaged for the pickers (`docs/pagination.md`)
 - [x] Prevent unbounded queries. — page size ≤ 100, board ≤ 1000 tasks
-- [ ] Select only required fields where useful.
+- [x] Select only required fields where useful. — list queries pick their columns (projects, task search, dashboard, invites never include the token hash); full rows only for single task/project reads and the board, whose rows the task dialog edits
 - [x] Review transaction boundaries. — `withTransaction`
 - [x] Use transactions for atomic multi-step writes.
 - [x] Profile slow queries. — `EXPLAIN ANALYZE` on 50,000 tasks (`docs/load-testing.md`)
@@ -1126,9 +1126,9 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] Repository audit.
 - [x] Baseline tests.
-- [ ] Architecture cleanup.
+- [ ] Architecture cleanup. — *partial:* layering, worker env validation, unused dependencies and in-app duplicate types done (Nov 2026); open: API and frontend share no wire types
 - [x] Environment validation.
-- [ ] Database schema finalization.
+- [x] Database schema finalization. — single-org membership decided; delete rules pinned (migration 023); task versions (024); bounded lists
 - [x] Authentication hardening. — revocation via token_version, current role on every request, uniform register conflicts (H.3)
 - [x] Authorization foundation.
 - [x] Tenant isolation.

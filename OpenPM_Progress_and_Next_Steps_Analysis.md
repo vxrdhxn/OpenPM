@@ -218,8 +218,13 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 - [x] **Worker environment validation:** `apps/worker/src/config.ts` validates with zod like the API and exits listing every invalid variable; `APP_URL` is required in production (`docs/jobs.md`).
 - [x] **Unused dependencies:** the frontend's `clsx`, `date-fns`, `tailwind-merge` and `zustand` were never imported and are removed.
 - [ ] **Duplicated domain types:** duplicates inside each app removed. Still open: the API and frontend each declare the wire types (status, priority, roles, notifications); a shared `packages/` workspace would fix that.
-- [ ] **Schema finalization:** cascade review, optimistic concurrency, pagination for members/invites/attachments, N+1 review; and the decision on multi-org membership.
+- [x] **Schema finalization:**
+  - **One organization per user**, by decision: no membership table or org switcher.
+  - **Delete rules:** every foreign key's ON DELETE rule is pinned by a test. Migration 023 stops `activity_log.user_id` cascading (`docs/data-deletion.md`).
+  - **Concurrent edits:** tasks have a `version` (migration 024). A stale PATCH gets 409, and the task dialog no longer reverts teammates' edits (`docs/concurrency.md`).
+  - **Bounded lists:** invites are capped at 500 per organization; members are deliberately unpaged (`docs/pagination.md`).
+  - **N+1 queries:** none found.
 
 ### Recommended Immediate Action
 1. **Repo settings (admin):** enable branch protection on `main`, review the first CodeQL alerts and make them merge-blocking (see `docs/ci.md`). For releases: allow Actions to create PRs, add a `RELEASE_PR_TOKEN` secret, and make the GHCR packages public or add a pull secret (`docs/releasing.md`).
-2. **Finish Phase 1:** schema finalization (above).
+2. **Last Phase 1 item:** shared wire types between the API and the frontend (a `packages/` workspace), if wanted.

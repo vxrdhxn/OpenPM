@@ -55,6 +55,8 @@ describe('Invite routes', () => {
       mockClient.query
         .mockResolvedValueOnce(rows()) // BEGIN
         .mockResolvedValueOnce(rows()) // already-a-member check
+        .mockResolvedValueOnce(rows()) // lock the organization
+        .mockResolvedValueOnce(rows([{ n: 0 }])) // other invites
         .mockResolvedValueOnce(rows([inviteRow])) // upsert
         .mockResolvedValueOnce(rows()) // activity log
         .mockResolvedValueOnce(rows()); // COMMIT
@@ -68,7 +70,7 @@ describe('Invite routes', () => {
       // Email normalized; membership checked in the caller's org only.
       expect(mockClient.query).toHaveBeenNthCalledWith(2, 'SELECT id FROM users WHERE email = $1 AND org_id = $2', ['new@example.com', 'org-1']);
 
-      const [upsertSql, upsertParams] = mockClient.query.mock.calls[2]!;
+      const [upsertSql, upsertParams] = mockClient.query.mock.calls[4]!;
       expect(upsertSql).toContain('token_hash');
       expect(upsertSql).not.toMatch(/RETURNING \*/);
       expect(upsertParams.slice(0, 2)).toEqual(['org-1', 'new@example.com']);
@@ -83,8 +85,23 @@ describe('Invite routes', () => {
       expect(upsertParams[2]).not.toBe(data.token);
       expect(opts).toMatchObject({ removeOnComplete: true });
 
-      expect(mockClient.query.mock.calls[3]![1]).toEqual(['org-1', 'admin-1', 'invite', INVITE_ID, 'created', JSON.stringify({ role: 'member' })]);
+      expect(mockClient.query.mock.calls[5]![1]).toEqual(['org-1', 'admin-1', 'invite', INVITE_ID, 'created', JSON.stringify({ role: 'member' })]);
       expect(mockClient.query).toHaveBeenLastCalledWith('COMMIT');
+    });
+
+    it('returns 409 and creates nothing once the organization holds the most invites it may', async () => {
+      mockClient.query
+        .mockResolvedValueOnce(rows()) // BEGIN
+        .mockResolvedValueOnce(rows()) // already-a-member check
+        .mockResolvedValueOnce(rows()) // lock the organization
+        .mockResolvedValueOnce(rows([{ n: 500 }])) // other invites
+        .mockResolvedValue(rows()); // ROLLBACK
+
+      const res = await asAdmin('POST', '/invites', { email: 'one.more@example.com', role: 'member' });
+
+      expect(res.statusCode).toBe(409);
+      expect(mockClient.query.mock.calls.some((c) => String(c[0]).startsWith('INSERT INTO organization_invites'))).toBe(false);
+      expect(queueAdd).not.toHaveBeenCalled();
     });
 
     it('returns 409 and queues nothing when the person is already in the organization', async () => {

@@ -80,7 +80,13 @@ inviting the same address again replaces it. The invitee can accept it, which cr
 or **decline** it (`POST /api/invites/decline`): the link stops working and the invite stays in the
 admins' list, marked declined. Inviting them again sends a new link and clears the mark.
 
+An organization holds at most **500 invites** at a time, pending, expired and declined together (all
+of them are listed). Past that, a new invite is refused with 409 until old ones are revoked;
+re-sending an existing invite is always allowed.
+
 ## Not implemented yet
 
-Reactivating a removed member (invite them again instead), and belonging to more than one
-organization.
+Reactivating a removed member (invite them again instead).
+
+Belonging to more than one organization is out of scope by decision (November 2026): each account
+belongs to exactly one organization (`users.org_id`).

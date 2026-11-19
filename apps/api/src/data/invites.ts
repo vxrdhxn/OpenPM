@@ -38,6 +38,19 @@ export async function isMemberEmail(client: PoolClient, scope: TenantScope, emai
   return res.rows.length > 0;
 }
 
+/**
+ * Lock the organization row and count its invites to addresses other than `email` (re-inviting someone
+ * replaces their invite, so it never adds one). The lock makes concurrent invites queue behind the count.
+ */
+export async function lockAndCountOthers(client: PoolClient, scope: TenantScope, email: string): Promise<number> {
+  await client.query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [scope.orgId]);
+  const res = await client.query<{ n: number }>(
+    'SELECT count(*)::int AS n FROM organization_invites WHERE org_id = $1 AND email <> $2',
+    [scope.orgId, email]
+  );
+  return res.rows[0]!.n;
+}
+
 /** Create or refresh the invite for `email`: re-inviting replaces the old link (its token hash is overwritten). */
 export async function upsert(
   client: PoolClient,
