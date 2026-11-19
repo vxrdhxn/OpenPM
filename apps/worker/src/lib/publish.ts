@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import IORedis from 'ioredis';
 import { config } from '../config';
 import type { Logger } from './logger';
@@ -20,7 +21,8 @@ function connection(): IORedis {
 /** Best effort, like the API's publishes: a lost live event only delays what clients fetch anyway. */
 export async function publish(channel: string, message: unknown, log: Pick<Logger, 'warn'>): Promise<void> {
   try {
-    await connection().publish(channel, JSON.stringify(message));
+    // The same envelope as the API's events (docs/realtime.md).
+    await connection().publish(channel, JSON.stringify({ ...(message as object), event_id: randomUUID(), published_at: new Date().toISOString() }));
   } catch (err) {
     log.warn({ err, channel }, 'Could not publish a live event');
   }

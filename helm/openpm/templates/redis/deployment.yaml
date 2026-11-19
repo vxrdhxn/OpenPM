@@ -28,6 +28,13 @@ spec:
             - redis-server
             - --requirepass
             - $(REDIS_PASSWORD)
+            # Never evict: Redis holds the job queue, and an evicted key is a silently lost job. At
+            # maxmemory (kept under the container limit, so it refuses writes instead of being
+            # OOM-killed) new writes fail loudly instead (docs/realtime.md).
+            - --maxmemory-policy
+            - noeviction
+            - --maxmemory
+            - {{ .Values.redis.maxMemory | default "200mb" | quote }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

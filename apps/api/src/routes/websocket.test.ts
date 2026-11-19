@@ -16,7 +16,7 @@ import { config } from '../config';
 import { activeWebsocketConnections, websocketErrorsTotal, websocketRejectionsTotal } from '../metrics';
 import { TRUST_TOKEN_CLAIMS } from '../test/auth';
 import authPlugin, { type AuthPluginOptions } from '../plugins/auth';
-import websocketRoutes from './websocket';
+import websocketRoutes, { MAX_PENDING_EVENTS } from './websocket';
 
 type Handler = (message: unknown, raw: string) => void;
 interface Client {
@@ -34,12 +34,16 @@ describe('GET /ws', () => {
   let handlers: Map<string, Handler>;
   let unsubscribe: ReturnType<typeof vi.fn>;
 
-  async function build(heartbeatMs?: number, authOptions: AuthPluginOptions = TRUST_TOKEN_CLAIMS) {
+  async function build(
+    heartbeatMs?: number,
+    authOptions: AuthPluginOptions = TRUST_TOKEN_CLAIMS,
+    limits: { maxConnections?: number; maxPerUser?: number; maxBufferedBytes?: number } = {}
+  ) {
     app = Fastify();
     await app.register(cookie);
     await app.register(authPlugin, authOptions);
     await app.register(websocket);
-    await app.register(websocketRoutes, { heartbeatMs });
+    await app.register(websocketRoutes, { heartbeatMs, ...limits });
     await app.listen({ port: 0, host: '127.0.0.1' });
     port = (app.server.address() as { port: number }).port;
   }
@@ -85,6 +89,55 @@ describe('GET /ws', () => {
   afterEach(async () => {
     clients.forEach((ws) => ws.terminate());
     await app.close();
+  });
+
+  describe('limits and backpressure', () => {
+    it('caps sockets per user, and frees the slot when one closes', async () => {
+      await build(undefined, TRUST_TOKEN_CLAIMS, { maxPerUser: 2 });
+      const a = connect({ headers: asCookie(tokenFor()) });
+      const b = connect({ headers: asCookie(tokenFor()) });
+      await Promise.all([open(a), open(b)]);
+      await tick();
+
+      const third = connect({ headers: asCookie(tokenFor()) });
+      expect(await third.closed).toMatchObject({ code: 1008, reason: 'Too many connections' });
+
+      // Another user is not affected.
+      const other = connect({ headers: asCookie(tokenFor('org-1', { user_id: 'u2' })) });
+      await open(other);
+
+      a.ws.close();
+      await a.closed;
+      await tick();
+      const again = connect({ headers: asCookie(tokenFor()) });
+      await open(again);
+      await tick();
+      expect(again.ws.readyState).toBe(WebSocket.OPEN);
+    });
+
+    it('refuses with 1013 (try again later) when the pod is full', async () => {
+      await build(undefined, TRUST_TOKEN_CLAIMS, { maxConnections: 1 });
+      const first = connect({ headers: asCookie(tokenFor()) });
+      await open(first);
+      await tick();
+
+      const second = connect({ headers: asCookie(tokenFor('org-1', { user_id: 'u2' })) });
+      expect(await second.closed).toMatchObject({ code: 1013, reason: 'Server busy' });
+    });
+
+    it('closes a client that falls too far behind instead of queueing without limit', async () => {
+      await build();
+      // The first access load never finishes, so every event waits behind it.
+      vi.mocked(hiddenProjectIds).mockReturnValue(new Promise(() => undefined));
+      const c = connect({ headers: asCookie(tokenFor()) });
+      await open(c);
+      await tick();
+
+      const handler = handlers.get('org:org-1:updates')!;
+      for (let i = 0; i <= MAX_PENDING_EVENTS; i++) handler({ type: 'labels_changed' }, '{"type":"labels_changed"}');
+
+      expect(await c.closed).toMatchObject({ code: 1013, reason: 'Too slow' });
+    });
   });
 
   describe('session revocation', () => {

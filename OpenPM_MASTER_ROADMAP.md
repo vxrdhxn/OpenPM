@@ -405,7 +405,7 @@ member.removed
 
 For every event, document its payload schema, authorization rules, sender, recipients and retry/ordering behavior.
 
-- [ ] Every event documented that way. — *partial:* comment and notification events in `docs/comments.md` and `docs/notifications.md`; task, project and member events are not
+- [x] Every event documented that way. — every event type, its payload and when it is sent: `docs/realtime.md`
 - [x] Tenant isolation. — per-org Redis channel
 
 ## Reliability
@@ -413,10 +413,10 @@ For every event, document its payload schema, authorization rules, sender, recip
 - [x] Reconnection. — exponential backoff with jitter
 - [x] Heartbeat/ping-pong.
 - [x] Stale connection cleanup. — missed heartbeat or JWT expiry closes the socket
-- [ ] Connection limits. — *partial:* 1,000 concurrent sockets tested (8% CPU, 96 MB); no per-user or per-pod cap
-- [ ] Backpressure strategy.
-- [ ] Duplicate-event handling.
-- [ ] Ordering strategy where needed.
+- [x] Connection limits. — `WS_MAX_CONNECTIONS` per pod (1013) and `WS_MAX_CONNECTIONS_PER_USER` (1008); 1,000 sockets load-tested
+- [x] Backpressure strategy. — a socket with over 1 MiB unsent or 1,000 events waiting is closed (1013) and the client refetches (`docs/realtime.md`)
+- [x] Duplicate-event handling. — every event has an `event_id`; events carry whole objects or only trigger a refetch, so applying one twice is harmless
+- [x] Ordering strategy where needed. — Redis delivers a channel in publish order; each socket handles its events one at a time in that order
 - [x] Multi-instance Redis/pub-sub testing. — two API instances under Compose, both directions, in a browser (`docs/rehearsal.md`)
 
 ---
@@ -434,7 +434,7 @@ For every event, document its payload schema, authorization rules, sender, recip
 
 ## Pub/Sub
 
-- [ ] Document channels.
+- [x] Document channels. — `org:<id>:updates`, plus every Redis key prefix and lifetime (`docs/realtime.md`)
 - [x] Prevent cross-tenant event leakage.
 - [x] Handle reconnects. — ioredis auto-resubscribe
 - [x] Handle subscriber failures. — socket closed with 1011; tested
@@ -447,7 +447,7 @@ For every event, document its payload schema, authorization rules, sender, recip
 - [x] No public exposure.
 - [x] Secrets managed securely. — Kubernetes Secrets
 - [x] Memory limits. — container resources
-- [ ] Intentional eviction policy. — *partial:* Redis runs with its default (no memory limit, `noeviction`), which BullMQ needs, but it is not set explicitly
+- [x] Intentional eviction policy. — `noeviction` set explicitly in Compose and Helm, with `maxmemory` under the container limit in Kubernetes (`docs/realtime.md`)
 
 ---
 
@@ -563,7 +563,7 @@ metadata
 - [x] Safe error responses. — 5xx bodies are generic; details only in the log
 - [ ] OpenAPI documentation. — *partial:* Swagger UI in non-production only; routes lack response schemas
 - [ ] Authentication documentation.
-- [ ] WebSocket event documentation. — *partial:* comment events in `docs/comments.md`; task events not yet documented
+- [x] WebSocket event documentation. — `docs/realtime.md`
 
 ---
 
@@ -1011,8 +1011,8 @@ For every threat: impact, likelihood, mitigation, detection and a security test.
 - [x] Testing. — CONTRIBUTING, `docs/frontend-testing.md`, `docs/ci.md`
 - [ ] API development.
 - [ ] Worker development. — *partial:* `docs/jobs.md` covers jobs, retries and recovery
-- [ ] WebSocket architecture.
-- [ ] Redis architecture.
+- [x] WebSocket architecture. — `docs/realtime.md`
+- [x] Redis architecture. — `docs/realtime.md` (what Redis holds, eviction, behavior when it is down)
 
 ## Operations
 

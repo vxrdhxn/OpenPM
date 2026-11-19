@@ -32,7 +32,10 @@ export const activeWebsocketConnections = new client.Gauge({
   help: 'Number of active WebSocket connections',
 });
 
-/** reason: unauthorized | origin | subscription_failed | revoked (session ended while connected) */
+/**
+ * reason: unauthorized | origin | subscription_failed | revoked (session ended while connected) |
+ * client_message | pod_full | too_many_for_user | slow_consumer (docs/realtime.md)
+ */
 export const websocketRejectionsTotal = new client.Counter({
   name: 'websocket_rejections_total',
   help: 'WebSocket connections refused or closed by the server, by reason',

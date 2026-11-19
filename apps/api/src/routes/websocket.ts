@@ -7,7 +7,16 @@ import { hiddenProjectIds } from '../security/projectAccess';
 export interface WebsocketRouteOptions {
   /** Ping interval. A client that misses a whole interval without answering is dropped. */
   heartbeatMs?: number;
+  /** Sockets this pod serves at once (WS_MAX_CONNECTIONS). */
+  maxConnections?: number;
+  /** Sockets one user may hold on this pod (WS_MAX_CONNECTIONS_PER_USER). */
+  maxPerUser?: number;
+  /** Unsent bytes one socket may queue before it is closed as too slow (WS_MAX_BUFFERED_BYTES). */
+  maxBufferedBytes?: number;
 }
+
+/** Events waiting to be checked and sent for one socket; beyond this the socket is closed as too slow. */
+export const MAX_PENDING_EVENTS = 1000;
 
 // setTimeout's maximum delay (2^31-1 ms); longer values fire immediately.
 const MAX_TIMER_MS = 2_147_483_647;
@@ -24,6 +33,13 @@ const MAX_TIMER_MS = 2_147_483_647;
  */
 const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastify, opts) => {
   const heartbeatMs = opts.heartbeatMs ?? 30_000;
+  const maxConnections = opts.maxConnections ?? config.WS_MAX_CONNECTIONS;
+  const maxPerUser = opts.maxPerUser ?? config.WS_MAX_CONNECTIONS_PER_USER;
+  const maxBufferedBytes = opts.maxBufferedBytes ?? config.WS_MAX_BUFFERED_BYTES;
+
+  // Sockets on this pod, in total and per user (docs/realtime.md).
+  let open = 0;
+  const perUser = new Map<string, number>();
 
   fastify.get('/ws', { websocket: true }, async (socket, request) => {
 
@@ -35,11 +51,20 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     let expiry: NodeJS.Timeout | null = null;
 
     let counted = false; // whether this socket is currently included in the connections gauge
+    let countedUser: string | null = null; // whose per-user count includes this socket
 
     const cleanup = () => {
       if (closed) return;
       closed = true;
-      if (counted) activeWebsocketConnections.dec();
+      if (counted) {
+        activeWebsocketConnections.dec();
+        open--;
+      }
+      if (countedUser) {
+        const n = (perUser.get(countedUser) ?? 1) - 1;
+        if (n <= 0) perUser.delete(countedUser);
+        else perUser.set(countedUser, n);
+      }
       if (heartbeat) clearInterval(heartbeat);
       if (expiry) clearTimeout(expiry);
       unsubscribe?.();
@@ -66,6 +91,14 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
       return;
     }
 
+    // A full pod refuses before doing any work. 1013 ("try again later"): the browser client retries
+    // with backoff, possibly reaching another pod.
+    if (open >= maxConnections) {
+      websocketRejectionsTotal.inc({ reason: 'pod_full' });
+      socket.close(1013, 'Server busy');
+      return;
+    }
+
     // Token signature/expiry AND the session still being current (not revoked, user still exists).
     let check;
     try {
@@ -84,10 +117,26 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     // run in that case, so starting timers or counting the socket now would leak them.
     if (closed) return;
 
+    const { org_id: orgId, user_id: userId, exp } = request.user;
+
+    // One user, many tabs is normal; hundreds is a runaway script. 1008 so it does not retry in a loop.
+    if ((perUser.get(userId) ?? 0) >= maxPerUser) {
+      websocketRejectionsTotal.inc({ reason: 'too_many_for_user' });
+      socket.close(1008, 'Too many connections');
+      return;
+    }
+    if (open >= maxConnections) {
+      websocketRejectionsTotal.inc({ reason: 'pod_full' });
+      socket.close(1013, 'Server busy');
+      return;
+    }
+
     activeWebsocketConnections.inc();
     counted = true;
+    open++;
+    perUser.set(userId, (perUser.get(userId) ?? 0) + 1);
+    countedUser = userId;
 
-    const { org_id: orgId, user_id: userId, exp } = request.user;
     const channel = `org:${orgId}:updates`;
 
     // Private projects this user cannot see: events about them are dropped (docs/projects.md). null
@@ -142,14 +191,32 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     heartbeat.unref();
 
     try {
+      // Backpressure: a client that cannot keep up (its unsent data, or the events waiting for it, keep
+      // growing) is closed rather than buffered without limit. It reconnects and refetches what it
+      // missed, as after any reconnect (docs/realtime.md).
+      let pending = 0;
+      const tooSlow = () => {
+        if (closed) return;
+        websocketRejectionsTotal.inc({ reason: 'slow_consumer' });
+        socket.close(1013, 'Too slow');
+      };
       const off = await cache.subscribe(channel, (message, raw) => {
+        if (closed) return;
+        if (pending >= MAX_PENDING_EVENTS) return tooSlow();
+        pending++;
         queue = queue.then(async () => {
-          const event = (message ?? {}) as { type?: string; project_id?: unknown };
-          if (event.type === 'project_access_changed') await reloadAccess();
-          // Only the id goes out with project_access_changed, so every client can refresh (and one
-          // that just lost access learns it); any other event about a hidden project is dropped.
-          else if (typeof event.project_id === 'string' && (hidden === null || hidden.has(event.project_id))) return;
-          if (socket.readyState === socket.OPEN) socket.send(raw ?? JSON.stringify(message));
+          try {
+            const event = (message ?? {}) as { type?: string; project_id?: unknown };
+            if (event.type === 'project_access_changed') await reloadAccess();
+            // Only the id goes out with project_access_changed, so every client can refresh (and one
+            // that just lost access learns it); any other event about a hidden project is dropped.
+            else if (typeof event.project_id === 'string' && (hidden === null || hidden.has(event.project_id))) return;
+            if (socket.readyState !== socket.OPEN) return;
+            if (socket.bufferedAmount > maxBufferedBytes) return tooSlow();
+            socket.send(raw ?? JSON.stringify(message));
+          } finally {
+            pending--;
+          }
         });
       });
 

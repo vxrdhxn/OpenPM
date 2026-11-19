@@ -19,6 +19,11 @@ const envSchema = z.object({
   // Verify-by-email sign-up (docs/signup.md): "auto" (the default) verifies whenever an email provider
   // is configured, "required" always, "off" never (a workspace is created at once).
   SIGNUP_VERIFICATION: z.enum(['auto', 'required', 'off']).default('auto'),
+  // WebSocket limits (docs/realtime.md): sockets per API pod, per user on a pod, and how much unsent
+  // data one socket may queue before it is closed as too slow (it reconnects and refetches).
+  WS_MAX_CONNECTIONS: z.string().regex(/^[1-9]\d*$/, 'WS_MAX_CONNECTIONS must be a positive whole number').default('10000').transform(Number),
+  WS_MAX_CONNECTIONS_PER_USER: z.string().regex(/^[1-9]\d*$/, 'WS_MAX_CONNECTIONS_PER_USER must be a positive whole number').default('20').transform(Number),
+  WS_MAX_BUFFERED_BYTES: z.string().regex(/^[1-9]\d*$/, 'WS_MAX_BUFFERED_BYTES must be a positive whole number').default('1048576').transform(Number),
   // Only its presence is used here (the worker sends the mail): it is what "auto" checks.
   RESEND_API_KEY: z.string().min(1).optional(),
 
@@ -59,6 +64,9 @@ const PUBLISHED_JWT_SECRETS = new Set([
 const BLANK_MEANS_UNSET = new Set([
   'LOG_LEVEL',
   'SIGNUP_VERIFICATION',
+  'WS_MAX_CONNECTIONS',
+  'WS_MAX_CONNECTIONS_PER_USER',
+  'WS_MAX_BUFFERED_BYTES',
   'RESEND_API_KEY',
   'DATABASE_MIGRATION_URL',
   'S3_ENDPOINT',

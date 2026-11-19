@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { config } from '../config';
 import { logger } from '../logger';
@@ -83,6 +84,12 @@ async function attempt<T>(operation: string, run: () => Promise<T>): Promise<T |
   }
 }
 
+/** Stamp an event with a unique id and the time it was published (plain objects only). */
+export function withEnvelope(message: unknown): unknown {
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) return message;
+  return { ...(message as Record<string, unknown>), event_id: randomUUID(), published_at: new Date().toISOString() };
+}
+
 export const cache = {
   /** The cached value, or null on a miss, an unreadable entry, or when Redis is unavailable. */
   async get<T>(key: string): Promise<T | null> {
@@ -110,9 +117,13 @@ export const cache = {
     if (result === FAILED) rememberDelete(key);
   },
 
-  /** Best effort: real-time events are not delivered while Redis is down (clients refetch on reconnect). */
+  /**
+   * Best effort: real-time events are not delivered while Redis is down (clients refetch on reconnect).
+   * Every event gets an `event_id` and `published_at` (docs/realtime.md), so a client can drop one it
+   * has already applied.
+   */
   async publish(channel: string, message: any): Promise<void> {
-    await attempt('publish', () => client.publish(channel, JSON.stringify(message)));
+    await attempt('publish', () => client.publish(channel, JSON.stringify(withEnvelope(message))));
   },
 
   /** Whether Redis answers right now (for the health check). */

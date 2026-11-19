@@ -88,6 +88,9 @@ postgres:
 redis:
   enabled: true
   image: "redis:7-alpine"
+  # Redis refuses writes beyond this (eviction policy noeviction: the job queue must never lose keys).
+  # Keep it below resources.limits.memory, so Redis says no before Kubernetes kills it.
+  maxMemory: "200mb"
   persistence:
     enabled: true
     size: 1Gi
