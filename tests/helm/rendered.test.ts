@@ -213,7 +213,7 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
     });
 
     it('refuses mistyped keys and invalid settings (values.schema.json)', () => {
-      expect(renderError(...TEST_SECRETS, '--set', 'api.replicaCnt=3')).toMatch(/additional properties 'replicaCnt' not allowed/);
+      expect(renderError(...TEST_SECRETS, '--set', 'api.replicaCnt=3')).toMatch(/additional propert.*replicaCnt.*not allowed/i); // Helm 3 and 4 word it differently
       expect(renderError(...TEST_SECRETS, '--set', 'api.signupVerification=maybe')).toMatch(/signupVerification/);
       expect(renderError(...TEST_SECRETS, '--set', 'api.image.digest=sha256:nothex')).toMatch(/digest/);
       expect(renderError(...TEST_SECRETS, '--set', 'global.logLevel=loud')).toMatch(/logLevel/);
