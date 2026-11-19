@@ -1,8 +1,8 @@
 # OpenPM — System Status, Architectural Audit & Actionable Roadmap
 
-**Date:** November 15, 2026 (audited against commit `c0c3cbc`)
+**Date:** November 19, 2026 (updated after commit `b3001fe`)
 **Repository:** `OpenPM`
-**Status Overview:** Build, lint and test clean on Node 22 🟢 | Phases A–E + F.1/F.2 implemented 🟢 | Never deployed 🟡
+**Status Overview:** Build, lint and test clean on Node 22 🟢 | v0.1.0 released 🟢 | Phase 1 cleanup in progress 🟡 | Never deployed to a real cluster 🟡
 
 The detailed checklist is in `OpenPM_MASTER_ROADMAP.md` (section 36 has the per-area summary). This document gives the overview and the next steps.
 
@@ -211,8 +211,15 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 ### Phase 11: Release (ready to tag)
 - [x] Security review (`docs/security-review.md`). The serious finding: the Helm chart's default JWT secret was published in this repo, `global.environment` defaults to production, and neither `values.prod.yaml` nor the Argo CD apps overrode it. Any install could have its sessions forged. Compose had the same problem. Now no credentials ship: the chart refuses to render and Compose to start without them, the API refuses published example secrets in production, and `secrets.existingSecret` keeps credentials out of Git (used by prod and dev Argo CD apps). Also fixed: Postgres/Redis ports exposed by Compose; rate limits shared by all users behind the Ingress (`TRUST_PROXY`) and counted per pod (now in Redis); no clickjacking headers on the frontend; unencoded passwords in connection URLs.
 - [x] Backup/restore scripts and drill, a disaster-recovery run on kind, a production-style install rehearsal (`docs/backup-restore.md`, `docs/rehearsal.md`), `docs/deploying.md`, the release checklist and the v0.1.0 release notes.
-- [ ] Tag `v0.1.0`. Before tagging: allow Actions to create PRs, decide on GHCR package visibility, check the repository's Security tab (not checked here: no authenticated `gh`).
+- [x] Tagged `v0.1.0` on 2026-11-17: images on GHCR and a GitHub Release. Its deploy PR has to be opened by hand until Actions may create PRs.
+
+### Phase 1 cleanup (in progress)
+- [x] **Layering:** routes → services → data for every route (`1d8deb9` … `94d04dd`); tenant filtering in the data layer.
+- [x] **Worker environment validation:** `apps/worker/src/config.ts` validates with zod like the API and exits listing every invalid variable; `APP_URL` is required in production (`docs/jobs.md`).
+- [x] **Unused dependencies:** the frontend's `clsx`, `date-fns`, `tailwind-merge` and `zustand` were never imported and are removed.
+- [ ] **Duplicated domain types:** duplicates inside each app removed. Still open: the API and frontend each declare the wire types (status, priority, roles, notifications); a shared `packages/` workspace would fix that.
+- [ ] **Schema finalization:** cascade review, optimistic concurrency, pagination for members/invites/attachments, N+1 review; and the decision on multi-org membership.
 
 ### Recommended Immediate Action
 1. **Repo settings (admin):** enable branch protection on `main`, review the first CodeQL alerts and make them merge-blocking (see `docs/ci.md`). For releases: allow Actions to create PRs, add a `RELEASE_PR_TOKEN` secret, and make the GHCR packages public or add a pull secret (`docs/releasing.md`).
-2. **First release:** tag `v0.1.0` to run the release workflow end to end.
+2. **Finish Phase 1:** schema finalization (above).
