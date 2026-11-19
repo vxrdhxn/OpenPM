@@ -502,8 +502,8 @@ Triggers:
 - [x] Comment. — to the task's assignee and creator
 - [x] Status change. — to the task's assignee and creator
 - [x] Due-date reminder. — worker sweep every 15 min (BullMQ job scheduler) notifies the assignee once per due date when an open task is due within 24h (`due_soon`, migration 025, `docs/notifications.md`)
-- [ ] Organization invitation.
-- [ ] Project membership change.
+- [x] Organization invitation. — by email (`invite_created`): the invitee has no account to notify in-app
+- [x] Project membership change. — `project_added` / `project_removed` to the person added or removed (migration 029); never for leaving yourself
 
 ---
 

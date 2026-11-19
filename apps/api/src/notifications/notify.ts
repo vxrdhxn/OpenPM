@@ -3,7 +3,7 @@ import { cache } from '../cache/redis';
 import { userSeesProjectSql } from '../security/projectAccess';
 
 /** Every type, in the order the preferences page lists them. */
-export const NOTIFICATION_TYPES = ['task_assigned', 'mentioned', 'commented', 'status_changed', 'due_soon'] as const;
+export const NOTIFICATION_TYPES = ['task_assigned', 'mentioned', 'commented', 'status_changed', 'due_soon', 'project_added', 'project_removed'] as const;
 /** `due_soon` is written by the worker's reminder sweep (apps/worker/src/processors/dueReminders.ts), not here. */
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

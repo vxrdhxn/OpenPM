@@ -38,7 +38,10 @@ describe('notification preferences (real Postgres)', () => {
 
   it('starts with everything on, and saves only the caller’s own choice', async () => {
     const res = await call(ada, 'GET', '/api/notifications/preferences');
-    expect(res.json()).toEqual({ types: ['task_assigned', 'mentioned', 'commented', 'status_changed', 'due_soon'], muted: [] });
+    expect(res.json()).toEqual({
+      types: ['task_assigned', 'mentioned', 'commented', 'status_changed', 'due_soon', 'project_added', 'project_removed'],
+      muted: [],
+    });
 
     expect((await mute(ada, ['commented', 'status_changed'])).statusCode).toBe(200);
     expect((await call(ada, 'GET', '/api/notifications/preferences')).json().muted).toEqual(['commented', 'status_changed']);
@@ -70,6 +73,64 @@ describe('notification preferences (real Postgres)', () => {
     await mute(ada, []);
     await db.query(DUE_SQL, [24]);
     expect(await count(ada.userId, 'due_soon')).toBe(1);
+  });
+});
+
+describe('project membership notifications (real Postgres)', () => {
+  let app: App;
+  let admin: Actor;
+  let ada: Actor;
+  let projectId: string;
+
+  beforeEach(async () => {
+    app = await startApp();
+    admin = await registerOrg(app);
+    ada = await addUser(app, admin.orgId, 'member');
+    projectId = (await createProject(app, admin, 'Payroll')).id;
+    await app.inject({ method: 'PATCH', url: `/api/projects/${projectId}`, headers: admin.auth, payload: { visibility: 'private' } });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  const inbox = async (actor: Actor) =>
+    (await app.inject({ method: 'GET', url: '/api/notifications', headers: actor.auth })).json().items as Array<Record<string, any>>;
+  const add = (actor: Actor, userId: string) =>
+    app.inject({ method: 'POST', url: `/api/projects/${projectId}/members`, headers: actor.auth, payload: { user_id: userId } });
+  const remove = (actor: Actor, userId: string) =>
+    app.inject({ method: 'DELETE', url: `/api/projects/${projectId}/members/${userId}`, headers: actor.auth });
+
+  it('tells people they were added to a project, linked to it, and only once', async () => {
+    expect((await add(admin, ada.userId)).statusCode).toBe(201);
+    await add(admin, ada.userId); // already a member: nothing new
+
+    const added = (await inbox(ada)).filter((n) => n.type === 'project_added');
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({ project_id: projectId, actor_id: admin.userId, data: { project_name: 'Payroll' } });
+  });
+
+  it('tells people they were removed, by name, even though they can no longer open the project', async () => {
+    await add(admin, ada.userId);
+    expect((await remove(admin, ada.userId)).statusCode).toBe(204);
+
+    const removed = (await inbox(ada)).filter((n) => n.type === 'project_removed');
+    expect(removed).toHaveLength(1);
+    expect(removed[0]).toMatchObject({ project_id: null, data: { project_name: 'Payroll' } });
+    // The earlier "added" one is tied to a project they can no longer see, so it is hidden.
+    expect((await inbox(ada)).some((n) => n.type === 'project_added')).toBe(false);
+  });
+
+  it('does not notify someone who leaves on their own, or who muted it', async () => {
+    await add(admin, ada.userId);
+    expect((await remove(ada, ada.userId)).statusCode).toBe(204);
+    expect((await inbox(ada)).some((n) => n.type === 'project_removed')).toBe(false);
+
+    await app.inject({ method: 'PUT', url: '/api/notifications/preferences', headers: ada.auth, payload: { muted: ['project_added'] } });
+    const before = (await db.query("SELECT 1 FROM notifications WHERE user_id = $1 AND type = 'project_added'", [ada.userId])).length;
+    await add(admin, ada.userId);
+    const after = (await db.query("SELECT 1 FROM notifications WHERE user_id = $1 AND type = 'project_added'", [ada.userId])).length;
+    expect(after).toBe(before);
   });
 });
 

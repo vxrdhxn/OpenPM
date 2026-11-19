@@ -12,6 +12,11 @@ same transaction as the change that causes them, so a rolled-back change never n
 | `commented` | someone comments on a task | the task's assignee and creator, unless they were mentioned in that comment |
 | `status_changed` | a task moves to another column | the task's assignee and creator, except someone who was just assigned it in the same change |
 | `due_soon` | an open task is due within the next 24 hours | the task's assignee (no actor: it comes from the server) |
+| `project_added` | someone adds you to a project's people | you (tied to the project, so it links there) |
+| `project_removed` | someone removes you from a project's people | you; it names the project instead of linking to it, since you may no longer see it. Leaving on your own notifies nobody |
+
+Invitations are not in-app notifications: the invitee has no account yet, so they get the invite
+email (`docs/jobs.md`).
 
 Never for your own actions, never to removed members, and never across organizations: recipients are
 filtered in the `INSERT ... SELECT` itself (`apps/api/src/notifications/notify.ts`).

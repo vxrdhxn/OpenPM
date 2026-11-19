@@ -3,7 +3,8 @@ import { badgeText, describeNotification, isForMe, TYPE_LABELS, typeLabel } from
 
 describe('typeLabel', () => {
   it('describes every type the API knows, and falls back to the raw name', () => {
-    expect(Object.keys(TYPE_LABELS)).toEqual(['task_assigned', 'mentioned', 'commented', 'status_changed', 'due_soon']);
+    expect(Object.keys(TYPE_LABELS)).toEqual(['task_assigned', 'mentioned', 'commented', 'status_changed', 'due_soon', 'project_added', 'project_removed']);
+    expect(describeNotification({ type: 'project_removed', actor_name: 'Ada', task_title: null, data: { project_name: 'Payroll' } })).toBe('Ada removed you from Payroll');
     expect(typeLabel('due_soon')).toMatch(/due within 24 hours/);
     expect(typeLabel('something_new')).toBe('something_new');
   });

@@ -164,16 +164,18 @@ describe('private projects (real Postgres)', () => {
       await call(owner, 'POST', `/api/projects/${p.id}/members`, { user_id: carol.userId });
       const task = await createTask(app, owner, p.id, { title: `Audit ${unique()}`, assignee_id: carol.userId });
       const notes = async () => (await call(carol, 'GET', '/api/notifications')).json().items.filter((n: { project_id: string }) => n.project_id === p.id);
-      expect(await notes()).toHaveLength(1);
+      expect((await notes()).map((n: { type: string }) => n.type).sort()).toEqual(['project_added', 'task_assigned']);
 
       expect((await call(owner, 'DELETE', `/api/projects/${p.id}/members/${carol.userId}`)).statusCode).toBe(204);
 
       expect(await row('SELECT assignee_id FROM tasks WHERE id = $1', [task.id])).toEqual({ assignee_id: null });
       expect(await notes()).toEqual([]);
+      // What she is told instead is not tied to the project.
+      expect((await call(carol, 'GET', '/api/notifications')).json().items.some((n: { type: string }) => n.type === 'project_removed')).toBe(true);
       expect((await call(carol, 'GET', '/api/notifications/unread-count')).json().count).toBe(
         Number((await row<{ n: string }>(
-          `SELECT count(*) AS n FROM notifications n JOIN projects p ON p.id = n.project_id
-            WHERE n.user_id = $1 AND n.read_at IS NULL AND p.visibility = 'workspace'`, [carol.userId]))!.n)
+          `SELECT count(*) AS n FROM notifications n LEFT JOIN projects p ON p.id = n.project_id
+            WHERE n.user_id = $1 AND n.read_at IS NULL AND (n.project_id IS NULL OR p.visibility = 'workspace')`, [carol.userId]))!.n)
       );
     });
 

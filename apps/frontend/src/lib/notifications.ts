@@ -2,7 +2,7 @@ import { api } from './api';
 import { buildQuery, type Page } from './query';
 import { statusLabel } from './tasks';
 
-export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed' | 'due_soon';
+export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed' | 'due_soon' | 'project_added' | 'project_removed';
 
 export interface AppNotification {
   id: string;
@@ -10,7 +10,7 @@ export interface AppNotification {
   project_id: string | null;
   task_id: string | null;
   comment_id: string | null;
-  data: { title?: string; excerpt?: string; from?: string; to?: string; due_date?: string };
+  data: { title?: string; excerpt?: string; from?: string; to?: string; due_date?: string; project_name?: string | null };
   read_at: string | null;
   created_at: string;
   actor_id: string | null;
@@ -39,6 +39,8 @@ export const TYPE_LABELS: Record<NotificationType, string> = {
   commented: 'someone comments on a task I created or am assigned',
   status_changed: 'a task I created or am assigned moves to another column',
   due_soon: 'a task assigned to me is due within 24 hours',
+  project_added: 'someone adds me to a project',
+  project_removed: 'someone removes me from a project',
 };
 export const typeLabel = (type: string) => TYPE_LABELS[type as NotificationType] ?? type;
 
@@ -56,6 +58,10 @@ export function describeNotification(n: Pick<AppNotification, 'type' | 'actor_na
       return `${who} commented on ${what}`;
     case 'status_changed':
       return `${who} moved ${what} to ${n.data.to ? statusLabel(n.data.to) : 'a new status'}`;
+    case 'project_added':
+      return `${who} added you to ${n.data.project_name ?? 'a project'}`;
+    case 'project_removed':
+      return `${who} removed you from ${n.data.project_name ?? 'a project'}`;
     case 'due_soon': {
       // A reminder from the server, not from a person.
       const due = n.data.due_date ? new Date(n.data.due_date) : null;
