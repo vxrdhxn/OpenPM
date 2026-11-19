@@ -25,6 +25,12 @@ const envSchema = z
       .default('5')
       .transform(Number),
     METRICS_PORT: port('9100'),
+    // How often to look for tasks due within 24 hours (docs/notifications.md).
+    DUE_REMINDER_INTERVAL_MINUTES: z
+      .string()
+      .regex(/^[1-9]\d*$/, 'DUE_REMINDER_INTERVAL_MINUTES must be a positive whole number')
+      .default('15')
+      .transform(Number),
     // Base URL of the frontend, for links in emails (invites, password resets).
     APP_URL: z.string().trim().url().optional(),
     // Unset: emails are logged instead of sent (development), or skipped with a warning (production).
@@ -48,6 +54,7 @@ const BLANK_MEANS_UNSET = new Set([
   'LOG_LEVEL',
   'WORKER_CONCURRENCY',
   'METRICS_PORT',
+  'DUE_REMINDER_INTERVAL_MINUTES',
   'APP_URL',
   'RESEND_API_KEY',
   'EMAIL_FROM_ADDRESS',

@@ -501,7 +501,7 @@ Triggers:
 - [x] Mention.
 - [x] Comment. — to the task's assignee and creator
 - [x] Status change. — to the task's assignee and creator
-- [ ] Due-date reminder.
+- [x] Due-date reminder. — worker sweep every 15 min (BullMQ job scheduler) notifies the assignee once per due date when an open task is due within 24h (`due_soon`, migration 025, `docs/notifications.md`)
 - [ ] Organization invitation.
 - [ ] Project membership change.
 

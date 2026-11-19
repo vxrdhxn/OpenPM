@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import pino from 'pino';
 import { UnrecoverableError, type Job } from 'bullmq';
 
-const { processTaskCreated } = vi.hoisted(() => ({ processTaskCreated: vi.fn() }));
+const { processTaskCreated, processDueReminders } = vi.hoisted(() => ({ processTaskCreated: vi.fn(), processDueReminders: vi.fn() }));
 vi.mock('./processors/taskCreated', () => ({ default: processTaskCreated }));
+vi.mock('./processors/dueReminders', () => ({ default: processDueReminders }));
 vi.mock('./lib/db', () => ({ pool: {} }));
 
 import { handleJob, jobLogger } from './handler';
@@ -67,6 +68,12 @@ describe('handleJob', () => {
     processTaskCreated.mock.calls[0]![1].info('from processor');
     expect(lines.find((l) => l.msg === 'from processor')).toMatchObject({ job_id: '42', request_id: 'req-abc-123' });
     expect(lines.find((l) => l.msg === 'Processing job')).toMatchObject({ level: 'info', job_name: 'task_created' });
+  });
+
+  it('dispatches the scheduled due_reminders sweep', async () => {
+    processDueReminders.mockResolvedValueOnce(0);
+    await handleJob(job('due_reminders'), capture().base);
+    expect(processDueReminders).toHaveBeenCalledTimes(1);
   });
 
   it('fails (retryably) a job name it has no processor for, so a newer worker can still run it', async () => {

@@ -182,7 +182,7 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 - [x] **I.5 Dashboard (done):** `/dashboard` is the landing page: stat tiles (my open, overdue, due in 7 days, active projects), assigned to me, upcoming deadlines, recently updated, project progress (meter list) and an activity feed. New `GET /api/dashboard` and `GET /api/activity` (product events only, org-scoped, paginated); task and project deletions now log their names. Colors from the dataviz palette, validated against the card surfaces. `docs/dashboard.md`; `dashboard.int.test.ts` against Postgres. Not yet reviewed in a browser.
 - [x] **I.6 Notifications (done):** notifications for assignment (create/reassign), @mentions, comments and status changes, written in the triggering transaction; never for your own action, never to removed members or other orgs. `@` autocomplete sends validated `mention_ids`; edits notify only new mentions. `/api/notifications` (list, unread count, mark read/all); a content-free live `notification` event, one shared WebSocket for the app, a sidebar badge and a `/notifications` page. Migration 018; `docs/notifications.md`; `notifications.int.test.ts` against Postgres. Not done: due-date reminders, preferences, retention.
 
-**Phase I is complete.** Remaining product gaps: ownership transfer, org deletion, due-date reminders, notification preferences.
+**Phase I is complete.** Remaining product gaps: notification preferences and retention (ownership transfer, org deletion and due-date reminders are done).
 
 ---
 

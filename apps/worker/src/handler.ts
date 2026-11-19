@@ -4,6 +4,7 @@ import { jobDurationSeconds, jobNameLabel, jobsTotal } from './metrics';
 import processTaskCreated from './processors/taskCreated';
 import processInviteCreated from './processors/inviteCreated';
 import processPasswordResetRequested from './processors/passwordResetRequested';
+import processDueReminders from './processors/dueReminders';
 
 /** Logger for one job: every line carries the job, and the originating request when known. */
 export function jobLogger(job: Job, base: Logger = rootLogger): Logger {
@@ -44,6 +45,8 @@ export async function handleJob(job: Job, base: Logger = rootLogger): Promise<vo
       await processInviteCreated(job, log);
     } else if (job.name === 'password_reset_requested') {
       await processPasswordResetRequested(job, log);
+    } else if (job.name === 'due_reminders') {
+      await processDueReminders(log);
     } else {
       // A producer/consumer mismatch, typically mid-deploy (new API, old worker). Fail retryably so a
       // worker that knows this job can pick it up, instead of completing it and losing it.

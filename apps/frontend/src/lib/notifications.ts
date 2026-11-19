@@ -2,7 +2,7 @@ import { api } from './api';
 import { buildQuery, type Page } from './query';
 import { statusLabel } from './tasks';
 
-export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed';
+export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed' | 'due_soon';
 
 export interface AppNotification {
   id: string;
@@ -10,7 +10,7 @@ export interface AppNotification {
   project_id: string | null;
   task_id: string | null;
   comment_id: string | null;
-  data: { title?: string; excerpt?: string; from?: string; to?: string };
+  data: { title?: string; excerpt?: string; from?: string; to?: string; due_date?: string };
   read_at: string | null;
   created_at: string;
   actor_id: string | null;
@@ -38,6 +38,14 @@ export function describeNotification(n: Pick<AppNotification, 'type' | 'actor_na
       return `${who} commented on ${what}`;
     case 'status_changed':
       return `${who} moved ${what} to ${n.data.to ? statusLabel(n.data.to) : 'a new status'}`;
+    case 'due_soon': {
+      // A reminder from the server, not from a person.
+      const due = n.data.due_date ? new Date(n.data.due_date) : null;
+      const when = due && !Number.isNaN(due.getTime())
+        ? due.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+        : 'soon';
+      return `${what} is due ${when}`;
+    }
     default:
       return `${who} updated ${what}`;
   }

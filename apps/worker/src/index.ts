@@ -7,6 +7,7 @@ import { handleJob, jobLogger } from './handler';
 import { registerQueueMetrics } from './metrics';
 import { startMetricsServer } from './metricsServer';
 import { config } from './config';
+import { closePublisher } from './lib/publish';
 
 const redisConnection = new IORedis(config.REDIS_URL, {
   maxRetriesPerRequest: null,
@@ -21,7 +22,19 @@ const worker = new Worker('tasks', (job) => handleJob(job), { connection: redisC
 // Metrics: process-level defaults, queue depth/lag (read from Redis at scrape time), and an HTTP
 // endpoint for Prometheus. A second Queue handle is used only for reading counts.
 client.collectDefaultMetrics();
-registerQueueMetrics(new Queue('tasks', { connection: redisConnection }));
+const queue = new Queue('tasks', { connection: redisConnection });
+registerQueueMetrics(queue);
+
+// Scheduled jobs. A job scheduler is stored in Redis under a fixed id, so every worker replica
+// upserting it keeps exactly one schedule, and each run is one job taken by one worker.
+queue
+  .upsertJobScheduler(
+    'due_reminders',
+    { every: config.DUE_REMINDER_INTERVAL_MINUTES * 60_000 },
+    // One attempt: the next run is minutes away and picks up whatever this one missed.
+    { name: 'due_reminders', data: {}, opts: { attempts: 1, removeOnComplete: true, removeOnFail: { age: 24 * 60 * 60 } } }
+  )
+  .catch((err) => logger.error({ err }, 'Could not schedule due-date reminders'));
 const metricsPort = config.METRICS_PORT;
 const metricsServer = startMetricsServer(metricsPort).catch((err) => {
   // A port clash must not take the worker down: jobs matter more than metrics.
@@ -57,6 +70,8 @@ logger.info({ queue: 'tasks', concurrency }, 'Worker is running and listening fo
 const gracefulShutdown = async () => {
   logger.info('Shutting down worker');
   await worker.close();
+  await queue.close();
+  await closePublisher();
   (await metricsServer)?.close();
   await pool.end();
   process.exit(0);

@@ -2,7 +2,8 @@ import type { PoolClient } from 'pg';
 import { cache } from '../cache/redis';
 import { userSeesProjectSql } from '../security/projectAccess';
 
-export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed';
+/** `due_soon` is written by the worker's reminder sweep (apps/worker/src/processors/dueReminders.ts), not here. */
+export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed' | 'due_soon';
 
 export interface NotificationInput {
   orgId: string;

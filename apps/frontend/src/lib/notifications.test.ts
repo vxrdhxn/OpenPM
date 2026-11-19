@@ -12,6 +12,13 @@ describe('describeNotification', () => {
     expect(describeNotification({ ...base, type })).toBe(text);
   });
 
+  it('words a due-date reminder without an actor', () => {
+    const text = describeNotification({ type: 'due_soon', actor_name: null, task_title: 'Fix login', data: { due_date: '2026-11-20T15:00:00Z' } });
+    expect(text).toMatch(/^Fix login is due \S/);
+    expect(text).not.toMatch(/Someone/);
+    expect(describeNotification({ type: 'due_soon', actor_name: null, task_title: 'Fix login', data: {} })).toBe('Fix login is due soon');
+  });
+
   it('names the new status', () => {
     expect(describeNotification({ ...base, type: 'status_changed', data: { to: 'in_review' } })).toBe('Ada moved Fix login to In Review');
   });
