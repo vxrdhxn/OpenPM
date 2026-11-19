@@ -91,6 +91,22 @@ from the browser to object storage, so tell the frontend its public origin, the 
 Without it, uploads fail with a CSP error in the browser console. The setting is read at runtime;
 no rebuild is needed.
 
+## Values are checked
+
+`helm/openpm/values.schema.json` is applied on every `helm install`, `upgrade`, `template` and Argo
+CD sync. A misspelled key in the chart's own sections (`api.replicaCnt`) is refused, not silently
+ignored, and so are settings with known rules: log level, sign-up verification mode, image digests,
+pull policies, ports, `trustProxy`, `corsOrigin`, Redis `maxMemory`, ingress backends. Kubernetes
+objects passed through (`resources`, `securityContext`, HPA `behavior`, NetworkPolicy peers) are
+validated by Kubernetes itself.
+
+## Spreading pods
+
+The API, frontend and worker pods spread across nodes, then zones (`topologySpread.enabled`, on by
+default), so one node or zone going down does not take every replica of an app with it. The rule
+is soft: on a cluster with fewer nodes than replicas, all pods still schedule. Together with the
+PodDisruptionBudgets (`maxUnavailable: 1`), a node drain moves one pod of each app at a time.
+
 ## Behind a proxy
 
 Rate limits (100 requests a minute per client, stricter on sign-in, counted in Redis across all API

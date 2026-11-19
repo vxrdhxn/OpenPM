@@ -22,6 +22,7 @@ spec:
         app.kubernetes.io/component: worker
     spec:
       {{- include "openpm.imagePullSecrets" . | nindent 6 }}
+      {{- include "openpm.topologySpread" (dict "root" $ "component" "worker") | nindent 6 }}
       {{- with .Values.securityContext.pod }}
       securityContext:
         {{- toYaml . | nindent 8 }}

@@ -24,6 +24,7 @@ spec:
         app.kubernetes.io/component: api
     spec:
       {{- include "openpm.imagePullSecrets" . | nindent 6 }}
+      {{- include "openpm.topologySpread" (dict "root" $ "component" "api") | nindent 6 }}
       {{- with .Values.securityContext.pod }}
       securityContext:
         {{- toYaml . | nindent 8 }}

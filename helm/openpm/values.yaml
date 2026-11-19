@@ -251,6 +251,11 @@ ingress:
   #    hosts:
   #      - openpm.local
 
+# Spread the API, frontend and worker pods across nodes and zones (soft: never blocks scheduling), so
+# one node or zone going down does not take every replica of an app with it.
+topologySpread:
+  enabled: true
+
 # Network Policies (Default Deny + Explicit flows)
 networkPolicy:
   enabled: true

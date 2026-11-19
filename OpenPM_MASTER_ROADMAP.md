@@ -664,7 +664,7 @@ Review:
 - [x] HorizontalPodAutoscaler.
 - [x] Rolling strategy. — Deployment default
 - [x] Graceful termination.
-- [ ] Anti-affinity/topology rules where appropriate.
+- [x] Anti-affinity/topology rules where appropriate. — soft topology spread across nodes and zones for the API, frontend and worker (`topologySpread.enabled`); render-tested
 
 ## Network
 
@@ -678,7 +678,7 @@ Review:
 ## Helm
 
 - [x] Validate templates. — `helm lint` + `helm template` for three value sets in CI
-- [ ] Validate values. — *partial:* credentials are checked at render time and `tests/helm/rendered.test.ts` checks the objects; no `values.schema.json`
+- [x] Validate values. — `values.schema.json`: unknown keys refused in the chart's sections, enums and patterns for settings with rules; credentials checked at render time with explicit messages; render-tested
 - [x] Safe defaults.
 - [x] No hardcoded secrets. — no default credentials; rendering fails without them; `secrets.existingSecret` (Phase 11)
 - [x] Production values documented. — `values.prod.yaml`

@@ -89,6 +89,17 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       expect(api.readinessProbe.httpGet.path).toBe('/health');
     });
 
+    it('spreads each app across nodes and zones, softly, selecting only its own pods', () => {
+      for (const app of ['api', 'frontend', 'worker']) {
+        const spec = deployment(objects, app)!.spec.template.spec;
+        expect(spec.topologySpreadConstraints.map((c: { topologyKey: string }) => c.topologyKey)).toEqual(['kubernetes.io/hostname', 'topology.kubernetes.io/zone']);
+        for (const c of spec.topologySpreadConstraints) {
+          expect(c.whenUnsatisfiable).toBe('ScheduleAnyway');
+          expect(c.labelSelector.matchLabels['app.kubernetes.io/component']).toBe(app);
+        }
+      }
+    });
+
     it('checks worker liveness over its /healthz, which does not depend on Postgres or Redis', () => {
       const worker = deployment(objects, 'worker')!.spec.template.spec.containers[0];
       expect(worker.livenessProbe.httpGet).toEqual({ path: '/healthz', port: 9100 });
@@ -169,6 +180,13 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
   });
 
   describe('credentials', () => {
+    it('refuses mistyped keys and invalid settings (values.schema.json)', () => {
+      expect(renderError(...TEST_SECRETS, '--set', 'api.replicaCnt=3')).toMatch(/additional properties 'replicaCnt' not allowed/);
+      expect(renderError(...TEST_SECRETS, '--set', 'api.signupVerification=maybe')).toMatch(/signupVerification/);
+      expect(renderError(...TEST_SECRETS, '--set', 'api.image.digest=sha256:nothex')).toMatch(/digest/);
+      expect(renderError(...TEST_SECRETS, '--set', 'global.logLevel=loud')).toMatch(/logLevel/);
+    });
+
     it('refuses to render without a JWT secret, or with one published in this repository', () => {
       expect(renderError()).toMatch(/secrets\.jwtSecret must be set/);
       for (const published of ['change_me_to_something_super_secret_and_long_enough_32_chars', 'super_secret_development_key_change_me_in_prod_123']) {

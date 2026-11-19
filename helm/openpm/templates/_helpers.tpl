@@ -116,3 +116,23 @@ External Secrets or kubectl) or the one this chart renders from secrets.* values
 {{- define "openpm.secretName" -}}
 {{- .Values.secrets.existingSecret | default (printf "%s-secrets" (include "openpm.fullname" .)) -}}
 {{- end }}
+
+{{/*
+Spread an app's pods across nodes, then zones, so losing one node (or zone) does not take every
+replica with it. Soft (ScheduleAnyway): a cluster with too few nodes still schedules them all.
+Call with (dict "root" $ "component" "api").
+*/}}
+{{- define "openpm.topologySpread" -}}
+{{- if .root.Values.topologySpread.enabled }}
+topologySpreadConstraints:
+{{- range list "kubernetes.io/hostname" "topology.kubernetes.io/zone" }}
+  - maxSkew: 1
+    topologyKey: {{ . }}
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        {{- include "openpm.selectorLabels" $.root | nindent 8 }}
+        app.kubernetes.io/component: {{ $.component }}
+{{- end }}
+{{- end }}
+{{- end }}
