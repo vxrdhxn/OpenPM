@@ -88,14 +88,17 @@ spec:
               containerPort: {{ .Values.worker.metrics.port | default 9100 }}
               protocol: TCP
           {{- end }}
+          # /healthz on the metrics server: the process is up and its event loop answers. It does not
+          # check Postgres or Redis, so an outage never restarts every worker (they retry jobs instead).
+          # The server listens whether or not metrics are scraped.
           livenessProbe:
-            exec:
-              command:
-                - kill
-                - "-0"
-                - "1"
+            httpGet:
+              path: /healthz
+              port: {{ .Values.worker.metrics.port | default 9100 }}
+            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           volumeMounts:

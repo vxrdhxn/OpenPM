@@ -89,6 +89,11 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       expect(api.readinessProbe.httpGet.path).toBe('/health');
     });
 
+    it('checks worker liveness over its /healthz, which does not depend on Postgres or Redis', () => {
+      const worker = deployment(objects, 'worker')!.spec.template.spec.containers[0];
+      expect(worker.livenessProbe.httpGet).toEqual({ path: '/healthz', port: 9100 });
+    });
+
     it('renders a controller-neutral Ingress (no deprecated class annotation)', () => {
       const ingress = objects.find((o) => o.kind === 'Ingress') as K8sObject & { metadata: { annotations?: Record<string, string> } };
       expect(ingress).toBeDefined();

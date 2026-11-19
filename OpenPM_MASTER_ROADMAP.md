@@ -713,7 +713,7 @@ Review:
 - [x] Vulnerability scanning. — Trivy in CI
 - [x] Image versioning/tag strategy. — `X.Y.Z` plus `sha-<commit>`, never overwritten, production pinned by digest (`docs/releasing.md`)
 - [x] Environment configuration outside images.
-- [ ] Health checks. — *partial:* API and frontend images; the worker has a Kubernetes liveness probe and a Compose check, but no image `HEALTHCHECK`
+- [x] Health checks. — every image has a `HEALTHCHECK`; the worker's uses `/healthz` on its metrics server, as do its Compose check and Kubernetes liveness probe (none depend on Postgres or Redis)
 - [x] Correct signal handling.
 - [x] Graceful shutdown.
 
