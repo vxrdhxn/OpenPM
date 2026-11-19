@@ -41,6 +41,10 @@ whenever `postgres.enabled`):
   interrupted runs, are deleted after each successful run.
 - **Storage:** a volume of its own, `<release>-postgres-backups` (5Gi, `postgres.backup.size`),
   kept when the release is uninstalled (`helm.sh/resource-policy: keep`).
+- **Binding:** on most storage classes the volume binds at the first backup, so it shows
+  `Pending` until then. That is expected; Argo CD is told not to wait for it. `helm install --wait`
+  would wait for it, so do not pass `--wait`, or set `postgres.backup.enabled=false` until after
+  install.
 - **Locked down:** runs as the postgres image's non-root user with a read-only root filesystem, and
   its NetworkPolicy lets it reach only Postgres on 5432.
 - **Alert:** `OpenPMBackupMissing` fires when no run has succeeded for 26 hours (needs

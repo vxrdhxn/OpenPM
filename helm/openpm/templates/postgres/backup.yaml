@@ -13,6 +13,10 @@ metadata:
   annotations:
     # Keep the backups when the release is uninstalled: they are what you restore from.
     helm.sh/resource-policy: keep
+    # Most storage classes (kind's local-path, GKE, EKS and AKS defaults) bind a volume only when a
+    # pod first mounts it, here at the first backup. Until then the claim is Pending, and Argo CD
+    # would wait for it before the PostSync smoke test, so every sync would hang (seen on kind).
+    argocd.argoproj.io/ignore-healthcheck: "true"
 spec:
   accessModes:
     - ReadWriteOnce

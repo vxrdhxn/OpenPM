@@ -199,6 +199,8 @@ describe.skipIf(!helmAvailable())('rendered Helm chart', () => {
       expect(pod.containers[0].env.find((e: { name: string }) => e.name === 'PGPASSWORD').valueFrom.secretKeyRef.key).toBe('POSTGRES_PASSWORD');
       const pvc = objects.find((o) => o.kind === 'PersistentVolumeClaim' && o.metadata?.name === 'openpm-postgres-backups')!;
       expect(pvc.metadata!.annotations!['helm.sh/resource-policy']).toBe('keep');
+      // Pending until the first backup on most storage classes: Argo CD must not wait for it.
+      expect(pvc.metadata!.annotations!['argocd.argoproj.io/ignore-healthcheck']).toBe('true');
       // The database accepts the backup job; the job may reach only the database.
       const dbPolicy = objects.find((o) => o.kind === 'NetworkPolicy' && o.metadata?.name === 'openpm-postgres') as K8sObject & { spec: any };
       const allowed = dbPolicy.spec.ingress[0].from.map((f: { podSelector: { matchLabels: Record<string, string> } }) => f.podSelector.matchLabels['app.kubernetes.io/component']);
