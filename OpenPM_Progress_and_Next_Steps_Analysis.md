@@ -225,6 +225,19 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
   - **Bounded lists:** invites are capped at 500 per organization; members are deliberately unpaged (`docs/pagination.md`).
   - **N+1 queries:** none found.
 
+### Backend and workflows (November 19, 2026)
+Done: storage cleanup and attachment retention; project membership notifications; WebSocket limits,
+backpressure and event ids; Redis `noeviction`; Redis latency and rate-limit metrics with alerts;
+infrastructure dashboard; cached responses sent as stored; index review; real-Redis and worker
+integration tests; worker health checks; Helm values schema; pod spreading; in-chart Postgres
+backups with retention and an alert; log retention; OpenAPI 3 spec with a validation check; and the
+docs: `api.md`, `realtime.md`, `incident-response.md`, `privacy.md`.
+
+Found by disruption tests on kind and fixed: health probes were rate-limited, stopping pods dropped a
+request, and the backup volume blocked Argo CD syncs (the last fix is not yet confirmed on a cluster).
+
+Left: frontend items, branch protection (repo admin), shared API/frontend types.
+
 ### Recommended Immediate Action
 1. **Repo settings (admin):** enable branch protection on `main`, review the first CodeQL alerts and make them merge-blocking (see `docs/ci.md`). For releases: allow Actions to create PRs, add a `RELEASE_PR_TOKEN` secret, and make the GHCR packages public or add a pull secret (`docs/releasing.md`).
 2. **Last Phase 1 item:** shared wire types between the API and the frontend (a `packages/` workspace), if wanted.

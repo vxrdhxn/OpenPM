@@ -918,8 +918,8 @@ Test:
 - [x] DB connection exhaustion. — 503 + Retry-After, `overload_rejections_total`, alert `OpenPMApiOverloaded`
 - [x] Queue backlog. — 3,000 queued jobs drained after a worker restart
 - [x] Invalid job. — malformed payload fails without retries (live test)
-- [ ] Partial deployment failure.
-- [ ] Kubernetes pod restart.
+- [x] Partial deployment failure. — on kind: a rollout to a missing image left the old pods serving; undone with `rollout undo` (Argo CD self-heal did not revert it within 3 min)
+- [x] Kubernetes pod restart. — on kind: a deleted API pod was replaced while the other served; the one request it dropped led to the 5 s preStop pause (`3c77131`)
 
 Define:
 
@@ -927,7 +927,7 @@ Define:
 - [x] Timeout behavior. — request 30 s, statement 10 s, pool 2 s (503), enqueue 2 s, cache 250 ms
 - [x] Fallback behavior. — cache -> Postgres; failed enqueue -> request still succeeds, counted
 - [x] User-visible failure behavior. — load errors with retry, failed saves as toasts, offline banner (Phase 10)
-- [ ] Recovery procedures. — *partial:* restore (`docs/backup-restore.md`), rollback (`docs/releasing.md`), observed recovery (`docs/load-testing.md`); no incident runbook
+- [x] Recovery procedures. — `docs/incident-response.md`: rollback, restore, lost cluster, jobs, Redis, files
 
 ---
 
@@ -940,20 +940,20 @@ Define:
 - [x] Disaster-recovery procedure. — restore over the live database, rehearsed on kind
 - [x] Redis persistence strategy if needed. — not backed up by design: cache and queue refill; jobs queued at the moment of loss are lost (documented)
 - [x] Attachment backup strategy if applicable. — bucket versioning/replication (`docs/backup-restore.md`)
-- [ ] Data deletion policy.
+- [x] Data deletion policy. — `docs/data-deletion.md` (what a delete takes with it) and `docs/privacy.md` (people and workspaces)
 - [x] Organization deletion policy. — immediate and complete, owner-confirmed; recoverable only from a backup (`docs/members.md`)
 
 ---
 
 # 29. Privacy
 
-- [ ] Document stored user data.
-- [ ] Minimize unnecessary personal data.
+- [x] Document stored user data. — every table, store and system with its personal data: `docs/privacy.md`
+- [x] Minimize unnecessary personal data. — tokens hashed, IPs only in the audit log, email domains only in logs, no tracking; listed in `docs/privacy.md`
 - [x] Do not log sensitive data.
-- [ ] Define retention periods.
-- [ ] Define account deletion.
+- [x] Define retention periods. — audit 365 d, notifications 90 d, sign-ups 24 h, reset links 1 h, logs 30 d, backups newest 7 (`docs/privacy.md`)
+- [x] Define account deletion. — removal anonymizes (email replaced, password cleared, sessions ended), the name stays on history and can be renamed (`docs/privacy.md`)
 - [x] Define organization deletion. — `docs/members.md`
-- [ ] Define export/deletion behavior if supported.
+- [x] Define export/deletion behavior if supported. — workspace deletion in-app; export through the API or by an operator; no self-service per-user export yet (`docs/privacy.md`)
 
 ---
 
@@ -1024,7 +1024,7 @@ For every threat: impact, likelihood, mitigation, detection and a security test.
 - [x] Backup/restore. — `docs/backup-restore.md`
 - [x] Rollback. — `docs/releasing.md`
 - [x] Monitoring. — `docs/observability.md`
-- [ ] Incident response.
+- [x] Incident response. — `docs/incident-response.md`: severities, first ten minutes, every alert with its first check and fix, security incidents, reviews
 
 ## Security
 
@@ -1098,7 +1098,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 - [x] Probes work. — API not ready until the database works; observed on kind
 - [x] HPA works where applicable. — kind + metrics-server: 2 → 7 under load, back to 2 after (G.5)
 - [x] NetworkPolicy works. — enforced on kind: required paths open, others blocked
-- [ ] PDB works. — *partial:* PDBs report the right allowed disruptions; no drain test
+- [x] PDB works. — on kind via the eviction API: the second API eviction was refused until the replacement was ready, then allowed
 - [x] ArgoCD sync works. — kind: sync, drift reverted by self-heal (G.5)
 
 ## Gate 5 — Reliability
