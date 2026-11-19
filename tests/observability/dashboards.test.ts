@@ -42,7 +42,24 @@ const load = (file: string): Dashboard => JSON.parse(fs.readFileSync(path.join(D
 
 // Labels Prometheus/the Operator attach to every scraped series.
 const INFRA_LABELS = new Set(['namespace', 'job', 'pod', 'instance', 'service', 'container', 'endpoint']);
-const OURS = /\b(?:http_|db_|auth_|websocket_|active_websocket|redis_|rate_limited_|storage_|abandoned_|worker_|emails_|nodejs_|process_)[a-z0-9_]*/g;
+// OpenPM's metrics, plus the Kubernetes ones in EXTERNAL_METRICS.
+const OURS = /\b(?:http_|db_|auth_|websocket_|active_websocket|redis_|rate_limited_|storage_|abandoned_|worker_|emails_|nodejs_|process_|kube_|container_|kubelet_)[a-z0-9_]*/g;
+
+/**
+ * Metrics from kube-state-metrics, cAdvisor and the kubelet (all in kube-prometheus-stack) that the
+ * infrastructure dashboard reads, with the labels they document. A name or label not listed here
+ * fails the checks below, like one of ours.
+ */
+const EXTERNAL_METRICS: Array<[string, string[]]> = [
+  ['kube_pod_container_status_restarts_total', ['container', 'pod']],
+  ['kube_deployment_status_replicas_available', ['deployment']],
+  ['kube_deployment_spec_replicas', ['deployment']],
+  ['kube_cronjob_status_last_successful_time', ['cronjob']],
+  ['container_cpu_usage_seconds_total', ['container', 'pod']],
+  ['container_memory_working_set_bytes', ['container', 'pod']],
+  ['kubelet_volume_stats_used_bytes', ['persistentvolumeclaim']],
+  ['kubelet_volume_stats_capacity_bytes', ['persistentvolumeclaim']],
+];
 
 let metricLabels: Map<string, string[]>; // base metric name -> its label names
 let histograms: Set<string>;
@@ -58,6 +75,7 @@ beforeAll(() => {
     metricLabels.set(meta.name, meta.labelNames ?? []);
     if (String(meta.type).toLowerCase() === 'histogram') histograms.add(meta.name);
   }
+  for (const [name, labels] of EXTERNAL_METRICS) metricLabels.set(name, labels);
 });
 
 /** "http_request_duration_seconds_bucket" -> { base: "http_request_duration_seconds", ok: true } */
@@ -199,8 +217,8 @@ describe.each(files)('dashboard %s', (file) => {
   });
 });
 
-it('ships at least the API and worker dashboards', () => {
-  expect(files).toEqual(expect.arrayContaining(['openpm-api.json', 'openpm-worker.json']));
+it('ships the API, worker and infrastructure dashboards', () => {
+  expect(files).toEqual(expect.arrayContaining(['openpm-api.json', 'openpm-worker.json', 'openpm-infra.json']));
 });
 
 it('gives each dashboard a different uid', () => {

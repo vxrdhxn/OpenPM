@@ -42,7 +42,19 @@ kubectl logs -l app.kubernetes.io/instance=openpm --all-containers | jq -c 'sele
   `RESEND_API_KEY`, development prints the whole mail so you can read it; with `NODE_ENV=production`
   it logs a warning with the domain and nothing else.
 
-Log retention is not defined by the application: set it in your log platform.
+### Retention
+
+OpenPM writes logs to stdout and keeps none itself, so retention is set where they are collected
+(Loki, CloudWatch, Elastic, ...). The policy:
+
+| What | Keep | Why |
+| --- | --- | --- |
+| Application logs (API, worker, frontend) | **30 days** | Long enough to investigate an incident reported a few weeks late. They hold request ids, user and org ids, IP addresses and email domains, never credentials or message contents (above). |
+| Security events | 365 days, in the database | The audit log (`docs/audit-log.md`, `AUDIT_RETENTION_DAYS`) is the long-term record, so logs need not be kept for it. |
+| Metrics | your Prometheus retention (15 days is its default) | Trends; nothing personal. |
+
+Kubernetes keeps only the current and previous container's logs on each node, so without a log
+platform logs are effectively kept until a pod is replaced.
 
 ## Metrics
 
@@ -127,13 +139,20 @@ Dashboards (in `helm/openpm/dashboards/`):
 
 - **OpenPM / API**: traffic, status codes, latency percentiles and p95 per route, 5xx and 429 rates,
   authentication failures, WebSocket rejections, database latency/errors/pool, Redis errors,
-  event-loop lag, memory, CPU.
+  event-loop lag, memory, CPU; and limits and cleanup: Redis command latency, rate-limited requests
+  by route, owed storage deletions. This is also where Postgres and Redis show *as the API sees
+  them*. OpenPM does not ship postgres_exporter or redis_exporter. With a managed database or cache,
+  the provider's own metrics cover the server side.
 - **OpenPM / Worker and queue**: jobs waiting, queue lag, failed jobs, throughput, duration
   percentiles, failure ratio, emails by result, runtime.
+- **OpenPM / Infrastructure**: container restarts, available versus desired replicas per
+  Deployment, CPU and memory per container and pod, volume usage, time since the last backup. Reads
+  kube-state-metrics, cAdvisor and kubelet metrics (all in kube-prometheus-stack).
 
 A test (`tests/observability/dashboards.test.ts`, run by `npm test`) checks every query against the
 metrics the code really registers (metric names, labels, legend labels, variables, grid layout), so
-a renamed metric or a typo fails the build instead of leaving an empty panel.
+a renamed metric or a typo fails the build instead of leaving an empty panel. The Kubernetes metrics
+the infrastructure dashboard reads are listed in that test with their documented labels.
 
 ## Alerts
 
@@ -187,4 +206,5 @@ and Redis server health (use their own exporters), and certificate expiry.
   live Grafana or run against a live Prometheus. Expect to adjust thresholds after real traffic. The alert rules are checked with `promtool` against synthetic series, not against a running Prometheus.
 - **docker-compose** does not run Prometheus or Grafana.
 - **Tracing** (spans across services) is not implemented; request ids cover correlation by log search.
-- **Log retention** and the worker's retry policy (jobs are enqueued without retries) are not defined.
+- **Database and cache exporters** (postgres_exporter, redis_exporter) are not shipped; see the API
+  dashboard for the application's view, and your provider's metrics for managed services.

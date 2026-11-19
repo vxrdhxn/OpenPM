@@ -729,7 +729,7 @@ Review:
 - [x] Appropriate stack traces.
 - [x] No passwords/tokens/secrets.
 - [x] Consistent log levels. — `LOG_LEVEL`
-- [ ] Retention policy.
+- [x] Retention policy. — application logs 30 days in the log platform; security events 365 days in the audit log; metrics per Prometheus retention (`docs/observability.md`)
 
 ## Metrics
 
@@ -753,8 +753,8 @@ Track:
 - [x] Prometheus scraping. — ServiceMonitors for API and worker; verified live with Compose (`docker-compose.monitoring.yml`)
 - [x] API dashboard.
 - [x] Worker dashboard.
-- [ ] Infrastructure dashboard.
-- [ ] Redis/PostgreSQL dashboards where appropriate.
+- [x] Infrastructure dashboard. — `OpenPM / Infrastructure`: restarts, replicas vs desired, CPU and memory per container, volume usage, backup age
+- [x] Redis/PostgreSQL dashboards where appropriate. — the API dashboard shows both as the app sees them (query latency, pool, errors, Redis command latency); no exporters shipped: managed services bring their own metrics
 - [x] Alerts for critical failures. — 18 rules, promtool-tested; `OpenPMWorkerDown` fired and cleared in a live rehearsal
 
 ---
