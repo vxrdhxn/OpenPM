@@ -387,7 +387,7 @@ export default function Home() {
         </div>
         <div className="mx-auto max-w-[1400px] overflow-hidden px-5 sm:px-10 xl:px-[72px] pb-4">
           <Reveal>
-            <Brand size="xl" meter={false} />
+            <Brand size="xl" />
           </Reveal>
         </div>
         <div className="mx-auto flex max-w-[1400px] flex-wrap justify-between gap-4 px-5 sm:px-10 xl:px-[72px] py-8 font-mono text-xs text-slate-600 dark:text-slate-400">

@@ -385,11 +385,6 @@ html[data-xray] body {
   }
 }
 
-@keyframes meter {
-  0%, 100% { transform: scaleY(0.45); }
-  50% { transform: scaleY(1); }
-}
-
 /* The full-screen site menu (SiteHeader). */
 @keyframes menu-in {
   from { clip-path: inset(0 0 100% 0); }
