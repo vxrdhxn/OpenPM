@@ -7,8 +7,10 @@ import { Clock, Material, Mesh, Object3D, PerspectiveCamera, Points, Scene, Text
 import { kanbanScene } from './scenes/kanban';
 import { gemScene } from './scenes/gem';
 import { planetScene } from './scenes/planet';
+import { projectsScene } from './scenes/projects';
+import { columnsScene } from './scenes/columns';
 
-export type SceneName = 'kanban' | 'gem' | 'planet';
+export type SceneName = 'kanban' | 'gem' | 'planet' | 'projects' | 'columns';
 /** `surface`: drawn over the page background. `brand`: drawn over the indigo-violet gradient. */
 export type SceneTone = 'surface' | 'brand';
 
@@ -19,6 +21,10 @@ export interface SceneContext {
   tone: SceneTone;
   /** The page's own font stack, so text drawn into textures matches the UI. */
   font: string;
+  /** The scene's data at mount (scenes that show live data); later changes arrive via setData. */
+  data: unknown;
+  /** Reduced motion: one still frame, so data changes should land at once, not animate. */
+  still: boolean;
 }
 
 export interface SceneHandle {
@@ -26,19 +32,28 @@ export interface SceneHandle {
   update(t: number, pointer: { x: number; y: number }): void;
   /** Frame the scene for a new aspect ratio. */
   fit(aspect: number): void;
+  /** New data from the page (optional: only data-driven scenes have it). */
+  setData?(data: unknown): void;
+}
+
+export interface Mounted {
+  dispose(): void;
+  setData(data: unknown): void;
 }
 
 const SCENES: Record<SceneName, (ctx: SceneContext) => SceneHandle> = {
   kanban: kanbanScene,
   gem: gemScene,
   planet: planetScene,
+  projects: projectsScene,
+  columns: columnsScene,
 };
 
 export function mount(
   el: HTMLElement,
   name: SceneName,
-  opts: { tone: SceneTone; dark: boolean; still: boolean; onReady: () => void },
-): () => void {
+  opts: { tone: SceneTone; dark: boolean; still: boolean; data?: unknown; onReady: () => void },
+): Mounted {
   const renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0x000000, 0);
@@ -49,7 +64,7 @@ export function mount(
   const scene = new Scene();
   const camera = new PerspectiveCamera(35, 1, 0.1, 100);
   const font = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
-  const handle = SCENES[name]({ scene, camera, dark: opts.dark, tone: opts.tone, font });
+  const handle = SCENES[name]({ scene, camera, dark: opts.dark, tone: opts.tone, font, data: opts.data, still: opts.still });
 
   const clock = new Clock();
   const pointer = { x: 0, y: 0 };
@@ -123,7 +138,7 @@ export function mount(
   if (opts.still) render(2.4);
   else resume();
 
-  return () => {
+  const dispose = () => {
     stop();
     ro.disconnect();
     io.disconnect();
@@ -133,6 +148,13 @@ export function mount(
     renderer.dispose();
     renderer.forceContextLoss();
     canvas.remove();
+  };
+  return {
+    dispose,
+    setData(data) {
+      handle.setData?.(data);
+      if (opts.still) render(2.4);
+    },
   };
 }
 

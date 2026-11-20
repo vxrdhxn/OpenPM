@@ -12,6 +12,7 @@ import WebsocketProvider from '@/hooks/WebsocketProvider';
 import NotificationsLink from '@/components/NotificationsLink';
 import AccountMenu from '@/components/AccountMenu';
 import Brand from '@/components/Brand';
+import ThemeToggle from '@/components/motion/ThemeToggle';
 import { Kbd } from '@/components/CommandPalette';
 import { ActiveBar, navLinkClass, PROJECTS_CHANGED } from '@/components/nav';
 import { messageOf, OfflineBanner } from '@/components/ui/feedback';
@@ -39,7 +40,7 @@ function Nav({ me, pathname, projects }: { me: Me; pathname: string; projects: S
     return (
       <Link href={href} className={navLinkClass(active)} aria-current={active ? 'page' : undefined}>
         <ActiveBar active={active} />
-        <Icon className={`w-[18px] h-[18px] transition-transform duration-200 group-hover:scale-110 ${active ? 'text-indigo-600 dark:text-indigo-300' : ''}`} aria-hidden="true" />
+        <Icon className={`w-[18px] h-[18px] transition-transform duration-200 group-hover:scale-110`} aria-hidden="true" />
         {label}
       </Link>
     );
@@ -223,11 +224,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </a>
       <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
         {/* Sidebar on wide screens */}
-        <aside className="hidden md:flex w-64 shrink-0 border-r border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl flex-col">
-          <div className="px-5 pt-6 pb-5">
+        <aside className="hidden md:flex w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 flex-col">
+          <div className="px-5 pt-6 pb-5 flex items-center justify-between">
             <Link href="/dashboard" aria-label="OpenPM home" className="inline-block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
               <Brand />
             </Link>
+            <ThemeToggle />
           </div>
           {sidebar}
         </aside>
@@ -261,10 +263,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         <div className="flex-1 flex flex-col min-w-0 relative">
-          {/* Soft color wash behind the content. */}
+          {/* Paper: a faint dot grid fading out from the top right. */}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute -top-40 right-[-10%] w-[45rem] h-[45rem] rounded-full bg-indigo-400/10 dark:bg-indigo-500/10 blur-3xl animate-drift" />
-            <div className="absolute top-1/2 -left-40 w-[35rem] h-[35rem] rounded-full bg-fuchsia-400/[0.07] dark:bg-fuchsia-500/[0.07] blur-3xl animate-drift [animation-delay:-9s]" />
+            <div className="absolute inset-0 bg-dots opacity-60 [mask-image:radial-gradient(ellipse_at_top_right,black,transparent_60%)]" />
           </div>
           <header className="relative md:hidden flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
             <button
@@ -279,10 +280,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Menu className="w-5 h-5" aria-hidden="true" />
             </button>
             <Brand />
+            <ThemeToggle className="ml-auto" />
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="ml-auto p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               aria-label="Jump to a page or project"
             >
               <Search className="w-5 h-5" aria-hidden="true" />

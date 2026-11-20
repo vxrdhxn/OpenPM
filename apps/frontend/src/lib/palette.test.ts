@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRADIENTS, gradientFor, greeting, hashString } from './palette';
+import { GRADIENTS, GRADIENT_HEX, gradientFor, gradientHexFor, greeting, hashString } from './palette';
 
 describe('palette', () => {
   it('gives the same key the same gradient', () => {
@@ -26,5 +26,13 @@ describe('palette', () => {
     expect(greeting(9)).toBe('Good morning');
     expect(greeting(14)).toBe('Good afternoon');
     expect(greeting(20)).toBe('Good evening');
+  });
+});
+
+describe('GRADIENT_HEX', () => {
+  it('has a hex pair for every gradient, so 3D scenes match the CSS colors', () => {
+    expect(GRADIENT_HEX).toHaveLength(GRADIENTS.length);
+    for (const pair of GRADIENT_HEX) for (const c of pair) expect(c).toMatch(/^#[0-9a-f]{6}$/);
+    expect(GRADIENTS.indexOf(gradientFor('abc'))).toBe(GRADIENT_HEX.indexOf(gradientHexFor('abc')));
   });
 });

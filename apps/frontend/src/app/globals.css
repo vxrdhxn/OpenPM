@@ -2,10 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Paper, ink, one red. Light is the default; <html data-theme="dark"> (set before first paint by the
+   script in layout.tsx, from the visitor's choice or their system) switches to ink. */
 :root {
-  --foreground-rgb: 15, 23, 42;
-  --background-rgb: 248, 250, 252;
-  --brand-color: 99, 102, 241; /* Indigo 500 */
+  --foreground-rgb: 18, 18, 20;
+  --background-rgb: 244, 244, 242;
+  --brand-color: 255, 64, 64;
   /* Data-viz tokens (dataviz palette; validated against these card surfaces, white and slate-900). */
   --meter-fill: #2a78d6; /* blue 450 */
   --meter-track: #cde2fb; /* blue 100: lighter step of the same ramp */
@@ -13,31 +15,31 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 241, 245, 249;
-    --background-rgb: 2, 6, 23; /* Slate 950 */
-    --brand-color: 129, 140, 248; /* Indigo 400 */
-    --meter-fill: #3987e5; /* blue 400: the dark-mode step */
-    --meter-track: #0d366b; /* blue 700 */
-    --status-critical: #d03b3b;
-    color-scheme: dark;
-  }
+:root[data-theme="dark"] {
+  --foreground-rgb: 236, 236, 232;
+  --background-rgb: 15, 15, 17;
+  --brand-color: 255, 99, 99;
+  --meter-fill: #3987e5; /* blue 400: the dark-mode step */
+  --meter-track: #0d366b; /* blue 700 */
+  --status-critical: #d03b3b;
+  color-scheme: dark;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 h1, h2, h3 {
   font-family: theme('fontFamily.display');
-  letter-spacing: -0.015em;
+  font-weight: 500;
+  letter-spacing: -0.03em;
 }
 
 ::selection {
-  background: rgb(99 102 241 / 0.25);
+  background: rgb(255 64 64 / 0.9);
+  color: #fff;
 }
 
 /* Components, not utilities: a utility on the same element (w-40, pl-9, ...) must be able to
@@ -46,16 +48,16 @@ h1, h2, h3 {
 @layer components {
   /* ---------- Surfaces ---------- */
   .glass-panel {
-    @apply bg-white/80 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/80 dark:border-slate-700/60 shadow-lift;
+    @apply bg-white/85 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-800 shadow-lift;
   }
 
   .card {
-    @apply bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-soft;
+    @apply bg-white/70 dark:bg-slate-900/70 rounded-2xl border border-slate-200 dark:border-slate-800;
   }
 
   /* A card that is a link or a button: lifts on hover, presses on click. */
   .card-interactive {
-    @apply card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lift hover:border-indigo-300/80 dark:hover:border-indigo-500/50 active:translate-y-0 active:scale-[0.995];
+    @apply card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lift hover:border-slate-400 dark:hover:border-slate-600 active:translate-y-0 active:scale-[0.995];
   }
 
   /* A square icon badge in front of a heading or a stat. */
@@ -65,44 +67,40 @@ h1, h2, h3 {
 
   /* ---------- Type ---------- */
   .page-title {
-    @apply font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white;
+    @apply font-display text-3xl sm:text-4xl font-medium tracking-[-0.035em] text-slate-900 dark:text-white;
   }
   .page-subtitle {
     @apply mt-1 text-slate-600 dark:text-slate-400;
   }
   .eyebrow {
-    @apply text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400;
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400;
   }
   .gradient-text {
-    @apply bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-400 dark:via-violet-400 dark:to-fuchsia-400 bg-clip-text text-transparent;
+    @apply text-accent-700 dark:text-accent-400;
   }
 
   /* ---------- Controls ---------- */
   .input-field {
-    @apply w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 shadow-sm hover:border-slate-400 dark:hover:border-slate-600 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/15 transition-all duration-200 outline-none;
+    @apply w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-500 hover:border-slate-400 dark:hover:border-slate-500 focus:border-slate-900 dark:focus:border-slate-200 focus:ring-4 focus:ring-accent-500/15 transition-all duration-200 outline-none;
   }
 
   .btn-base {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-xl font-medium transition-all duration-200 outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none select-none;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full font-medium transition-all duration-300 outline-none focus-visible:ring-4 focus-visible:ring-accent-500/40 active:scale-[0.96] disabled:opacity-50 disabled:pointer-events-none select-none;
   }
 
   /* Full width, for forms. */
   .btn-primary {
-    @apply btn-base w-full py-3 px-4 text-white bg-gradient-to-r from-indigo-600 to-violet-600 bg-[length:200%_100%] bg-left hover:bg-right shadow-glow hover:shadow-[0_12px_28px_-8px_rgb(99_102_241_/_0.65)];
-    transition-property: background-position, box-shadow, transform, opacity;
-    transition-duration: 400ms;
+    @apply btn-base w-full py-3 px-5 text-white bg-ink hover:bg-black dark:bg-paper dark:text-ink dark:hover:bg-white hover:shadow-lift;
   }
 
   /* A primary button sized to its content (.btn-primary is full width, for forms). */
   .btn-compact {
-    @apply btn-base px-3.5 py-2 text-sm text-white bg-gradient-to-r from-indigo-600 to-violet-600 bg-[length:200%_100%] bg-left hover:bg-right shadow-[0_4px_14px_-4px_rgb(99_102_241_/_0.6)] hover:shadow-[0_8px_20px_-6px_rgb(99_102_241_/_0.7)];
-    transition-property: background-position, box-shadow, transform, opacity;
-    transition-duration: 400ms;
+    @apply btn-base px-4 py-2 text-sm text-white bg-ink hover:bg-black dark:bg-paper dark:text-ink dark:hover:bg-white hover:shadow-lift;
   }
 
   /* Neutral action next to a primary one (Cancel, Try again). */
   .btn-secondary {
-    @apply btn-base px-3.5 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-400 dark:hover:bg-slate-800 dark:hover:border-slate-600;
+    @apply btn-base px-4 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-transparent text-slate-900 dark:text-slate-100 hover:bg-white hover:border-slate-900 dark:hover:bg-slate-900 dark:hover:border-slate-300;
   }
 
   /* Quiet action (icon buttons, "Clear filters"). */
@@ -112,7 +110,7 @@ h1, h2, h3 {
 
   /* Destructive confirm (delete, remove, leave). */
   .btn-danger {
-    @apply btn-base px-3.5 py-2 text-sm bg-red-600 hover:bg-red-700 text-white shadow-[0_4px_14px_-4px_rgb(220_38_38_/_0.55)];
+    @apply btn-base px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white;
   }
 
   .chip {
@@ -126,19 +124,17 @@ h1, h2, h3 {
     background-size: 200% 100%;
     animation: shimmer 1.6s linear infinite;
   }
-  @media (prefers-color-scheme: dark) {
-    .skeleton {
-      background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.06) 50%, transparent 100%);
-    }
+  [data-theme="dark"] .skeleton {
+    background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.06) 50%, transparent 100%);
   }
 
   /* ---------- Decoration ---------- */
   .bg-dots {
-    background-image: radial-gradient(rgb(100 116 139 / 0.18) 1px, transparent 1px);
+    background-image: radial-gradient(rgb(110 110 114 / 0.2) 1px, transparent 1px);
     background-size: 22px 22px;
   }
   .bg-brand {
-    @apply bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600;
+    @apply bg-ink dark:bg-slate-900 dark:ring-1 dark:ring-inset dark:ring-slate-800;
   }
 
   /* Children fade up one after another. Set --i on each child for the order (capped by the delay). */
@@ -177,19 +173,17 @@ h1, h2, h3 {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #c6c6c0;
   border-radius: 999px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb {
-    background: #334155;
-    background-clip: content-box;
-  }
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #3a3a40;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9a9a96;
   background-clip: content-box;
 }
 
@@ -201,4 +195,207 @@ h1, h2, h3 {
 @keyframes shimmer-bar {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
+}
+
+/* ---------- Motion system (components/motion) ---------- */
+
+/* Switching theme: the new theme grows as a circle from the click (ThemeToggle sets --tx/--ty). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  animation: theme-reveal 0.7s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+@keyframes theme-reveal {
+  from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 50%)); }
+  to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 50%)); }
+}
+
+/* Blocks that rise into place when they scroll into view (Reveal). */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--d, 0ms);
+}
+.reveal[data-in='true'] {
+  opacity: 1;
+  transform: none;
+}
+/* Headings, word by word, each rising out of its own line box (SplitReveal). */
+.word {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.1em;
+}
+.word > span {
+  display: inline-block;
+  transform: translateY(110%);
+  transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--w, 0) * 55ms + var(--d, 0ms));
+}
+[data-in='true'] .word > span {
+  transform: none;
+}
+
+/* A link whose underline draws in from the left. */
+.link-draw {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.link-draw:hover,
+.link-draw:focus-visible {
+  background-size: 100% 1px;
+}
+
+/* X-ray: see how the page is built (XRayToggle). */
+html[data-xray] body * {
+  outline: 1px dashed rgb(255 64 64 / 0.45) !important;
+  outline-offset: -1px;
+}
+html[data-xray] body {
+  background-image:
+    linear-gradient(to right, rgb(255 64 64 / 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 64 64 / 0.07) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .word > span {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* The page curtain (MotionLayer): ink sweeps up off each page as it arrives. */
+.page-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background: #121214;
+  display: flex;
+  align-items: flex-end;
+  padding: 2rem;
+  animation: curtain-up 0.75s cubic-bezier(0.76, 0, 0.24, 1) 0.12s both;
+}
+[data-theme="dark"] .page-curtain {
+  background: #ebebe8;
+}
+.page-curtain-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 6vw, 5rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  color: #f4f4f2;
+  animation: curtain-label 0.75s cubic-bezier(0.76, 0, 0.24, 1) 0.12s both;
+}
+[data-theme="dark"] .page-curtain-label {
+  color: #121214;
+}
+.page-curtain-dot {
+  width: 0.35em;
+  height: 0.35em;
+  border-radius: 999px;
+  background: #ff4040;
+}
+@keyframes curtain-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-101%); visibility: hidden; }
+}
+@keyframes curtain-label {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-60%); opacity: 0; }
+}
+
+/* A burst where you click (MotionLayer): one ring and eight dots flying out. */
+.click-burst {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.click-burst::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: -18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1.5px solid #ff4040;
+  animation: burst-ring 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.click-burst i {
+  position: absolute;
+  left: -2.5px;
+  top: -2.5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #ff4040;
+  animation: burst-dot 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.click-burst i:nth-child(even) {
+  background: rgb(var(--foreground-rgb));
+}
+@keyframes burst-ring {
+  from { transform: scale(0.2); opacity: 1; }
+  to { transform: scale(1.6); opacity: 0; }
+}
+@keyframes burst-dot {
+  from { transform: rotate(var(--a)) translateX(4px) scale(1); opacity: 1; }
+  to { transform: rotate(var(--a)) translateX(30px) scale(0.2); opacity: 0; }
+}
+
+/* The ring that trails the mouse (MotionLayer). */
+.cursor-ring {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 95;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(var(--foreground-rgb), 0.55);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, width 0.3s, height 0.3s;
+}
+.cursor-ring[data-hot='true'] {
+  border-color: #ff4040;
+  background: rgb(255 64 64 / 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-curtain,
+  .cursor-ring,
+  .click-burst {
+    display: none !important;
+  }
+}
+
+@keyframes meter {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}
+
+/* The full-screen site menu (SiteHeader). */
+@keyframes menu-in {
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes menu-item {
+  from { transform: translateY(110%); }
+  to { transform: none; }
 }

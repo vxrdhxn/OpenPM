@@ -6,7 +6,9 @@ import { buildQuery, type Page } from '@/lib/query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, FolderKanban, Clock, Loader2, Search, Lock, ArrowRight } from 'lucide-react';
-import { gradientFor } from '@/lib/palette';
+import { gradientFor, gradientHexFor } from '@/lib/palette';
+import { tilt } from '@/lib/tilt';
+import ThreeScene from '@/components/three/ThreeScene';
 import PageHeader from '@/components/ui/PageHeader';
 import ProjectDialog from '@/components/ProjectDialog';
 import { EmptyBlock, ErrorBlock } from '@/components/ui/states';
@@ -97,23 +99,42 @@ function ProjectsPage() {
   }, [loadProjects]);
 
   const filtered = query !== '' || status !== '';
+  // The banner's 3D carousel shows the boards in view, in their own colors.
+  const carousel = projects.slice(0, 7).map((p) => {
+    const [from, to] = gradientHexFor(p.id);
+    const name = p.name.trim();
+    return { initial: [...name][0]?.toUpperCase() ?? '?', name: name.length > 18 ? `${name.slice(0, 17)}…` : name, from, to };
+  });
 
 
   return (
     <div className="p-4 sm:p-8 max-w-[1400px] w-full mx-auto">
-      <PageHeader
-        icon={<FolderKanban />}
-        title="Projects"
-        subtitle="Manage your team's workflows and tasks."
-        actions={
-          canCreate && (
-            <button onClick={() => setIsModalOpen(true)} className="btn-compact">
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              New project
-            </button>
-          )
-        }
-      />
+      <section className="relative mb-8 overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60">
+        <div aria-hidden="true" className="absolute inset-0 bg-dots opacity-40 [mask-image:linear-gradient(to_right,black,transparent_55%)]" />
+        <ThreeScene
+          scene="projects"
+          data={loading ? undefined : { items: carousel }}
+          className="!absolute inset-y-0 right-0 hidden md:block w-[55%] pointer-events-none"
+        />
+        <div className="relative p-6 sm:p-8 md:min-h-[14rem] md:max-w-[52%] flex flex-col justify-center">
+          <PageHeader
+            className=""
+            icon={<FolderKanban />}
+            eyebrow="Your workspace"
+            title="Projects"
+            subtitle="Manage your team's workflows and tasks."
+          >
+            {canCreate && (
+              <div className="mt-5">
+                <button onClick={() => setIsModalOpen(true)} className="btn-compact">
+                  <Plus className="w-4 h-4" aria-hidden="true" />
+                  New project
+                </button>
+              </div>
+            )}
+          </PageHeader>
+        </div>
+      </section>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-8">
         <div className="relative flex-1 max-w-md">
@@ -180,8 +201,14 @@ function ProjectsPage() {
               key={p.id}
               href={`/projects/${p.id}`}
               style={{ '--i': i } as React.CSSProperties}
-              className="card-interactive group relative flex flex-col overflow-hidden outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/40"
+              {...tilt}
+              className="card-interactive group relative flex flex-col overflow-hidden outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/40 [transform-style:preserve-3d]"
             >
+              {/* Glare that follows the mouse (lib/tilt.ts sets --gx/--gy). */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-[radial-gradient(circle_at_var(--gx,50%)_var(--gy,0%),rgba(255,255,255,0.35),transparent_45%)] dark:bg-[radial-gradient(circle_at_var(--gx,50%)_var(--gy,0%),rgba(165,180,252,0.14),transparent_45%)]"
+              />
               <div aria-hidden="true" className={`relative h-20 bg-gradient-to-br ${gradientFor(p.id)} ${p.status === 'archived' ? 'grayscale opacity-70' : ''}`}>
                 <div className="absolute inset-0 bg-dots opacity-30 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
                 <div className="absolute -right-6 -top-10 w-32 h-32 rounded-full bg-white/15 blur-xl transition-transform duration-700 group-hover:scale-150" />

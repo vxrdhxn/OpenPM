@@ -1,11 +1,16 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
+import { Bricolage_Grotesque, IBM_Plex_Mono, Space_Grotesk } from 'next/font/google';
+import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import './globals.css';
 import { FeedbackProvider } from '@/components/ui/feedback';
+import MotionLayer from '@/components/motion/MotionLayer';
+import { THEME_SCRIPT } from '@/lib/theme';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
-const display = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-display', display: 'swap', weight: ['600', '700', '800'] });
+// Display type for headings, a grotesk for reading, a mono for numbers and labels.
+const sans = Space_Grotesk({ subsets: ['latin'], variable: '--font-sans', display: 'swap', weight: ['400', '500', '600', '700'] });
+const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-display', display: 'swap', weight: ['400', '500', '600', '700', '800'] });
+const mono = IBM_Plex_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap', weight: ['400', '500'] });
 
 export const metadata: Metadata = {
   title: 'OpenPM - Modern Project Management',
@@ -14,8 +19,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
-    { media: '(prefers-color-scheme: dark)', color: '#020617' },
+    { media: '(prefers-color-scheme: light)', color: '#f4f4f2' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f0f11' },
   ],
 };
 
@@ -27,12 +32,20 @@ export default async function RootLayout({
   // Every page is rendered per request, never prerendered at build time: its scripts need this
   // request's CSP nonce (proxy.ts), and a page built in advance would carry none, so it would not run.
   await connection();
+  // The theme script runs inline, before first paint, so it needs this request's nonce too.
+  const csp = (await headers()).get('content-security-policy') ?? '';
+  const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
   return (
-    <html lang="en" className={`${inter.variable} ${display.variable}`}>
+    // data-theme is set by the script before React hydrates, so React must not complain about it.
+    <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       {/* Browser extensions (e.g. Grammarly) add attributes to <body> before React hydrates. This
           silences that mismatch for <body>'s own attributes only, not for anything inside it. */}
       <body className="font-sans min-h-screen antialiased" suppressHydrationWarning>
         <FeedbackProvider>{children}</FeedbackProvider>
+        <MotionLayer />
       </body>
     </html>
   );

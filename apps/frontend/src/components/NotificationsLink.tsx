@@ -60,7 +60,7 @@ export default function NotificationsLink({ userId, active }: { userId: string; 
     >
       <ActiveBar active={active} />
       <span className="relative">
-        <Bell className={`w-[18px] h-[18px] transition-transform duration-200 group-hover:scale-110 ${badge ? 'group-hover:rotate-12' : ''} ${active ? 'text-indigo-600 dark:text-indigo-300' : ''}`} aria-hidden="true" />
+        <Bell className={`w-[18px] h-[18px] transition-transform duration-200 group-hover:scale-110 ${badge ? 'group-hover:rotate-12' : ''}`} aria-hidden="true" />
         {badge && (
           <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 flex w-2 h-2">
             <span className="absolute inset-0 rounded-full bg-fuchsia-400 opacity-75 animate-ping" />
@@ -70,7 +70,7 @@ export default function NotificationsLink({ userId, active }: { userId: string; 
       </span>
       Notifications
       {badge && (
-        <span key={badge} className="ml-auto min-w-[1.25rem] px-1.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-semibold text-center shadow-sm animate-pop" aria-hidden="true">
+        <span key={badge} className="ml-auto min-w-[1.25rem] px-1.5 py-0.5 rounded-full bg-accent-700 text-white text-xs font-semibold text-center shadow-sm animate-pop" aria-hidden="true">
           {badge}
         </span>
       )}

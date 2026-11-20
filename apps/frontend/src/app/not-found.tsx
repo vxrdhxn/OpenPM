@@ -9,7 +9,6 @@ export default function NotFound() {
   return (
     <main className="relative min-h-screen flex items-center justify-center overflow-hidden p-6 bg-slate-50 dark:bg-slate-950">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[40rem] h-[40rem] rounded-full bg-gradient-to-r from-indigo-400/20 via-violet-400/15 to-fuchsia-400/20 blur-3xl animate-drift" />
         <div className="absolute inset-0 bg-dots opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]" />
       </div>
       <div className="relative max-w-md text-center animate-fade-up">

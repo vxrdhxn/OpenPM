@@ -138,7 +138,7 @@ export default function Dashboard() {
       {summary.state === 'ready' && summary.data.projects.active === 0 && (
         <section
           aria-labelledby="welcome-title"
-          className="relative mb-8 overflow-hidden rounded-3xl bg-brand bg-[length:200%_200%] animate-gradient-pan p-6 sm:p-8 text-white shadow-glow"
+          className="relative mb-8 overflow-hidden rounded-3xl bg-brand p-6 sm:p-8 text-white"
         >
           <div aria-hidden="true" className="absolute inset-0 bg-dots opacity-20 [mask-image:linear-gradient(to_left,black,transparent)]" />
           <div aria-hidden="true" className="absolute -right-10 -bottom-16 w-64 h-64 rounded-full bg-white/10 blur-2xl animate-drift" />

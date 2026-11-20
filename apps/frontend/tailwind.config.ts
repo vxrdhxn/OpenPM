@@ -1,6 +1,26 @@
 import type { Config } from "tailwindcss";
 
+/*
+ * Paper, ink, one red. The whole app is drawn in a warm neutral scale (as `slate`), an ink scale for
+ * what used to be the brand color (as `indigo` and `violet`, so every existing brand class turns to
+ * ink without a rewrite) and a single red accent (as `fuchsia`, and `accent`).
+ */
+const neutral = {
+  50: "#f4f4f2", 100: "#ebebe8", 200: "#deded9", 300: "#c6c6c0", 400: "#9a9a96",
+  500: "#6b6b70", 600: "#4a4a50", 700: "#3a3a40", 800: "#26262b", 900: "#18181b", 950: "#0f0f11",
+};
+const ink = {
+  50: "#f1f1ee", 100: "#e6e6e2", 200: "#d4d4ce", 300: "#b8b8b2", 400: "#8f8f8c",
+  500: "#5c5c60", 600: "#2a2a2f", 700: "#1c1c20", 800: "#141417", 900: "#101012", 950: "#0a0a0b",
+};
+const red = {
+  50: "#fff1f1", 100: "#ffe0e0", 200: "#ffc6c6", 300: "#ff9d9d", 400: "#ff6363",
+  500: "#ff4040", 600: "#e62525", 700: "#c21b1b", 800: "#a01a1a", 900: "#841c1c", 950: "#480808",
+};
+
 const config: Config = {
+  // The theme is a choice (components/ThemeToggle.tsx), not only the system's: <html data-theme>.
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -14,15 +34,23 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        slate: neutral,
+        indigo: ink,
+        violet: ink,
+        fuchsia: red,
+        accent: red,
+        paper: "#f4f4f2",
+        ink: "#121214",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {
-        soft: "0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -4px rgb(15 23 42 / 0.08)",
-        lift: "0 2px 4px rgb(15 23 42 / 0.04), 0 16px 32px -12px rgb(15 23 42 / 0.18)",
-        glow: "0 8px 24px -8px rgb(99 102 241 / 0.55)",
+        soft: "0 1px 2px rgb(18 18 20 / 0.03), 0 4px 16px -6px rgb(18 18 20 / 0.06)",
+        lift: "0 2px 4px rgb(18 18 20 / 0.04), 0 18px 36px -14px rgb(18 18 20 / 0.2)",
+        glow: "0 10px 24px -10px rgb(255 64 64 / 0.55)",
       },
       keyframes: {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
@@ -67,6 +95,8 @@ const config: Config = {
         },
         progress: { from: { transform: "scaleX(1)" }, to: { transform: "scaleX(0)" } },
         grow: { from: { transform: "scaleX(0)" }, to: { transform: "scaleX(1)" } },
+        marquee: { from: { transform: "translateX(0)" }, to: { transform: "translateX(-50%)" } },
+        "spin-slow": { to: { transform: "rotate(360deg)" } },
         pop: {
           "0%": { transform: "scale(0.6)", opacity: "0" },
           "70%": { transform: "scale(1.12)", opacity: "1" },
@@ -86,6 +116,8 @@ const config: Config = {
         "gradient-pan": "gradient-pan 8s ease infinite",
         grow: "grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both",
         pop: "pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both",
+        marquee: "marquee 40s linear infinite",
+        "spin-slow": "spin-slow 24s linear infinite",
       },
     },
   },

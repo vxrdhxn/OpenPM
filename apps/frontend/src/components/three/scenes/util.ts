@@ -12,7 +12,8 @@ import {
   SpriteMaterial,
 } from 'three';
 
-export const BRAND = { indigo: '#6366f1', violet: '#8b5cf6', fuchsia: '#d946ef', sky: '#0ea5e9', emerald: '#10b981' };
+/** Paper, ink, one red: the 3D scenes use the site's palette (the old names stay for the scenes). */
+export const BRAND = { indigo: '#8f8f8c', violet: '#5c5c60', fuchsia: '#ff4040', sky: '#c6c6c0', emerald: '#10b981' };
 
 export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 export const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);

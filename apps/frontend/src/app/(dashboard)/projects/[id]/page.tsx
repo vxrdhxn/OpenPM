@@ -23,6 +23,7 @@ import TaskForm from '@/components/TaskForm';
 import Dialog from '@/components/ui/Dialog';
 import { messageOf, useToast } from '@/components/ui/feedback';
 import { ErrorBlock } from '@/components/ui/states';
+import ThreeScene from '@/components/three/ThreeScene';
 import { EMPTY_DRAFT, STATUSES, newTaskBody, priorityLabel, statusLabel, type TaskDraft } from '@/lib/tasks';
 
 // The dialogs are loaded when first opened, not with the board.
@@ -375,6 +376,12 @@ export default function KanbanBoard() {
           {project?.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-3xl">{project.description}</p>}
           </div>
         </div>
+        {/* The board in 3D: one bar per column, as tall as its share of the tasks (live). */}
+        <ThreeScene
+          scene="columns"
+          data={{ counts: COLUMNS.map((c) => totals[c.id] ?? tasks[c.id]?.length ?? 0) }}
+          className="hidden xl:block ml-auto -my-6 h-36 w-80"
+        />
         {(canEdit || project?.visibility === 'private') && (
           <div className="flex flex-wrap gap-2">
             {project?.visibility === 'private' && me && (

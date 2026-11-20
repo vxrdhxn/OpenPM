@@ -9,6 +9,7 @@ export default function PageHeader({
   icon,
   actions,
   children,
+  className = 'mb-8',
 }: {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
@@ -16,9 +17,11 @@ export default function PageHeader({
   icon?: React.ReactNode;
   actions?: React.ReactNode;
   children?: React.ReactNode;
+  /** Outer spacing; the default leaves room before the page body. */
+  className?: string;
 }) {
   return (
-    <div className="flex flex-wrap gap-4 items-end justify-between mb-8">
+    <div className={`flex flex-wrap gap-4 items-end justify-between ${className}`}>
       <div className="flex items-start gap-4 min-w-0">
         {icon && (
           <span

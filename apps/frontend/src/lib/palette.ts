@@ -16,6 +16,23 @@ export const GRADIENTS = [
   'from-pink-600 to-rose-700',
 ] as const;
 
+/**
+ * The same gradients as hex pairs, for drawing outside CSS (the 3D scenes). Kept in step with GRADIENTS
+ * as Tailwind renders them: `indigo`/`violet` are the ink scale and `fuchsia` the red (tailwind.config.ts).
+ */
+export const GRADIENT_HEX: readonly (readonly [string, string])[] = [
+  ['#2a2a2f', '#1c1c20'],
+  ['#2563eb', '#1c1c20'],
+  ['#0e7490', '#1d4ed8'],
+  ['#0f766e', '#047857'],
+  ['#047857', '#115e59'],
+  ['#b45309', '#c2410c'],
+  ['#e11d48', '#be185d'],
+  ['#c21b1b', '#7e22ce'],
+  ['#2a2a2f', '#c21b1b'],
+  ['#db2777', '#be123c'],
+];
+
 /** A small, stable string hash (FNV-1a). */
 export function hashString(s: string): number {
   let h = 0x811c9dc5;
@@ -28,6 +45,9 @@ export function hashString(s: string): number {
 
 /** The gradient classes for an id or name. */
 export const gradientFor = (key: string) => GRADIENTS[hashString(key) % GRADIENTS.length]!;
+
+/** The gradient for an id or name as two hex colors (matches gradientFor). */
+export const gradientHexFor = (key: string) => GRADIENT_HEX[hashString(key) % GRADIENT_HEX.length]!;
 
 /** "Good morning" / "Good afternoon" / "Good evening" for an hour of the day (0–23). */
 export function greeting(hour: number): string {

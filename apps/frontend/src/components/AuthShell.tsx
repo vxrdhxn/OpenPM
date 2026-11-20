@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { CheckCircle2, KanbanSquare, Radio, ShieldCheck, Zap } from 'lucide-react';
+import { CheckCircle2, Radio, ShieldCheck, Zap } from 'lucide-react';
 import Brand from './Brand';
 import ThreeScene from './three/ThreeScene';
+import ThemeToggle from './motion/ThemeToggle';
 
 const FEATURES = [
   { icon: Radio, title: 'Live boards', text: 'Every move shows up for your whole team, instantly.' },
@@ -53,17 +54,13 @@ export default function AuthShell({ children, wide = false }: { children: React.
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950">
       <aside
         aria-label="About OpenPM"
-        className="relative hidden lg:flex w-[46%] max-w-2xl flex-col justify-between overflow-hidden bg-brand bg-[length:200%_200%] animate-gradient-pan p-12 text-white"
+        className="relative hidden lg:flex w-[46%] max-w-2xl flex-col justify-between overflow-hidden bg-ink dark:bg-slate-900 p-12 text-white"
       >
         <div aria-hidden="true" className="absolute inset-0 bg-dots opacity-20" />
-        <div aria-hidden="true" className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white/10 blur-3xl animate-drift" />
-        <div aria-hidden="true" className="absolute -bottom-32 -left-20 w-[28rem] h-[28rem] rounded-full bg-fuchsia-300/20 blur-3xl animate-drift [animation-delay:-7s]" />
+                <div aria-hidden="true" className="absolute -top-32 -right-32 w-80 h-80 rounded-full bg-accent-500" />
 
         <Link href="/" className="relative inline-flex items-center gap-2.5 self-start rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white">
-          <span className="inline-flex w-10 h-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/30 backdrop-blur" aria-hidden="true">
-            <KanbanSquare className="w-5 h-5" />
-          </span>
-          <span className="font-display text-2xl font-extrabold tracking-tight">OpenPM</span>
+          <span className="font-display text-[1.7rem] font-semibold tracking-[-0.05em]">openpm<span className="text-accent-500">.</span></span>
         </Link>
 
         <div className="relative">
@@ -77,7 +74,7 @@ export default function AuthShell({ children, wide = false }: { children: React.
               </div>
             }
           />
-          <h2 className="font-display text-4xl xl:text-5xl font-extrabold leading-[1.1] tracking-tight">
+          <h2 className="font-display text-5xl xl:text-6xl font-medium leading-[0.98] tracking-[-0.045em]">
             Plan it. Track it.
             <br />
             <span className="text-white/80">Ship it together.</span>
@@ -97,9 +94,8 @@ export default function AuthShell({ children, wide = false }: { children: React.
       </aside>
 
       <main className="relative flex-1 flex items-center justify-center overflow-hidden p-4 sm:p-8">
+        <ThemeToggle className="absolute right-4 top-4 z-10 sm:right-8 sm:top-6" />
         <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-[30%] -right-[10%] w-[60%] h-[60%] rounded-full bg-indigo-400/20 dark:bg-indigo-500/15 blur-[120px] animate-drift" />
-          <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-fuchsia-400/15 dark:bg-fuchsia-500/10 blur-[120px] animate-drift [animation-delay:-9s]" />
           <div className="absolute inset-0 bg-dots opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
         </div>
         <div className={`relative w-full ${wide ? 'max-w-lg' : 'max-w-md'} my-8`}>
