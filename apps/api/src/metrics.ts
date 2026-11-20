@@ -47,7 +47,7 @@ export const websocketErrorsTotal = new client.Counter({
   help: 'WebSocket socket-level errors',
 });
 
-/** reason: missing | expired | invalid (bad JWT) | revoked (session ended, H.3) | bad_credentials (failed login) */
+/** reason: missing | expired | invalid (bad JWT) | revoked (session ended, H.3) | bad_credentials (failed login) | not_admin (admin sign-in by a non-admin) | register_conflict */
 export const authFailuresTotal = new client.Counter({
   name: 'auth_failures_total',
   help: 'Failed authentication attempts',

@@ -12,6 +12,10 @@ const securityHeaders = [
 const nextConfig = {
   output: 'standalone',
   poweredByHeader: false,
+  // The admin sign-in has a memorable address of its own.
+  async redirects() {
+    return [{ source: '/admin/login', destination: '/login?as=admin', permanent: false }];
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

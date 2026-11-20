@@ -20,7 +20,7 @@ test.describe('accessibility', () => {
   test('signed-out pages', async ({ browser }) => {
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
-    for (const path of ['/', '/login', '/register', '/forgot-password', '/verify-signup']) {
+    for (const path of ['/', '/login', '/login?as=admin', '/register', '/forgot-password', '/verify-signup']) {
       await page.goto(path);
       await expectNoViolations(page);
     }
@@ -31,7 +31,7 @@ test.describe('accessibility', () => {
     // Scan lists with content, not only their empty states (a project card once failed contrast).
     const projectId = await createProject(page, 'A11y list');
     await createTask(page, projectId, 'Listed task', { priority: 'high' });
-    for (const path of ['/dashboard', '/projects', '/notifications', '/settings/profile', '/settings/notifications', '/settings/organization']) {
+    for (const path of ['/dashboard', '/admin', '/projects', '/notifications', '/settings/profile', '/settings/notifications', '/settings/organization']) {
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expectNoViolations(page);

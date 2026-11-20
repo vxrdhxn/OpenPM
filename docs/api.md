@@ -10,7 +10,7 @@ the same spec at `/docs`.
 
 | | |
 | --- | --- |
-| **Sign in** | `POST /api/auth/login` `{ email, password }` sets an httpOnly `auth_token` cookie (SameSite=Strict, Secure in production) and returns `{ token }`. Sign-up and invite acceptance sign you in the same way. |
+| **Sign in** | `POST /api/auth/login` `{ email, password, as? }` sets an httpOnly `auth_token` cookie (SameSite=Strict, Secure in production) and returns `{ token, role }`. `as` is `member` (the default) or `admin`: the admin sign-in lets in only owners and admins, and answers anyone else (with the right password) `403` without a session. Sign-up and invite acceptance sign you in the same way. |
 | **Send it** | Browsers send the cookie automatically. Other clients send `Authorization: Bearer <token>`. Tokens in the URL are never accepted. |
 | **Lifetime** | 24 hours. There is no refresh token: sign in again. |
 | **Every request** | The token's signature and expiry are checked, and then the session itself: the user still exists and is active, and `token_version` still matches. So a demotion, a removal or a revoked session takes effect on the next request, not when the token expires. The current role always comes from the database. |

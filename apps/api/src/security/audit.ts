@@ -15,6 +15,8 @@ export const AUDIT_ACTIONS = [
   'auth.registered', // created the workspace (and its first account)
   'auth.login',
   'auth.login_failed', // wrong password for an existing, active account
+  'auth.admin_login', // signed in through the admin sign-in
+  'auth.admin_login_denied', // right password, but not an admin, at the admin sign-in
   'auth.logout',
   'auth.password_changed',
   'auth.password_change_failed', // wrong current password when changing it

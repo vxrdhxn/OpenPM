@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, BellRing, FolderKanban, LayoutDashboard, Menu, Search, Settings, ShieldCheck, User, X } from 'lucide-react';
+import { Activity, BellRing, FolderKanban, Gauge, LayoutDashboard, Menu, Search, Settings, ShieldCheck, User, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
 import { gradientFor } from '@/lib/palette';
@@ -52,6 +52,7 @@ function Nav({ me, pathname, projects }: { me: Me; pathname: string; projects: S
       {item('/projects', 'Projects', FolderKanban)}
       {item('/activity', 'Activity', Activity)}
       <NotificationsLink userId={me.id} active={isActive('/notifications')} />
+      {isManager && item('/admin', 'Admin', Gauge)}
 
       {projects.length > 0 && (
         <>

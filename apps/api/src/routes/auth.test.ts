@@ -174,6 +174,51 @@ describe('Auth routes', () => {
     });
   });
 
+  describe('admin sign-in', () => {
+    const adminLogin = (password = 'password123') =>
+      app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'a@b.com', password, as: 'admin' } });
+    const account = async (role: string) => {
+      const hash = await bcrypt.hash('password123', 4);
+      vi.mocked(db.query).mockResolvedValue([{ id: 'u1', org_id: 'o1', role, password_hash: hash, token_version: 0 }]);
+    };
+
+    it.each(['owner', 'admin'])('lets an %s in, and says so in the response', async (role) => {
+      await account(role);
+      const res = await adminLogin();
+      expect(res.statusCode).toBe(200);
+      expect(res.json().role).toBe(role);
+      expect(res.headers['set-cookie']).toBeDefined();
+      const audited = vi.mocked(db.query).mock.calls.some((c) => sqlOf(c).includes('audit') && JSON.stringify(c[1]).includes('auth.admin_login'));
+      expect(audited).toBe(true);
+    });
+
+    it.each(['member', 'viewer'])('refuses a %s with the right password: 403, and no session', async (role) => {
+      await account(role);
+      const res = await adminLogin();
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toMatch(/not a workspace admin/);
+      expect(res.headers['set-cookie']).toBeUndefined();
+      const denied = vi.mocked(db.query).mock.calls.some((c) => JSON.stringify(c[1]).includes('auth.admin_login_denied'));
+      expect(denied).toBe(true);
+    });
+
+    it('gives a wrong password the same 401 as the member sign-in (no hint about the role)', async () => {
+      await account('member');
+      const res = await adminLogin('wrong-password');
+      expect(res.statusCode).toBe(401);
+      expect(res.json().error).toBe('Invalid credentials');
+    });
+
+    it('treats a missing `as` as the member sign-in, and rejects unknown doors', async () => {
+      await account('viewer');
+      const member = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'a@b.com', password: 'password123' } });
+      expect(member.statusCode).toBe(200);
+      expect(member.json().role).toBe('viewer');
+      const bogus = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'a@b.com', password: 'password123', as: 'root' } });
+      expect(bogus.statusCode).toBe(400);
+    });
+  });
+
   describe('login failure metrics', () => {
     const attempt = (email: string, password: string) =>
       app.inject({ method: 'POST', url: '/auth/login', payload: { email, password } });

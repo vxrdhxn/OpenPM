@@ -27,6 +27,8 @@ export const AUDIT_FILTERS: { label: string; options: { value: string; label: st
     options: [
       { value: 'auth.login', label: 'Signed in' },
       { value: 'auth.login_failed', label: 'Failed sign-in' },
+      { value: 'auth.admin_login', label: 'Admin sign-in' },
+      { value: 'auth.admin_login_denied', label: 'Admin sign-in refused' },
       { value: 'auth.logout', label: 'Signed out' },
       { value: 'auth.password_changed', label: 'Password changed' },
       { value: 'auth.password_change_failed', label: 'Failed password change' },
@@ -74,6 +76,10 @@ export function describeAudit(entry: Pick<AuditEntry, 'action' | 'actor_name' | 
       return `${who} created the workspace`;
     case 'auth.login':
       return `${who} signed in`;
+    case 'auth.admin_login':
+      return `${who} signed in as an admin`;
+    case 'auth.admin_login_denied':
+      return `${who} tried the admin sign-in without admin rights`;
     case 'auth.login_failed':
       return `Failed sign-in to ${target}'s account (wrong password)`;
     case 'auth.logout':
@@ -121,7 +127,7 @@ export function describeAudit(entry: Pick<AuditEntry, 'action' | 'actor_name' | 
 
 /** Failed sign-ins and password changes, and ownership or access removals stand out in the list. */
 export const isWarning = (action: string) =>
-  action === 'auth.login_failed' || action === 'auth.password_change_failed' || action === 'member.removed' || action === 'member.ownership_transferred' || action === 'project.deleted';
+  action === 'auth.login_failed' || action === 'auth.admin_login_denied' || action === 'auth.password_change_failed' || action === 'member.removed' || action === 'member.ownership_transferred' || action === 'project.deleted';
 
 /** "Firefox on Windows"-style summary of a user agent, enough to spot an unfamiliar device. */
 export function deviceOf(userAgent: string | null): string {

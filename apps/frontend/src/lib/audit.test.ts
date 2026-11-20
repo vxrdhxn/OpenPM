@@ -12,6 +12,8 @@ describe('describeAudit', () => {
   it.each([
     [entry('auth.login'), 'Ada signed in'],
     [entry('auth.login_failed'), "Failed sign-in to Bo's account (wrong password)"],
+    [entry('auth.admin_login'), 'Ada signed in as an admin'],
+    [entry('auth.admin_login_denied'), 'Ada tried the admin sign-in without admin rights'],
     [entry('auth.password_change_failed'), 'Ada tried to change their password with a wrong current password'],
     [entry('member.role_changed', { from: 'member', to: 'admin' }), "Ada changed Bo's role from Member to Admin"],
     [entry('member.ownership_transferred'), 'Ada transferred ownership to Bo'],
@@ -35,13 +37,15 @@ describe('AUDIT_FILTERS', () => {
   it('names every action once', () => {
     const values = AUDIT_FILTERS.flatMap((g) => g.options.map((o) => o.value));
     expect(new Set(values).size).toBe(values.length);
-    expect(values).toHaveLength(21);
+    expect(values).toHaveLength(23);
   });
 });
 
 describe('isWarning', () => {
   it('flags failed sign-ins, not ordinary ones', () => {
     expect(isWarning('auth.login_failed')).toBe(true);
+    expect(isWarning('auth.admin_login_denied')).toBe(true);
+    expect(isWarning('auth.admin_login')).toBe(false);
     expect(isWarning('auth.login')).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ import { TOKEN_PATTERN } from '../security/tokens';
 import { auditBestEffort, originOf } from '../security/audit';
 import * as authService from '../services/auth';
 import { signupNeedsVerification } from '../config';
-import type { Registration } from '../services/auth';
+import type { LoginDoor, Registration } from '../services/auth';
 
 /** /api/auth: sign-up, sign-in, sign-out and password reset. Rules: services/auth.ts. */
 
@@ -62,7 +62,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(201).send({ token });
   });
 
-  fastify.post<{ Body: { email: string; password: string } }>('/login', {
+  // `as: 'admin'` is the admin sign-in: it lets in only workspace owners and admins (services/auth.ts).
+  fastify.post<{ Body: { email: string; password: string; as?: LoginDoor } }>('/login', {
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -71,14 +72,17 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           email: { type: 'string', format: 'email' },
           password: { type: 'string' },
+          as: { type: 'string', enum: ['member', 'admin'] },
         },
         additionalProperties: false,
       },
     },
   }, async (request, reply) => {
-    const claims = await authService.login(request.body.email, request.body.password, originOf(request), request.log);
+    const { email, password, as: door = 'member' } = request.body;
+    const claims = await authService.login(email, password, originOf(request), request.log, door);
     const token = issueSession(fastify, reply, claims);
-    return reply.send({ token });
+    // The role tells the app where to go next (the admin area or the dashboard).
+    return reply.send({ token, role: claims.role });
   });
 
   // Current user, from the verified token (role as stored now; see plugins/auth.ts).

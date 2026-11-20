@@ -159,7 +159,21 @@ const SLUG_TAKEN_SINCE = 'That organization URL was taken after you signed up. S
  * Check credentials and return the claims for a new session. One answer (401) and one metric/log
  * reason for both "no such user" and "wrong password"; the email address is never recorded.
  */
-export async function login(rawEmail: string, password: string, origin: RequestOrigin, log: FastifyBaseLogger): Promise<Required<SessionClaims>> {
+/** Which sign-in door was used: the member door lets everyone in, the admin door only owners and admins. */
+export type LoginDoor = 'member' | 'admin';
+
+/** The roles that may use the admin sign-in (and the admin area). */
+export const ADMIN_ROLES = ['owner', 'admin'] as const;
+
+export const NOT_AN_ADMIN = 'This account is not a workspace admin. Sign in as a member instead.';
+
+export async function login(
+  rawEmail: string,
+  password: string,
+  origin: RequestOrigin,
+  log: FastifyBaseLogger,
+  door: LoginDoor = 'member',
+): Promise<Required<SessionClaims>> {
   const user = await accounts.findForLogin(rawEmail.toLowerCase().trim());
 
   // Always one full bcrypt comparison (against a dummy hash for an unknown email), so the response
@@ -177,7 +191,16 @@ export async function login(rawEmail: string, password: string, origin: RequestO
     throw new AppError(401, 'Invalid credentials');
   }
 
-  await auditBestEffort(origin, { orgId: user.org_id, actorId: user.id, action: 'auth.login', targetType: 'user', targetId: user.id }, log);
+  // The admin door checks the role only after the password: a stranger learns nothing about whether
+  // an account is an admin. A member who knocks on it gets no session at all.
+  if (door === 'admin' && !(ADMIN_ROLES as readonly string[]).includes(user.role)) {
+    await auditBestEffort(origin, { orgId: user.org_id, actorId: user.id, action: 'auth.admin_login_denied', targetType: 'user', targetId: user.id }, log);
+    authFailuresTotal.inc({ reason: 'not_admin' });
+    log.warn({ event: 'login_failed', reason: 'not_admin', user_id: user.id }, 'Admin sign-in refused for a non-admin account');
+    throw new AppError(403, NOT_AN_ADMIN);
+  }
+
+  await auditBestEffort(origin, { orgId: user.org_id, actorId: user.id, action: door === 'admin' ? 'auth.admin_login' : 'auth.login', targetType: 'user', targetId: user.id }, log);
   return { user_id: user.id, org_id: user.org_id, role: user.role, tv: user.token_version ?? 0 };
 }
 

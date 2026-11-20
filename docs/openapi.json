@@ -144,6 +144,13 @@
                   },
                   "password": {
                     "type": "string"
+                  },
+                  "as": {
+                    "type": "string",
+                    "enum": [
+                      "member",
+                      "admin"
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -1981,6 +1988,8 @@
                 "auth.registered",
                 "auth.login",
                 "auth.login_failed",
+                "auth.admin_login",
+                "auth.admin_login_denied",
                 "auth.logout",
                 "auth.password_changed",
                 "auth.password_change_failed",

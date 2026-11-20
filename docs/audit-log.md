@@ -17,6 +17,8 @@ on projects and tasks.
 | --- | --- | --- | --- |
 | `auth.registered` | Someone creates a workspace (its first account) | them | the organization |
 | `auth.login` | A sign-in succeeds | them | them |
+| `auth.admin_login` | A sign-in through the **admin** sign-in succeeds (owners and admins only) | them | them |
+| `auth.admin_login_denied` | The right password at the admin sign-in, for an account that is not an owner or admin: no session is issued | them | them |
 | `auth.login_failed` | A wrong password for an **existing, active** account | none | the account |
 | `auth.logout` | Sign-out (ends every session of that user) | them | them |
 | `auth.password_changed` | From the profile page (needs the current password) | them | them |

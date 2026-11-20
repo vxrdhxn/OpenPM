@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, ArrowRight, Bell, BellRing, CornerDownLeft, FolderKanban, LayoutDashboard, Search, Settings, ShieldCheck, User } from 'lucide-react';
+import { Activity, ArrowRight, Bell, BellRing, CornerDownLeft, FolderKanban, Gauge, LayoutDashboard, Search, Settings, ShieldCheck, User } from 'lucide-react';
 import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
 import { gradientFor } from '@/lib/palette';
@@ -32,6 +32,7 @@ const PAGES = (isManager: boolean): Item[] => [
   { id: 'p-notif-settings', label: 'Notification settings', hint: 'Settings', href: '/settings/notifications', icon: <BellRing className="w-4 h-4" /> },
   ...(isManager
     ? [
+        { id: 'p-admin', label: 'Admin', hint: 'Page', href: '/admin', icon: <Gauge className="w-4 h-4" /> },
         { id: 'p-org', label: 'Organization', hint: 'Settings', href: '/settings/organization', icon: <Settings className="w-4 h-4" /> },
         { id: 'p-security', label: 'Security log', hint: 'Settings', href: '/settings/security', icon: <ShieldCheck className="w-4 h-4" /> },
       ]
