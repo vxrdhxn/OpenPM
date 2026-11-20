@@ -18,6 +18,7 @@ import {
   Users,
 } from 'lucide-react';
 import Brand from '@/components/Brand';
+import ThreeScene from '@/components/three/ThreeScene';
 
 export const metadata = { title: 'OpenPM · Open-source project management' };
 
@@ -149,26 +150,47 @@ export default function Home() {
 
       <main className="relative z-10">
         {/* Hero */}
-        <section className="mx-auto max-w-7xl px-4 sm:px-8 pt-12 sm:pt-20 pb-16 text-center">
-          <p className="inline-flex items-center gap-2 rounded-full border border-indigo-200 dark:border-indigo-500/30 bg-white/70 dark:bg-slate-900/60 px-4 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 shadow-sm backdrop-blur animate-fade-up">
-            <Sparkles className="w-4 h-4" aria-hidden="true" /> Open source · Self-hosted · Real-time
-          </p>
-          <h1 className="mx-auto mt-6 max-w-4xl font-display text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 dark:text-white animate-fade-up [animation-delay:80ms]">
-            Project management your team will <span className="gradient-text">actually love</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg sm:text-xl text-slate-600 dark:text-slate-300 animate-fade-up [animation-delay:160ms]">
-            Live Kanban boards, comments, notifications and a dashboard that tells you what matters. Runs on your own servers, from a laptop to Kubernetes.
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3 animate-fade-up [animation-delay:240ms]">
-            <Link href="/register" className="btn-compact px-6 py-3 text-base group">
-              Create your workspace
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-            </Link>
-            <Link href="/login" className="btn-secondary px-6 py-3 text-base">I already have an account</Link>
+        <section className="mx-auto grid max-w-7xl items-center gap-4 px-4 sm:px-8 pt-8 sm:pt-14 pb-8 lg:grid-cols-[1.05fr_1fr] lg:gap-0">
+          <div className="text-center lg:text-left">
+            <p className="inline-flex items-center gap-2 rounded-full border border-indigo-200 dark:border-indigo-500/30 bg-white/70 dark:bg-slate-900/60 px-4 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 shadow-sm backdrop-blur animate-fade-up">
+              <Sparkles className="w-4 h-4" aria-hidden="true" /> Open source · Self-hosted · Real-time
+            </p>
+            <h1 className="mx-auto lg:mx-0 mt-6 max-w-3xl font-display text-4xl sm:text-6xl xl:text-7xl font-extrabold tracking-tight text-slate-900 dark:text-white animate-fade-up [animation-delay:80ms]">
+              Project management your team will <span className="gradient-text">actually love</span>
+            </h1>
+            <p className="mx-auto lg:mx-0 mt-6 max-w-xl text-lg sm:text-xl text-slate-600 dark:text-slate-300 animate-fade-up [animation-delay:160ms]">
+              Live Kanban boards, comments, notifications and a dashboard that tells you what matters. Runs on your own servers, from a laptop to Kubernetes.
+            </p>
+            <div className="mt-10 flex flex-wrap items-center justify-center lg:justify-start gap-3 animate-fade-up [animation-delay:240ms]">
+              <Link href="/register" className="btn-compact px-6 py-3 text-base group">
+                Create your workspace
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+              </Link>
+              <Link href="/login" className="btn-secondary px-6 py-3 text-base">I already have an account</Link>
+            </div>
+            <dl className="mt-10 flex flex-wrap justify-center lg:justify-start gap-x-8 gap-y-3 text-sm animate-fade-up [animation-delay:320ms]">
+              {[
+                ['Real-time', 'every change, live'],
+                ['WCAG 2.1 AA', 'checked on every build'],
+                ['AGPL-3.0', 'yours to run'],
+              ].map(([k, v]) => (
+                <div key={k}>
+                  <dt className="font-display text-base font-bold text-slate-900 dark:text-white">{k}</dt>
+                  <dd className="text-slate-600 dark:text-slate-400">{v}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <div className="mt-16 sm:mt-20 animate-fade-up [animation-delay:320ms]">
-            <BoardPreview />
-          </div>
+          <ThreeScene scene="kanban" className="h-[22rem] sm:h-[30rem] lg:h-[40rem] -mx-4 sm:mx-0 lg:-mr-6" />
+        </section>
+
+        {/* The real board, in miniature */}
+        <section aria-labelledby="preview-title" className="mx-auto max-w-7xl px-4 sm:px-8 pt-8 pb-16 text-center">
+          <p className="eyebrow text-indigo-700 dark:text-indigo-300">See it in action</p>
+          <h2 id="preview-title" className="mt-3 mb-14 font-display text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
+            A board that moves as fast as your team
+          </h2>
+          <BoardPreview />
         </section>
 
         {/* Features */}

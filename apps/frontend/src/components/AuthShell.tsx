@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { CheckCircle2, KanbanSquare, Radio, ShieldCheck, Zap } from 'lucide-react';
 import Brand from './Brand';
+import ThreeScene from './three/ThreeScene';
 
 const FEATURES = [
   { icon: Radio, title: 'Live boards', text: 'Every move shows up for your whole team, instantly.' },
@@ -66,15 +67,22 @@ export default function AuthShell({ children, wide = false }: { children: React.
         </Link>
 
         <div className="relative">
+          <ThreeScene
+            scene="gem"
+            tone="brand"
+            className="-mx-12 -mt-6 h-[19rem] xl:h-[23rem]"
+            fallback={
+              <div className="mb-10">
+                <MiniBoard />
+              </div>
+            }
+          />
           <h2 className="font-display text-4xl xl:text-5xl font-extrabold leading-[1.1] tracking-tight">
             Plan it. Track it.
             <br />
             <span className="text-white/80">Ship it together.</span>
           </h2>
           <p className="mt-4 max-w-md text-lg text-white/90">The open-source project management platform your team will actually enjoy using.</p>
-          <div className="mt-10">
-            <MiniBoard />
-          </div>
         </div>
 
         <ul className="relative grid gap-4 xl:grid-cols-3">

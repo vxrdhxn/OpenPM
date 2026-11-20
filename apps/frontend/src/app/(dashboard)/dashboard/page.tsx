@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import ThreeScene from '@/components/three/ThreeScene';
 import { useEffect, useState } from 'react';
-import { Activity, AlarmClock, ArrowRight, CalendarClock, CheckCircle2, Clock3, FolderKanban, ListTodo, Rocket, Sparkles, TrendingUp, UserPlus } from 'lucide-react';
+import { Activity, AlarmClock, ArrowRight, CalendarClock, CheckCircle2, Clock3, FolderKanban, ListTodo, Sparkles, TrendingUp, UserPlus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
 import type { ActivityEntry } from '@/lib/activity';
@@ -141,7 +142,7 @@ export default function Dashboard() {
         >
           <div aria-hidden="true" className="absolute inset-0 bg-dots opacity-20 [mask-image:linear-gradient(to_left,black,transparent)]" />
           <div aria-hidden="true" className="absolute -right-10 -bottom-16 w-64 h-64 rounded-full bg-white/10 blur-2xl animate-drift" />
-          <Rocket aria-hidden="true" className="absolute right-8 top-8 hidden sm:block w-24 h-24 text-white/20 animate-float" />
+          <ThreeScene scene="gem" tone="brand" className="!absolute -right-16 -top-10 hidden lg:block w-[26rem] h-[26rem]" />
           <div className="relative max-w-2xl">
             <p className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold ring-1 ring-white/25">
               <Sparkles className="w-3.5 h-3.5" aria-hidden="true" /> Getting started
