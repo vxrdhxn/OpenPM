@@ -27,18 +27,18 @@ export const isOverdue = (t: Pick<TaskRow, 'due_date' | 'status'>, now = Date.no
  */
 export default function TaskRows({ tasks, empty, showAssignee = false }: { tasks: TaskRow[]; empty: string; showAssignee?: boolean }) {
   if (tasks.length === 0) {
-    return <p className="py-6 text-center text-sm text-slate-500 rounded-xl bg-slate-50 dark:bg-slate-800/40">{empty}</p>;
+    return <p className="py-6 text-center text-sm text-slate-600 dark:text-slate-400 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">{empty}</p>;
   }
 
   return (
-    <ul className="-mx-2 stagger">
+    <ul className="-mx-2 stagger divide-y divide-slate-200 dark:divide-slate-800">
       {tasks.map((t, i) => {
         const overdue = isOverdue(t);
         return (
           <li
             key={t.id}
             style={{ '--i': i } as React.CSSProperties}
-            className="group relative flex items-start justify-between gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
+            className="group relative flex items-start justify-between gap-3 px-2 py-3.5 transition-all duration-300 hover:pl-4 hover:bg-white/70 dark:hover:bg-slate-900/70"
           >
             <PriorityDot priority={t.priority} className="mt-1.5" />
             <div className="min-w-0 flex-1">

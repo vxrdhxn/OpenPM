@@ -399,3 +399,14 @@ html[data-xray] body {
   from { transform: translateY(110%); }
   to { transform: none; }
 }
+
+/* Page titles (DisplayTitle): the words rise as the page opens, no scrolling needed. */
+.title-rise .word > span {
+  transform: none;
+  animation: word-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--w, 0) * 60ms + 80ms);
+}
+@keyframes word-up {
+  from { transform: translateY(110%); }
+  to { transform: none; }
+}

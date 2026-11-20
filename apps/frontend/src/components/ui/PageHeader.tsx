@@ -1,6 +1,9 @@
+import DisplayTitle from './DisplayTitle';
+
 /**
- * The top of every signed-in page: an optional eyebrow and icon, the one h1, a subtitle and the
- * page's main actions.
+ * The top of every signed-in page, in the home page's voice: a mono eyebrow, a big display title
+ * with a red full stop (the page's one h1), a subtitle, and the page's main actions.
+ * `title` is text; pages that need something richer render their own heading.
  */
 export default function PageHeader({
   title,
@@ -9,9 +12,9 @@ export default function PageHeader({
   icon,
   actions,
   children,
-  className = 'mb-8',
+  className = 'mb-10',
 }: {
-  title: React.ReactNode;
+  title: string;
   subtitle?: React.ReactNode;
   eyebrow?: React.ReactNode;
   icon?: React.ReactNode;
@@ -21,24 +24,23 @@ export default function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-wrap gap-4 items-end justify-between ${className}`}>
-      <div className="flex items-start gap-4 min-w-0">
-        {icon && (
-          <span
-            aria-hidden="true"
-            className="hidden sm:inline-flex icon-tile w-12 h-12 rounded-2xl bg-brand text-white shadow-glow [&>svg]:w-6 [&>svg]:h-6"
-          >
-            {icon}
-          </span>
+    <div className={`flex flex-wrap gap-6 items-end justify-between ${className}`}>
+      <div className="min-w-0">
+        {(eyebrow || icon) && (
+          <p className="eyebrow mb-3 flex items-center gap-2 animate-fade-in">
+            {icon && (
+              <span aria-hidden="true" className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink text-white dark:bg-paper dark:text-ink [&>svg]:h-3 [&>svg]:w-3">
+                {icon}
+              </span>
+            )}
+            {eyebrow}
+          </p>
         )}
-        <div className="min-w-0">
-          {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}
-          <h1 className="page-title break-words">{title}</h1>
-          {subtitle && <p className="page-subtitle">{subtitle}</p>}
-          {children}
-        </div>
+        <DisplayTitle text={title} className="text-[clamp(2.6rem,5.5vw,4.75rem)] leading-[0.95]" />
+        {subtitle && <p className="mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-400 animate-fade-up [animation-delay:200ms]">{subtitle}</p>}
+        {children}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2 animate-fade-up [animation-delay:250ms]">{actions}</div>}
     </div>
   );
 }

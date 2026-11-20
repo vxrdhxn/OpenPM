@@ -105,9 +105,9 @@ export function columnsScene(ctx: SceneContext): SceneHandle {
 
   return {
     fit(aspect) {
-      const d = aspect < 2 ? 5.6 * (2 / aspect) : 5.6;
-      camera.position.set(0, 2.6, d);
-      camera.lookAt(0, 0.8, 0);
+      const d = aspect < 2 ? 6.4 * (2 / aspect) : 6.4;
+      camera.position.set(0, 2.4, d);
+      camera.lookAt(0, 1.05, 0);
     },
     setData,
     update(t, pointer) {

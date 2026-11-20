@@ -13,7 +13,6 @@ import type { ProjectFields } from '@/components/ProjectDialog';
 import Avatar from '@/components/ui/Avatar';
 import { PriorityChip } from '@/components/TaskBadges';
 import { isOverdue } from '@/components/dashboard/TaskRows';
-import { gradientFor } from '@/lib/palette';
 import BoardFilters, { EMPTY_BOARD_FILTERS, isFiltering, type BoardFilterValues } from '@/components/BoardFilters';
 import { buildQuery } from '@/lib/query';
 import type { Member } from '@/lib/members';
@@ -24,6 +23,7 @@ import Dialog from '@/components/ui/Dialog';
 import { messageOf, useToast } from '@/components/ui/feedback';
 import { ErrorBlock } from '@/components/ui/states';
 import ThreeScene from '@/components/three/ThreeScene';
+import DisplayTitle from '@/components/ui/DisplayTitle';
 import { EMPTY_DRAFT, STATUSES, newTaskBody, priorityLabel, statusLabel, type TaskDraft } from '@/lib/tasks';
 
 // The dialogs are loaded when first opened, not with the board.
@@ -334,38 +334,36 @@ export default function KanbanBoard() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full">
-      <div className="relative px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl flex flex-wrap gap-4 justify-between items-center shrink-0">
+      <div className="relative px-4 sm:px-10 pt-6 sm:pt-10 pb-6 flex flex-wrap gap-6 justify-between items-end shrink-0">
         <div className="min-w-0 flex items-start gap-4">
-          <span
-            aria-hidden="true"
-            className={`hidden sm:inline-flex icon-tile w-12 h-12 rounded-2xl bg-gradient-to-br ${gradientFor(params.id)} text-white font-display text-xl font-bold shadow-lg`}
-          >
-            {project ? [...project.name.trim()][0]?.toUpperCase() : ''}
-          </span>
           <div className="min-w-0">
-          <nav aria-label="Breadcrumb" className="mb-1">
-            <ol className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+          <nav aria-label="Breadcrumb" className="mb-3 animate-fade-in">
+            <ol className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.12em] text-slate-600 dark:text-slate-400">
               <li>
-                <Link href="/projects" className="hover:text-indigo-700 dark:hover:text-indigo-300">All boards</Link>
+                <Link href="/projects" className="link-draw hover:text-slate-900 dark:hover:text-white">All boards</Link>
               </li>
               <li aria-hidden="true"><ChevronRight className="w-3 h-3" /></li>
               <li aria-current="page" className="truncate max-w-[16rem]">{project?.name ?? '…'}</li>
             </ol>
           </nav>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="page-title break-words">
-              {project?.name ?? <span className="skeleton inline-block h-8 w-48 align-middle" aria-label="Loading project" />}
-            </h1>
+            {project ? (
+              <DisplayTitle text={project.name} className="text-[clamp(2.4rem,5vw,4.25rem)] leading-[0.95]" />
+            ) : (
+              <h1 className="page-title">
+                <span className="skeleton inline-block h-12 w-72 align-middle" aria-label="Loading project" />
+              </h1>
+            )}
             {project?.visibility === 'private' && (
               <span className="chip py-1 text-amber-800 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40">
                 <Lock className="w-3 h-3" aria-hidden="true" /> Private
               </span>
             )}
             {isConnected ? (
-              <span className="chip py-1 text-emerald-800 bg-emerald-50 ring-1 ring-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:ring-emerald-500/30">
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 font-mono text-xs text-slate-700 dark:text-slate-300">
                 <span aria-hidden="true" className="relative flex w-2 h-2">
-                  <span className="absolute inset-0 rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                  <span className="relative w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="absolute inset-0 rounded-full bg-accent-500 opacity-75 animate-ping" />
+                  <span className="relative w-2 h-2 rounded-full bg-accent-500" />
                 </span>
                 Live
               </span>
@@ -373,14 +371,14 @@ export default function KanbanBoard() {
               <span className="chip py-1 text-slate-700 bg-slate-100 dark:text-slate-300 dark:bg-slate-800"><AlertCircle className="w-3 h-3" aria-hidden="true" /> Disconnected</span>
             )}
           </div>
-          {project?.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-3xl">{project.description}</p>}
+          {project?.description && <p className="mt-4 max-w-2xl text-lg text-slate-600 dark:text-slate-400 animate-fade-up [animation-delay:200ms]">{project.description}</p>}
           </div>
         </div>
         {/* The board in 3D: one bar per column, as tall as its share of the tasks (live). */}
         <ThreeScene
           scene="columns"
           data={{ counts: COLUMNS.map((c) => totals[c.id] ?? tasks[c.id]?.length ?? 0) }}
-          className="hidden xl:block ml-auto -my-6 h-36 w-80"
+          className="hidden xl:block ml-auto -my-8 h-40 w-80"
         />
         {(canEdit || project?.visibility === 'private') && (
           <div className="flex flex-wrap gap-2">
@@ -419,23 +417,26 @@ export default function KanbanBoard() {
 
       {/* Focusable so keyboard users can scroll the columns sideways even when no card is focusable
           (an empty board), as WCAG asks of scrollable regions. */}
-      <div className="flex-1 overflow-x-auto p-4 sm:p-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500" tabIndex={0} role="region" aria-label="Board columns">
+      <div className="flex-1 overflow-x-auto px-4 sm:px-10 pt-4 pb-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500" tabIndex={0} role="region" aria-label="Board columns">
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-5 h-full items-start stagger">
+          <div className="flex gap-6 h-full items-start stagger">
             {COLUMNS.map((col, colIndex) => (
               <section
                 key={col.id}
                 aria-label={col.title}
                 style={{ '--i': colIndex } as React.CSSProperties}
-                className="w-72 sm:w-80 shrink-0 flex flex-col max-h-full rounded-2xl bg-slate-100/80 dark:bg-slate-900/50 ring-1 ring-slate-200/80 dark:ring-slate-800 backdrop-blur overflow-hidden"
+                className="group/col w-72 sm:w-80 shrink-0 flex flex-col max-h-full"
               >
-                <div aria-hidden="true" className={`h-1 bg-gradient-to-r ${col.accent.bar}`} />
-                <div className="flex items-center gap-2 px-4 pt-3 pb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  <span aria-hidden="true" className={`w-2 h-2 rounded-full ${col.accent.dot}`} />
-                  {col.title}
-                  <span className="ml-auto min-w-[1.5rem] rounded-full bg-white dark:bg-slate-800 px-2 py-0.5 text-center text-xs font-medium text-slate-600 dark:text-slate-300 shadow-sm tabular-nums">
-                    {totals[col.id] ?? tasks[col.id]?.length ?? 0}
-                  </span>
+                <div className="relative border-t border-slate-300 dark:border-slate-700 pt-3 pb-4">
+                  <span aria-hidden="true" className={`absolute -top-px left-0 h-px w-10 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/col:w-full ${col.accent.dot}`} />
+                  <div className="flex items-baseline gap-3">
+                    <span aria-hidden="true" className="font-mono text-xs text-slate-500">{String(colIndex + 1).padStart(2, '0')}</span>
+                    <h2 className="font-display text-2xl font-medium tracking-[-0.03em] text-slate-900 dark:text-white">{col.title}</h2>
+                    <span className="ml-auto font-mono text-xs text-slate-600 dark:text-slate-400 tabular-nums">
+                      {String(totals[col.id] ?? tasks[col.id]?.length ?? 0).padStart(2, '0')}
+                      <span className="sr-only"> tasks</span>
+                    </span>
+                  </div>
                 </div>
                 
                 <Droppable droppableId={col.id}>
@@ -443,11 +444,11 @@ export default function KanbanBoard() {
                     <div 
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex-1 overflow-y-auto px-2.5 pb-2.5 pt-1 mx-1 mb-1 rounded-xl transition-all duration-200 ${snapshot.isDraggingOver ? `${col.accent.over} ring-2 ring-dashed` : ''}`}
+                      className={`flex-1 overflow-y-auto p-2 rounded-2xl transition-all duration-300 ${snapshot.isDraggingOver ? `${col.accent.over} ring-2 ring-dashed` : 'bg-slate-100/70 dark:bg-slate-900/50'}`}
                       style={{ minHeight: '150px' }}
                     >
                       {tasks[col.id]?.length === 0 && !snapshot.isDraggingOver && (
-                        <p className="mt-2 rounded-xl border-2 border-dashed border-slate-300/80 dark:border-slate-700 px-3 py-6 text-center text-xs text-slate-600 dark:text-slate-400">
+                        <p className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-8 text-center font-mono text-xs text-slate-600 dark:text-slate-400">
                           {canEdit ? 'Drop tasks here' : 'No tasks'}
                         </p>
                       )}
@@ -462,12 +463,13 @@ export default function KanbanBoard() {
                               // contains another control (the drag handle).
                               onClick={() => setSelectedTaskId(task.id)}
                               style={provided.draggableProps.style}
-                              className={`relative bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border mb-2.5 group cursor-pointer focus-within:ring-2 focus-within:ring-indigo-500 ${
+                              className={`relative bg-white dark:bg-slate-800/80 p-4 rounded-xl border mb-2 group cursor-pointer focus-within:ring-4 focus-within:ring-accent-500/30 ${
                                 snapshot.isDragging
-                                  ? 'shadow-2xl border-indigo-300 dark:border-indigo-500 ring-2 ring-indigo-500/40'
-                                  : 'shadow-soft border-slate-200/80 dark:border-slate-700/80 hover:shadow-lift hover:border-indigo-200 dark:hover:border-indigo-500/50'
-                              } transition-[box-shadow,border-color] duration-200`}
+                                  ? 'shadow-2xl border-slate-900 dark:border-slate-200'
+                                  : 'border-slate-200 dark:border-slate-700 hover:shadow-lift hover:border-slate-900 dark:hover:border-slate-300'
+                              } transition-[box-shadow,border-color] duration-300`}
                             >
+                              <span aria-hidden="true" className="absolute right-3 top-3 h-1.5 w-1.5 rounded-full bg-accent-500 scale-0 transition-transform duration-300 group-hover:scale-100" />
                               {/* The card tilts while it is carried (inner element: the library positions the outer one). */}
                               <div className={`transition-transform duration-200 ${snapshot.isDragging ? 'rotate-2 scale-[1.02]' : ''}`}>
                               <div className="flex items-start gap-2">
@@ -475,7 +477,7 @@ export default function KanbanBoard() {
                                   <GripVertical className="w-4 h-4" aria-hidden="true" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <h3 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">
+                                  <h3 className="pr-3 text-[15px] font-medium leading-snug text-slate-900 dark:text-slate-100">
                                     <button
                                       type="button"
                                       aria-label={`Open task: ${task.title}`}
@@ -483,7 +485,7 @@ export default function KanbanBoard() {
                                         e.stopPropagation();
                                         setSelectedTaskId(task.id);
                                       }}
-                                      className="text-left break-words outline-none group-hover:text-indigo-700 dark:group-hover:text-indigo-200 transition-colors"
+                                      className="text-left break-words outline-none"
                                     >
                                       {task.title}
                                     </button>
@@ -532,7 +534,7 @@ export default function KanbanBoard() {
                           type="button"
                           onClick={() => loadMore(col.id)}
                           disabled={loadingColumn === col.id}
-                          className="w-full mt-1 py-2 flex items-center justify-center gap-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50"
+                          className="w-full mt-1 py-2 flex items-center justify-center gap-1.5 font-mono text-xs text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 rounded-full transition-colors disabled:opacity-50"
                         >
                           {loadingColumn === col.id && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                           {loadingColumn === col.id
