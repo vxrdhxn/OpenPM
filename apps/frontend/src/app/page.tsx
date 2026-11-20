@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { ArrowUpRight, Check, CircleDot, KeyRound, LogIn, ShieldCheck } from 'lucide-react';
 import Brand from '@/components/Brand';
-import ThreeScene from '@/components/three/ThreeScene';
 import ArrowLink from '@/components/motion/ArrowLink';
 import ThemeToggle from '@/components/motion/ThemeToggle';
 import { Reveal, SplitReveal } from '@/components/motion/Reveal';
+import RotatingWord from '@/components/home/RotatingWord';
 import SiteHeader from '@/components/home/SiteHeader';
 import { CHAPTERS } from '@/components/home/chapters';
 import Rulers from '@/components/home/Rulers';
@@ -157,41 +157,54 @@ export default function Home() {
       <Rulers />
 
       <main id="main" className="relative">
-        {/* Hero */}
-        <section className="relative mx-auto grid min-h-[100svh] max-w-[1400px] grid-rows-[1fr_auto] px-5 sm:px-10 xl:px-[72px] pt-24 pb-10">
-          <ThreeScene scene="morph" className="!absolute right-0 top-10 h-[46svh] w-full sm:h-[60svh] lg:w-[64%] xl:right-0" />
-          <div className="relative flex items-start justify-between pt-6">
-            <p className="font-mono text-xs text-slate-600 dark:text-slate-400 animate-fade-in">
-              v0.1.0 · AGPL-3.0
-              <br />
-              Ideas. A plan. Done.
-              <br />
-              Scroll down to see how it works.
+        {/* Hero: the headline is the picture; its last word keeps changing. */}
+        <section className="relative mx-auto flex min-h-[100svh] max-w-[1400px] flex-col justify-between gap-12 px-5 sm:px-10 xl:px-[72px] pt-28 pb-10">
+          <p className="font-mono text-xs text-slate-600 dark:text-slate-400 animate-fade-in">
+            v0.1.0 · AGPL-3.0
+            <br />
+            Scroll down to see how it works.
+          </p>
+          <h1
+            aria-label="Plan closer. Ship together."
+            className="title-rise font-display text-[clamp(3.4rem,10vw,10.5rem)] font-medium leading-[0.88] tracking-[-0.055em] text-slate-900 dark:text-white"
+          >
+            <span aria-hidden="true" className="block">
+              <span className="word">
+                <span style={{ '--w': 0 } as React.CSSProperties}>Plan</span>
+              </span>{' '}
+              <span className="word">
+                <span style={{ '--w': 1 } as React.CSSProperties}>closer.</span>
+              </span>
+            </span>
+            <span aria-hidden="true" className="block">
+              <span className="word">
+                <span style={{ '--w': 2 } as React.CSSProperties}>Ship</span>
+              </span>{' '}
+              <span className="word">
+                <span style={{ '--w': 3 } as React.CSSProperties}>
+                  <RotatingWord words={['together', 'faster', 'on time', 'calmly', 'every week']} />
+                </span>
+              </span>
+            </span>
+          </h1>
+          <Reveal delay={350} className="grid items-end gap-8 lg:grid-cols-[1fr_auto]">
+            <p className="max-w-xl text-xl leading-relaxed text-slate-600 dark:text-slate-300">
+              Project management you run yourself. Live boards, comments, notifications and a dashboard, in one calm place.
             </p>
-          </div>
-          <div className="relative grid items-end gap-10 lg:grid-cols-[1.7fr_1fr]">
-            <SplitReveal
-              as="h1"
-              text="Plan closer. Ship together."
-              className="font-display text-[clamp(3.2rem,7.4vw,7.25rem)] font-medium leading-[0.92] tracking-[-0.05em] text-slate-900 dark:text-white"
-            />
-            <Reveal delay={350} className="pb-2">
-              <p className="max-w-md text-xl leading-relaxed text-slate-600 dark:text-slate-300">
-                Project management you run yourself. Live boards, comments, notifications and a dashboard, in one calm place.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
+            <div className="flex flex-col items-start gap-5 lg:items-end">
+              <div className="flex flex-wrap gap-3">
                 <ArrowLink href="/register">Create a workspace</ArrowLink>
                 <ArrowLink href="/#how" variant="outline">See how it works</ArrowLink>
               </div>
-              <p className="mt-6 inline-flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+              <p className="inline-flex items-center gap-2 rounded-full border border-slate-300 dark:border-slate-700 px-3 py-1 font-mono text-[11px] text-slate-600 dark:text-slate-400">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inset-0 rounded-full bg-accent-500 opacity-75 animate-ping" />
                   <span className="relative h-2 w-2 rounded-full bg-accent-500" />
                 </span>
                 real-time · self-hosted · open source
               </p>
-            </Reveal>
-          </div>
+            </div>
+          </Reveal>
         </section>
 
         {/* Statement and principles */}

@@ -410,3 +410,13 @@ html[data-xray] body {
   from { transform: translateY(110%); }
   to { transform: none; }
 }
+
+/* RotatingWord: the old word rolls up and out, the new one rolls in from below. */
+@keyframes word-out {
+  from { transform: none; opacity: 1; }
+  to { transform: translateY(-105%); opacity: 0; }
+}
+@keyframes word-in {
+  from { transform: translateY(105%); }
+  to { transform: none; }
+}
