@@ -52,9 +52,14 @@ interface Props {
   onClose: () => void;
   /** The task was saved or deleted here (the board refreshes; live events also arrive). */
   onChanged?: () => void;
+  /**
+   * Delete with undo: the board hides the task at once and sends the delete after a grace period
+   * (lib/pendingDelete.ts). Without it, the dialog deletes straight away.
+   */
+  onDelete?: (task: TaskSummary) => void;
 }
 
-export default function TaskDetailModal({ task, projectId, me, lastMessage = null, orgLabels = NO_LABELS, members = NO_MEMBERS, onClose, onChanged }: Props) {
+export default function TaskDetailModal({ task, projectId, me, lastMessage = null, orgLabels = NO_LABELS, members = NO_MEMBERS, onClose, onChanged, onDelete }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
   const role = me?.role ?? '';
@@ -120,7 +125,15 @@ export default function TaskDetailModal({ task, projectId, me, lastMessage = nul
   };
 
   const remove = async () => {
-    if (!(await confirm({ title: `Delete "${task.title}"?`, message: 'Its comments and attachments are deleted too. This cannot be undone.', confirmLabel: 'Delete task', destructive: true }))) return;
+    const message = onDelete
+      ? 'Its comments and attachments are deleted too. You can undo this for a few seconds.'
+      : 'Its comments and attachments are deleted too. This cannot be undone.';
+    if (!(await confirm({ title: `Delete "${task.title}"?`, message, confirmLabel: 'Delete task', destructive: true }))) return;
+    if (onDelete) {
+      onDelete(base);
+      onClose();
+      return;
+    }
     setDeleting(true);
     try {
       await api.delete(`/projects/${projectId}/tasks/${task.id}`);

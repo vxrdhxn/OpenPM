@@ -58,7 +58,10 @@ test.describe('core journey', () => {
     await expect(taskDialog).toBeVisible();
     await taskDialog.getByRole('button', { name: 'Delete' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Delete task' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Task deleted' })).toBeVisible();
+    // The card goes at once, with an Undo (errors.spec.ts covers undo and the delayed delete).
+    const deleted = page.getByRole('status').filter({ hasText: 'Deleted "Write the announcement"' });
+    await expect(deleted).toBeVisible();
+    await expect(deleted.getByRole('button', { name: 'Undo' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open task: Write the announcement' })).toHaveCount(0);
 
     await context.close();

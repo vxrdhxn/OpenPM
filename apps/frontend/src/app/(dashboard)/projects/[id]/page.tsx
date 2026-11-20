@@ -1,30 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMe } from '@/components/me';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
-import { Plus, GripVertical, AlertCircle, Pencil, Lock, Users, CalendarDays, ChevronRight, Loader2, Inbox } from 'lucide-react';
+import { Plus, GripVertical, AlertCircle, Pencil, Lock, Users, ChevronRight, Loader2, Inbox } from 'lucide-react';
 import type { CurrentUser } from '@/components/TaskDetailModal';
 import type { ProjectFields } from '@/components/ProjectDialog';
-import Avatar from '@/components/ui/Avatar';
-import { PriorityChip } from '@/components/TaskBadges';
-import { isOverdue } from '@/components/dashboard/TaskRows';
 import BoardFilters, { EMPTY_BOARD_FILTERS, isFiltering, type BoardFilterValues } from '@/components/BoardFilters';
 import { buildQuery } from '@/lib/query';
 import type { Member } from '@/lib/members';
 import { listLabels, type Label } from '@/lib/labels';
-import LabelChip from '@/components/LabelChip';
+import BoardCardContent from '@/components/BoardCardContent';
 import TaskForm from '@/components/TaskForm';
 import Dialog from '@/components/ui/Dialog';
 import { messageOf, useToast } from '@/components/ui/feedback';
+import { isPendingDelete, scheduleDelete } from '@/lib/pendingDelete';
 import { ErrorBlock } from '@/components/ui/states';
 import ThreeScene from '@/components/three/ThreeScene';
 import DisplayTitle from '@/components/ui/DisplayTitle';
-import { EMPTY_DRAFT, STATUSES, newTaskBody, priorityLabel, statusLabel, type TaskDraft } from '@/lib/tasks';
+import { EMPTY_DRAFT, STATUSES, newTaskBody, statusLabel, type TaskDraft } from '@/lib/tasks';
 
 // The dialogs are loaded when first opened, not with the board.
 const TaskDetailModal = dynamic(() => import('@/components/TaskDetailModal'), { ssr: false });
@@ -73,14 +72,12 @@ export default function KanbanBoard() {
   // Task detail dialog. Keep only the id and look the task up in the live board data, so the dialog
   // always shows the latest version and closes by itself if the task is deleted by someone else.
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [me, setMe] = useState<CurrentUser | null>(null);
+  // The signed-in user, in the shape the task dialog takes.
+  const signedIn = useMe();
+  const me = useMemo<CurrentUser | null>(() => (signedIn ? { user_id: signedIn.id, role: signedIn.role } : null), [signedIn]);
   const selectedTask = selectedTaskId
     ? Object.values(tasks).flat().find((t) => t.id === selectedTaskId) ?? null
     : null;
-
-  useEffect(() => {
-    api.get('/auth/me').then((data) => setMe(data.user)).catch(() => setMe(null));
-  }, []);
 
   // Filters. The text search is debounced; the selects apply at once.
   const [filters, setFilters] = useState<BoardFilterValues>(EMPTY_BOARD_FILTERS);
@@ -130,14 +127,19 @@ export default function KanbanBoard() {
           })}`
         )
         .then((data) => {
-          // Each column is its first page (see the API's BOARD_COLUMN_LIMIT).
+          // Each column is its first page (see the API's BOARD_COLUMN_LIMIT). A task deleted here whose
+          // delete is still in its undo window stays hidden, though the server still has it.
+          const visible = (list?: any[]) => (list || []).filter((t) => !isPendingDelete(`task:${t.id}`));
+          const hidden = (list?: any[]) => (list || []).length - visible(list).length;
           setTasks({
-            todo: data.todo || [],
-            in_progress: data.in_progress || [],
-            in_review: data.in_review || [],
-            done: data.done || []
+            todo: visible(data.todo),
+            in_progress: visible(data.in_progress),
+            in_review: visible(data.in_review),
+            done: visible(data.done),
           });
-          setTotals(data.totals ?? {});
+          const totals: Record<string, number> = { ...(data.totals ?? {}) };
+          for (const c of ['todo', 'in_progress', 'in_review', 'done']) if (totals[c] !== undefined) totals[c] -= hidden(data[c]);
+          setTotals(totals);
           setCursors(data.cursors ?? {});
           setLoadError(null);
         })
@@ -237,6 +239,47 @@ export default function KanbanBoard() {
   useEffect(() => {
     if (connectionEpoch > 1) fetchTasks();
   }, [connectionEpoch, fetchTasks]);
+
+  // Delete with undo: the card leaves the board at once; the delete is sent after a grace period
+  // (lib/pendingDelete.ts), so Undo can put the card back exactly where it was.
+  const deleteWithUndo = (task: { id: string; title: string; status?: string }) => {
+    const column = Object.keys(tasks).find((c) => tasks[c]?.some((t) => t.id === task.id)) ?? task.status ?? 'todo';
+    const index = tasks[column]?.findIndex((t) => t.id === task.id) ?? -1;
+    const card = index >= 0 ? tasks[column][index] : null;
+    const putBack = () => {
+      if (!card) return;
+      setTasks((prev) => {
+        if (prev[column]?.some((t) => t.id === card.id)) return prev;
+        const list = [...(prev[column] ?? [])];
+        list.splice(Math.min(index, list.length), 0, card);
+        return { ...prev, [column]: list };
+      });
+      setTotals((prev) => ({ ...prev, [column]: (prev[column] ?? 0) + 1 }));
+    };
+
+    setTasks((prev) => ({ ...prev, [column]: (prev[column] ?? []).filter((t) => t.id !== task.id) }));
+    setTotals((prev) => ({ ...prev, [column]: Math.max(0, (prev[column] ?? 1) - 1) }));
+
+    const pending = scheduleDelete(
+      `task:${task.id}`,
+      (keepalive) => api.delete(`/projects/${params.id}/tasks/${task.id}`, keepalive ? { keepalive: true } : undefined),
+      {
+        onError: (err) => {
+          putBack();
+          toast(messageOf(err, 'Could not delete the task'), 'error');
+        },
+      },
+    );
+    toast(`Deleted "${task.title}"`, 'info', {
+      label: 'Undo',
+      run: () => {
+        if (pending.cancel()) {
+          putBack();
+          toast('Task restored');
+        }
+      },
+    });
+  };
 
   const onDragEnd = async (result: any) => {
     if (!result.destination) return;
@@ -476,52 +519,7 @@ export default function KanbanBoard() {
                                 <div {...provided.dragHandleProps} onClick={(e) => e.stopPropagation()} aria-label={`Move task: ${task.title}`} className={`text-slate-400 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity mt-1 cursor-grab active:cursor-grabbing ${canEdit ? '' : 'hidden'}`}>
                                   <GripVertical className="w-4 h-4" aria-hidden="true" />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="pr-3 text-[15px] font-medium leading-snug text-slate-900 dark:text-slate-100">
-                                    <button
-                                      type="button"
-                                      aria-label={`Open task: ${task.title}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedTaskId(task.id);
-                                      }}
-                                      className="text-left break-words outline-none"
-                                    >
-                                      {task.title}
-                                    </button>
-                                  </h3>
-                                  {task.labels?.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-2">
-                                      {task.labels.map((l: Label) => (
-                                        <LabelChip key={l.id} label={l} />
-                                      ))}
-                                    </div>
-                                  )}
-                                  <div className="flex items-center justify-between gap-2 mt-3">
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                      <PriorityChip priority={task.priority} label={priorityLabel(task.priority)} />
-                                      {task.due_date && (
-                                        <span
-                                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
-                                            isOverdue(task)
-                                              ? 'bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-200'
-                                              : 'text-slate-600 dark:text-slate-400'
-                                          }`}
-                                        >
-                                          <CalendarDays className="w-3 h-3" aria-hidden="true" />
-                                          {isOverdue(task) && <span className="sr-only">Overdue, due</span>}
-                                          {new Date(task.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {task.assignee_name && (
-                                      <span title={task.assignee_name} className="shrink-0">
-                                        <Avatar name={task.assignee_name} id={task.assignee_id ?? undefined} size="xs" className="ring-0 transition-transform group-hover:scale-110" />
-                                        <span className="sr-only">Assigned to {task.assignee_name}</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
+                                <BoardCardContent task={task} onOpen={setSelectedTaskId} />
                               </div>
                               </div>
                             </div>
@@ -561,6 +559,7 @@ export default function KanbanBoard() {
           members={members}
           onClose={() => setSelectedTaskId(null)}
           onChanged={fetchTasks}
+          onDelete={deleteWithUndo}
         />
       )}
 
