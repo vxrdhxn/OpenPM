@@ -159,12 +159,12 @@ export default function Home() {
       <main id="main" className="relative">
         {/* Hero */}
         <section className="relative mx-auto grid min-h-[100svh] max-w-[1400px] grid-rows-[1fr_auto] px-5 sm:px-10 xl:px-[72px] pt-24 pb-10">
-          <ThreeScene scene="flow" className="!absolute right-0 top-10 h-[46svh] w-full sm:h-[60svh] lg:w-[64%] xl:right-0" />
+          <ThreeScene scene="morph" className="!absolute right-0 top-10 h-[46svh] w-full sm:h-[60svh] lg:w-[64%] xl:right-0" />
           <div className="relative flex items-start justify-between pt-6">
             <p className="font-mono text-xs text-slate-600 dark:text-slate-400 animate-fade-in">
               v0.1.0 · AGPL-3.0
               <br />
-              To do, in progress, done.
+              Ideas. A plan. Done.
               <br />
               Scroll down to see how it works.
             </p>

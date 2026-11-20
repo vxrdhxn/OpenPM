@@ -4,13 +4,13 @@
  * Loaded on demand (dynamic import), so three.js never lands in the main bundle.
  */
 import { Clock, Material, Mesh, Object3D, PerspectiveCamera, Points, Scene, Texture, WebGLRenderer } from 'three';
-import { flowScene } from './scenes/flow';
+import { morphScene } from './scenes/morph';
 import { gemScene } from './scenes/gem';
 import { planetScene } from './scenes/planet';
 import { projectsScene } from './scenes/projects';
 import { columnsScene } from './scenes/columns';
 
-export type SceneName = 'flow' | 'gem' | 'planet' | 'projects' | 'columns';
+export type SceneName = 'morph' | 'gem' | 'planet' | 'projects' | 'columns';
 /** `surface`: drawn over the page background. `brand`: drawn over the indigo-violet gradient. */
 export type SceneTone = 'surface' | 'brand';
 
@@ -42,7 +42,7 @@ export interface Mounted {
 }
 
 const SCENES: Record<SceneName, (ctx: SceneContext) => SceneHandle> = {
-  flow: flowScene,
+  morph: morphScene,
   gem: gemScene,
   planet: planetScene,
   projects: projectsScene,
