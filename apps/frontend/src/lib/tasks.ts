@@ -3,19 +3,16 @@
  * accepts title, description, status, priority, assignee_id and due_date).
  */
 
-export const STATUSES = [
-  { value: 'todo', label: 'To Do' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'in_review', label: 'In Review' },
-  { value: 'done', label: 'Done' },
-] as const;
+import { TASK_PRIORITIES, TASK_STATUSES, type TaskPriority, type TaskStatus } from '@openpm/wire';
 
-export const PRIORITIES = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'urgent', label: 'Urgent' },
-] as const;
+export type { TaskPriority, TaskStatus };
+
+/** How the UI names each status and priority. The values themselves come from the API (@openpm/wire). */
+const STATUS_LABELS: Record<TaskStatus, string> = { todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', done: 'Done' };
+const PRIORITY_LABELS: Record<TaskPriority, string> = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
+
+export const STATUSES = TASK_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }));
+export const PRIORITIES = TASK_PRIORITIES.map((value) => ({ value, label: PRIORITY_LABELS[value] }));
 
 export const isStatus = (s: string) => STATUSES.some((x) => x.value === s);
 export const statusLabel = (s: string) => STATUSES.find((x) => x.value === s)?.label ?? s;

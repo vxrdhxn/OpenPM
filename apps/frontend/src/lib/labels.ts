@@ -1,7 +1,7 @@
 import { api } from './api';
 
-export const LABEL_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'indigo', 'purple', 'pink'] as const;
-export type LabelColor = (typeof LABEL_COLORS)[number];
+export { LABEL_COLORS, type LabelColor } from '@openpm/wire';
+import type { LabelColor } from '@openpm/wire';
 
 export interface Label {
   id: string;

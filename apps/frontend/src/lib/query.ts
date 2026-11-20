@@ -18,8 +18,4 @@ export function buildQuery(params: Record<string, QueryValue>): string {
   return qs ? `?${qs}` : '';
 }
 
-/** A page from a paginated endpoint. Pass `next_cursor` as `cursor` to get the next one. */
-export interface Page<T> {
-  items: T[];
-  next_cursor: string | null;
-}
+export type { Page } from '@openpm/wire';

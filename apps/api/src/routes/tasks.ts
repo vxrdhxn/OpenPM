@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
+import { TASK_PRIORITIES, TASK_STATUSES } from '../wire';
 import { scopeOf } from '../data/scope';
 import type { TaskChanges } from '../data/tasks';
 import { taskFilterQuerySchema, type TaskFilters } from '../query/taskFilters';
@@ -18,7 +19,7 @@ export { BOARD_COLUMN_LIMIT, MAX_DESCRIPTION_LENGTH } from '../services/tasks';
 type ProjectParams = { projectId: string };
 type TaskParams = ProjectParams & { taskId: string };
 
-const PRIORITY = { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] } as const;
+const PRIORITY = { type: 'string', enum: [...TASK_PRIORITIES] } as const;
 
 const taskRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preValidation', fastify.authenticate);
@@ -66,7 +67,7 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           title: { type: 'string', minLength: 1 },
           description: { type: 'string', maxLength: MAX_DESCRIPTION_LENGTH },
-          status: { type: 'string', enum: ['todo', 'in_progress', 'in_review', 'done'] },
+          status: { type: 'string', enum: [...TASK_STATUSES] },
           priority: PRIORITY,
           assignee_id: { type: 'string', format: 'uuid', nullable: true },
           due_date: { type: 'string', format: 'date-time', nullable: true },

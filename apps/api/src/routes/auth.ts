@@ -5,6 +5,7 @@ import { auditBestEffort, originOf } from '../security/audit';
 import * as authService from '../services/auth';
 import { signupNeedsVerification } from '../config';
 import type { LoginDoor, Registration } from '../services/auth';
+import { LOGIN_DOORS } from '../wire';
 
 /** /api/auth: sign-up, sign-in, sign-out and password reset. Rules: services/auth.ts. */
 
@@ -72,7 +73,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         properties: {
           email: { type: 'string', format: 'email' },
           password: { type: 'string' },
-          as: { type: 'string', enum: ['member', 'admin'] },
+          as: { type: 'string', enum: [...LOGIN_DOORS] },
         },
         additionalProperties: false,
       },

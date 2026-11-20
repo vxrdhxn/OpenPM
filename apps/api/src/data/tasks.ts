@@ -10,8 +10,8 @@ import type { TenantScope } from './scope';
  * id from another project or organization matches nothing. Callers pass a transaction client for writes.
  */
 
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
-export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+import type { TaskPriority, TaskStatus } from '../wire';
+export type { TaskPriority, TaskStatus };
 
 export interface TaskRow {
   id: string;

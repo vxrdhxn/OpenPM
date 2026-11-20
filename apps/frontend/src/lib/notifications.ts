@@ -2,7 +2,8 @@ import { api } from './api';
 import { buildQuery, type Page } from './query';
 import { statusLabel } from './tasks';
 
-export type NotificationType = 'task_assigned' | 'mentioned' | 'commented' | 'status_changed' | 'due_soon' | 'project_added' | 'project_removed';
+import type { NotificationType } from '@openpm/wire';
+export type { NotificationType };
 
 export interface AppNotification {
   id: string;

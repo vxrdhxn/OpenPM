@@ -1,7 +1,8 @@
 import { Conditions, likePattern, searchQuerySchema } from './pagination';
 
-export const TASK_STATUSES = ['todo', 'in_progress', 'in_review', 'done'] as const;
-export const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+import { TASK_PRIORITIES, TASK_STATUSES } from '../wire';
+
+export { TASK_PRIORITIES, TASK_STATUSES };
 
 /**
  * Filters shared by the board (`GET /api/projects/:projectId/tasks`) and task search

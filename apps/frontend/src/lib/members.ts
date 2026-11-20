@@ -3,7 +3,8 @@
  * offers actions that will be allowed. This is a convenience, not the security boundary: the API
  * enforces the same rules and is the authority.
  */
-export type Role = 'owner' | 'admin' | 'member' | 'viewer';
+import { ROLES, type Role } from '@openpm/wire';
+export { ROLES, type Role };
 
 export interface Member {
   id: string;
@@ -12,8 +13,6 @@ export interface Member {
   role: Role;
   created_at: string;
 }
-
-export const ROLES: Role[] = ['owner', 'admin', 'member', 'viewer'];
 
 const RANK: Record<string, number> = { owner: 4, admin: 3, member: 2, viewer: 1 };
 const rank = (role: string) => RANK[role] ?? 0;

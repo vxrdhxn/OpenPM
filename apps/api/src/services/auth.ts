@@ -160,10 +160,11 @@ const SLUG_TAKEN_SINCE = 'That organization URL was taken after you signed up. S
  * reason for both "no such user" and "wrong password"; the email address is never recorded.
  */
 /** Which sign-in door was used: the member door lets everyone in, the admin door only owners and admins. */
-export type LoginDoor = 'member' | 'admin';
+export type { LoginDoor } from '../wire';
 
 /** The roles that may use the admin sign-in (and the admin area). */
-export const ADMIN_ROLES = ['owner', 'admin'] as const;
+export { ADMIN_ROLES } from '../wire';
+import { isAdminRole, type LoginDoor } from '../wire';
 
 export const NOT_AN_ADMIN = 'This account is not a workspace admin. Sign in as a member instead.';
 
@@ -193,7 +194,7 @@ export async function login(
 
   // The admin door checks the role only after the password: a stranger learns nothing about whether
   // an account is an admin. A member who knocks on it gets no session at all.
-  if (door === 'admin' && !(ADMIN_ROLES as readonly string[]).includes(user.role)) {
+  if (door === 'admin' && !isAdminRole(user.role)) {
     await auditBestEffort(origin, { orgId: user.org_id, actorId: user.id, action: 'auth.admin_login_denied', targetType: 'user', targetId: user.id }, log);
     authFailuresTotal.inc({ reason: 'not_admin' });
     log.warn({ event: 'login_failed', reason: 'not_admin', user_id: user.id }, 'Admin sign-in refused for a non-admin account');

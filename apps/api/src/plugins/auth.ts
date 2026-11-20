@@ -5,7 +5,8 @@ import { getJwtSecret } from '../config';
 import { db } from '../db/client';
 import { authFailuresTotal } from '../metrics';
 
-export type Role = 'owner' | 'admin' | 'member' | 'viewer';
+export type { Role } from '../wire';
+import type { Role } from '../wire';
 
 export const ROLE_RANKS: Record<string, number> = {
   owner: 4,

@@ -1,6 +1,6 @@
-import { ROLE_RANKS, type Role } from '../plugins/auth';
+import { ROLE_RANKS } from '../plugins/auth';
 
-export const ROLES: readonly Role[] = ['owner', 'admin', 'member', 'viewer'];
+export { ROLES } from '../wire';
 
 const rank = (role: string) => ROLE_RANKS[role] ?? 0;
 

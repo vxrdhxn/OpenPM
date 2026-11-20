@@ -12,7 +12,8 @@ import { boardCacheKey } from './tasks';
  * (which removes them from every task). Changes publish `labels_changed` so open boards refresh.
  */
 
-export const LABEL_COLORS = ['gray', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'indigo', 'purple', 'pink'] as const;
+import { LABEL_COLORS } from '../wire';
+export { LABEL_COLORS };
 /** Most labels one organization can have, so the label list and pickers stay bounded. */
 export const MAX_LABELS_PER_ORG = 200;
 /** Most labels on one task. */

@@ -12,6 +12,8 @@ COPY apps/frontend/ ./apps/frontend/
 # attachments.test.ts imports the server's allowlist (relative, on purpose) and `next build`
 # type-checks it, so that one file has to be present in the build stage.
 COPY apps/api/src/attachments/policy.ts ./apps/api/src/attachments/policy.ts
+# The API's wire vocabulary (statuses, roles, ...), which the frontend imports as @openpm/wire.
+COPY apps/api/src/wire/ ./apps/api/src/wire/
 
 # Browser-side URLs are inlined at build time (see src/lib/endpoints.ts). Leave them empty for an
 # image that works on any domain behind the Helm chart's Ingress (same-origin /api and /ws); set them
