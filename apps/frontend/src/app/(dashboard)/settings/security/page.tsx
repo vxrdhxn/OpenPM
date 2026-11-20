@@ -82,7 +82,7 @@ export default function SecurityLogPage() {
 
   return (
     <div className="p-4 sm:p-8 max-w-4xl mx-auto w-full">
-      <h1 className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">
+      <h1 className="page-title mb-2">
         Security log
       </h1>
       <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
@@ -131,7 +131,7 @@ export default function SecurityLogPage() {
         ) : (
           <section
             aria-label="Security events"
-            className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm"
+            className="card animate-fade-up"
           >
             <ul className="divide-y divide-slate-200 dark:divide-slate-800">
               {entries.map((e) => {

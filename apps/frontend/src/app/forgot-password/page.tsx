@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { CheckSquare, ArrowLeft } from 'lucide-react';
+import AuthShell, { AuthCard } from '@/components/AuthShell';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -25,8 +26,8 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
-      <div className="max-w-md w-full space-y-8 bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800">
+    <AuthShell>
+      <AuthCard className="space-y-8">
         
         <div className="flex flex-col items-center">
           <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl flex items-center justify-center mb-4">
@@ -82,7 +83,7 @@ export default function ForgotPassword() {
           </Link>
         </div>
 
-      </div>
-    </div>
+      </AuthCard>
+    </AuthShell>
   );
 }

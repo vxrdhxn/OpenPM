@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { LoadingBlock } from '@/components/ui/states';
 
 export default function ProfileSettings() {
   const [profile, setProfile] = useState({ name: '', email: '' });
@@ -48,12 +49,16 @@ export default function ProfileSettings() {
   };
 
   if (loading) {
-    return <div className="p-8">Loading profile...</div>;
+    return (
+      <div className="p-4 sm:p-8 max-w-2xl mx-auto w-full">
+        <div className="card p-6"><LoadingBlock label="Loading profile" rows={4} /></div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-8 max-w-2xl">
-      <h1 className="text-2xl font-bold mb-6 text-slate-900 dark:text-white">Profile Settings</h1>
+    <div className="p-4 sm:p-8 max-w-2xl mx-auto w-full">
+      <h1 className="page-title mb-6">Profile Settings</h1>
       
       {message.text && (
         <div className={`p-4 mb-6 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -61,7 +66,7 @@ export default function ProfileSettings() {
         </div>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <form onSubmit={handleSave} className="space-y-6 card p-6 animate-fade-up">
         <div>
           <label htmlFor="profile-email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Email Address

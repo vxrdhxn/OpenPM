@@ -3,89 +3,202 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 245, 247, 250;
-  --background-end-rgb: 255, 255, 255;
+  --foreground-rgb: 15, 23, 42;
+  --background-rgb: 248, 250, 252;
   --brand-color: 99, 102, 241; /* Indigo 500 */
   /* Data-viz tokens (dataviz palette; validated against these card surfaces, white and slate-900). */
   --meter-fill: #2a78d6; /* blue 450 */
   --meter-track: #cde2fb; /* blue 100: lighter step of the same ramp */
   --status-critical: #d03b3b; /* reserved: always with an icon and a label */
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 15, 23, 42; /* Slate 900 */
-    --background-end-rgb: 2, 6, 23;     /* Slate 950 */
+    --foreground-rgb: 241, 245, 249;
+    --background-rgb: 2, 6, 23; /* Slate 950 */
     --brand-color: 129, 140, 248; /* Indigo 400 */
     --meter-fill: #3987e5; /* blue 400: the dark-mode step */
     --meter-track: #0d366b; /* blue 700 */
     --status-critical: #d03b3b;
+    color-scheme: dark;
   }
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-  background-attachment: fixed;
-  font-family: 'Inter', sans-serif;
+  background: rgb(var(--background-rgb));
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+h1, h2, h3 {
+  font-family: theme('fontFamily.display');
+  letter-spacing: -0.015em;
+}
+
+::selection {
+  background: rgb(99 102 241 / 0.25);
 }
 
 /* Components, not utilities: a utility on the same element (w-40, pl-9, ...) must be able to
    override them. In the utilities layer, `.input-field`'s w-full and px-4 won, which stretched the
    board filters and put search text under the search icon. */
 @layer components {
+  /* ---------- Surfaces ---------- */
   .glass-panel {
-    @apply bg-white/10 dark:bg-slate-800/50 backdrop-blur-lg border border-white/20 dark:border-slate-700/50 shadow-xl;
+    @apply bg-white/80 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/80 dark:border-slate-700/60 shadow-lift;
   }
-  
+
+  .card {
+    @apply bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-soft;
+  }
+
+  /* A card that is a link or a button: lifts on hover, presses on click. */
+  .card-interactive {
+    @apply card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lift hover:border-indigo-300/80 dark:hover:border-indigo-500/50 active:translate-y-0 active:scale-[0.995];
+  }
+
+  /* A square icon badge in front of a heading or a stat. */
+  .icon-tile {
+    @apply inline-flex items-center justify-center shrink-0 rounded-xl;
+  }
+
+  /* ---------- Type ---------- */
+  .page-title {
+    @apply font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white;
+  }
+  .page-subtitle {
+    @apply mt-1 text-slate-600 dark:text-slate-400;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-400 dark:via-violet-400 dark:to-fuchsia-400 bg-clip-text text-transparent;
+  }
+
+  /* ---------- Controls ---------- */
   .input-field {
-    @apply w-full px-4 py-3 rounded-lg bg-white/5 border border-slate-300 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none;
+    @apply w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 shadow-sm hover:border-slate-400 dark:hover:border-slate-600 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/15 transition-all duration-200 outline-none;
+  }
+
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl font-medium transition-all duration-200 outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none select-none;
+  }
+
+  /* Full width, for forms. */
+  .btn-primary {
+    @apply btn-base w-full py-3 px-4 text-white bg-gradient-to-r from-indigo-600 to-violet-600 bg-[length:200%_100%] bg-left hover:bg-right shadow-glow hover:shadow-[0_12px_28px_-8px_rgb(99_102_241_/_0.65)];
+    transition-property: background-position, box-shadow, transform, opacity;
+    transition-duration: 400ms;
   }
 
   /* A primary button sized to its content (.btn-primary is full width, for forms). */
   .btn-compact {
-    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50;
+    @apply btn-base px-3.5 py-2 text-sm text-white bg-gradient-to-r from-indigo-600 to-violet-600 bg-[length:200%_100%] bg-left hover:bg-right shadow-[0_4px_14px_-4px_rgb(99_102_241_/_0.6)] hover:shadow-[0_8px_20px_-6px_rgb(99_102_241_/_0.7)];
+    transition-property: background-position, box-shadow, transform, opacity;
+    transition-duration: 400ms;
   }
 
   /* Neutral action next to a primary one (Cancel, Try again). */
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm rounded-lg font-medium border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50;
+    @apply btn-base px-3.5 py-2 text-sm border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-400 dark:hover:bg-slate-800 dark:hover:border-slate-600;
+  }
+
+  /* Quiet action (icon buttons, "Clear filters"). */
+  .btn-ghost {
+    @apply btn-base px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white;
   }
 
   /* Destructive confirm (delete, remove, leave). */
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-1 px-3 py-1.5 text-sm rounded-lg font-medium bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50;
+    @apply btn-base px-3.5 py-2 text-sm bg-red-600 hover:bg-red-700 text-white shadow-[0_4px_14px_-4px_rgb(220_38_38_/_0.55)];
   }
 
-  .btn-primary {
-    @apply w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/30 transition-all active:scale-[0.98];
+  .chip {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-medium rounded-full;
+  }
+
+  /* ---------- Loading ---------- */
+  .skeleton {
+    @apply rounded-xl bg-slate-200/70 dark:bg-slate-800/70;
+    background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.55) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+  @media (prefers-color-scheme: dark) {
+    .skeleton {
+      background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.06) 50%, transparent 100%);
+    }
+  }
+
+  /* ---------- Decoration ---------- */
+  .bg-dots {
+    background-image: radial-gradient(rgb(100 116 139 / 0.18) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .bg-brand {
+    @apply bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600;
+  }
+
+  /* Children fade up one after another. Set --i on each child for the order (capped by the delay). */
+  .stagger > * {
+    animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(min(var(--i, 0), 12) * 45ms);
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Motion is decoration: people who ask for less get none. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 4px;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 @media (prefers-color-scheme: dark) {
   ::-webkit-scrollbar-thumb {
     background: #334155;
+    background-clip: content-box;
   }
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+  background-clip: content-box;
+}
+
+@keyframes progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes shimmer-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
 }

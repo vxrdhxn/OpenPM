@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { BellRing, ChevronUp, Loader2, LogOut, User } from 'lucide-react';
-import { initials, menuFocusTarget } from '@/lib/menu';
+import { menuFocusTarget } from '@/lib/menu';
+import Avatar from '@/components/ui/Avatar';
 
 export interface AccountMenuUser {
   name: string;
@@ -18,7 +19,7 @@ interface Props {
 }
 
 const itemClass =
-  'flex w-full items-center gap-3 px-3 py-2 text-sm text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-slate-100 dark:focus:bg-slate-800 outline-none';
+  'flex items-center gap-3 mx-1 px-3 py-2 w-[calc(100%-0.5rem)] rounded-lg text-sm text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-slate-100 dark:focus:bg-slate-800 outline-none transition-colors';
 
 /**
  * The signed-in person at the bottom of the sidebar: a button that opens a menu with their profile,
@@ -86,7 +87,7 @@ export default function AccountMenu({ me, onLogout, loggingOut }: Props) {
   };
 
   return (
-    <div className="relative p-4 border-t border-slate-200 dark:border-slate-800">
+    <div className="relative p-3 border-t border-slate-200/80 dark:border-slate-800">
       {open && (
         <div
           ref={menu}
@@ -94,11 +95,14 @@ export default function AccountMenu({ me, onLogout, loggingOut }: Props) {
           role="menu"
           aria-label="Account"
           onKeyDown={onMenuKeyDown}
-          className="absolute bottom-full left-4 right-4 mb-2 z-50 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1"
+          className="absolute bottom-full left-3 right-3 mb-2 z-50 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-lift py-1 origin-bottom animate-scale-in"
         >
-          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3 px-3 py-3 mb-1 border-b border-slate-200 dark:border-slate-800">
+            <Avatar name={me.name} size="md" />
+            <div className="min-w-0">
             <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{me.name}</p>
             <p className="text-xs text-slate-600 dark:text-slate-400 truncate">{me.email}</p>
+            </div>
           </div>
           <Link href="/settings/profile" role="menuitem" tabIndex={-1} className={itemClass} onClick={() => setOpen(false)}>
             <User className="w-4 h-4" aria-hidden="true" />
@@ -114,7 +118,7 @@ export default function AccountMenu({ me, onLogout, loggingOut }: Props) {
             tabIndex={-1}
             disabled={loggingOut}
             onClick={onLogout}
-            className={`${itemClass} border-t border-slate-200 dark:border-slate-800 text-red-700 dark:text-red-400`}
+            className={`${itemClass} mt-1 text-red-700 dark:text-red-400 hover:bg-red-50 focus:bg-red-50 dark:hover:bg-red-500/10 dark:focus:bg-red-500/10`}
           >
             {loggingOut ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <LogOut className="w-4 h-4" aria-hidden="true" />}
             Sign out
@@ -130,13 +134,11 @@ export default function AccountMenu({ me, onLogout, loggingOut }: Props) {
         aria-controls={open ? menuId : undefined}
         onClick={() => (open ? close(false) : openWith('first'))}
         onKeyDown={onButtonKeyDown}
-        className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        className="group flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
       >
-        <span
-          aria-hidden="true"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 text-sm font-semibold"
-        >
-          {initials(me.name)}
+        <span className="relative">
+          <Avatar name={me.name} size="md" className="transition-transform duration-200 group-hover:scale-105" />
+          <span aria-hidden="true" className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
         </span>
         {/* The accessible name is the visible text ("Account: <name> <role>"), so speech users can say what they see. */}
         <span className="min-w-0 flex-1">

@@ -328,8 +328,8 @@ Actions:
 ## Navigation
 
 - [x] Consistent application shell.
-- [ ] Organization switcher.
-- [ ] Project navigation.
+- [x] Organization switcher. — *not needed:* one organization per user, by decision (Phase 1 schema work)
+- [x] Project navigation. — sidebar "Recent boards", breadcrumbs on the board, and a Ctrl/⌘+K command palette for pages and projects
 - [x] User/account menu. — `components/AccountMenu.tsx`: name and role, a menu with profile, notification settings and sign out; WAI-ARIA menu button keyboard; browser-tested on desktop and in the phone drawer
 - [x] Responsive navigation.
 - [x] Mobile behavior.
@@ -355,8 +355,8 @@ Actions:
 - [x] Due date.
 - [x] Description editor. — plain text
 - [x] Comments. — Comments section in the task dialog
-- [ ] Activity.
-- [ ] Safe optimistic updates where appropriate.
+- [x] Activity. — `/activity`: the whole organization's feed, grouped by day, paginated
+- [x] Safe optimistic updates where appropriate. — board moves apply at once, roll back on failure, and offer Undo
 - [x] Error recovery. — failed saves keep the edit and say why; failed moves put the card back
 
 ## UX quality
@@ -370,8 +370,8 @@ Actions:
 - [x] Focus management. — task dialog: focus trap, Escape, focus restored
 - [x] Screen-reader labels. — every control named (axe in CI)
 - [x] Responsive layouts.
-- [ ] Consistent spacing and typography.
-- [ ] No unnecessary loading spinners.
+- [x] Consistent spacing and typography. — design tokens and component classes in `globals.css` (card, buttons, inputs, page title), a display font for headings, one `PageHeader`
+- [x] No unnecessary loading spinners. — shimmer skeletons in place of page spinners
 - [x] No obvious placeholder UI.
 
 ---
@@ -889,7 +889,7 @@ Audit event
 ## Frontend
 
 - [ ] Analyze bundle size.
-- [ ] Lazy-load heavy components.
+- [x] Lazy-load heavy components. — task, project and people dialogs and the command palette load on first open (`next/dynamic`)
 - [ ] Avoid unnecessary client components.
 - [ ] Optimize data fetching.
 - [ ] Prevent excessive re-renders.
@@ -1043,10 +1043,10 @@ For every threat: impact, likelihood, mitigation, detection and a security test.
 
 Before release:
 
-- [ ] Consistent design system. — *partial:* shared Dialog, Field, button, toast and state components (`components/ui`); older pages still carry one-off styles
+- [x] Consistent design system. — one set of tokens and components (`globals.css`, `components/ui`), applied to every page including sign-in, the landing page and errors
 - [x] Consistent buttons/forms/modals. — every dialog uses `ui/Dialog`; `btn-compact` / `btn-secondary` / `btn-danger`
 - [x] Consistent error messages. — toasts for actions, `ErrorBlock` with retry for loads
-- [ ] Consistent loading states. — *partial:* shared `LoadingBlock`; the dashboard keeps its own skeletons
+- [x] Consistent loading states. — `LoadingBlock` / `.skeleton` everywhere, the dashboard included
 - [x] Consistent empty states. — `EmptyBlock` with the action that fills it
 - [x] Keyboard navigation. — dialogs, skip link, menu, keyboard drag (tested; `docs/accessibility.md`)
 - [ ] Accessibility review. — *partial:* axe WCAG 2.1 AA clean on every screen in CI, keyboard reviewed; no screen-reader pass yet
@@ -1055,7 +1055,7 @@ Before release:
 - [x] Clear onboarding. — dashboard welcome with three steps; `docs/user-guide.md`
 - [x] Helpful first-run experience. — "Create your first project" opens the project dialog
 - [x] Destructive-action confirmations. — in-app confirm (Cancel focused) for every delete, remove and leave
-- [ ] Undo/recovery where appropriate. — *partial:* unsaved task edits are protected; archive instead of delete for projects; no undo after delete
+- [ ] Undo/recovery where appropriate. — *partial:* unsaved task edits are protected; archive instead of delete for projects; toasts take an action, and moving a card offers Undo; no undo after delete (needs soft delete in the API)
 - [x] 404 page.
 - [x] 500/error page. — `error.tsx` and `global-error.tsx`
 - [x] Network failure states. — offline banner; failed requests shown, not swallowed
@@ -1329,7 +1329,7 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Reliability           | 🟢     | Failure-tested in Compose (Postgres, Redis, worker, API restarts, pool exhaustion); rollback and restore rehearsed on kind. No incident runbook; not tested on a cloud cluster. |
 | Backup/restore        | 🟢     | Scripts, a drill that compares every table, and a disaster recovery rehearsed (`docs/backup-restore.md`). No scheduled job for the in-chart Postgres; no retention policy. |
 | Documentation         | 🟢     | README, CONTRIBUTING, SECURITY, user guide, deploying, releasing, backup/restore, release checklist, security review, accessibility, testing and feature docs. Missing: threat model, per-route permissions, task/project WebSocket events, incident runbook, privacy/data policy. |
-| UX polish             | 🟢     | Phase 10: task and project editing, shared dialogs, toasts, error and empty states, phone layout, onboarding, WCAG 2.1 AA in CI. Open: screen-reader pass, account menu, undo, visual regression checks. |
+| UX polish             | 🟢     | Phase 10: task and project editing, shared dialogs, toasts, error and empty states, phone layout, onboarding, WCAG 2.1 AA in CI. Redesign (Nov 20): design system with light/dark tokens, animations that respect reduced motion, landing page, split-screen sign-in, sidebar with recent boards, command palette, activity page, undo on board moves. Open: screen-reader pass, undo after delete, visual regression checks. |
 | Production readiness  | 🟡     | v0.1.0 released. To run it: merge the deploy PR, create `openpm-secrets` in `openpm-prod`, sync. Never run on a cloud cluster. |
 
 ### Status legend

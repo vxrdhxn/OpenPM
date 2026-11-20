@@ -114,7 +114,7 @@ export default function MembersPanel() {
   const leaveBlocked = actor ? leaveBlockedReason(actor, members) : null;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div className="card animate-fade-up overflow-hidden">
       <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">

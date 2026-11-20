@@ -22,6 +22,10 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3001',
     trace: 'retain-on-failure',
+    // Entrance animations fade content in from transparent. axe would measure contrast mid-fade, and
+    // clicks would wait for moving elements, so the tests run with reduced motion (which the app
+    // honours by turning animations off). Motion itself is decoration, not behaviour.
+    contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [
     { name: 'setup', testMatch: /auth\.setup\.ts/ },

@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { buildCsp, newNonce } from './lib/csp';
 
-// Only for signed-out users: signed-in users are sent to the dashboard.
-const publicPaths = ['/login', '/register'];
+// Only for signed-out users (the landing page, sign in, sign up): signed-in users are sent to the dashboard.
+const publicPaths = ['/', '/login', '/register'];
 // Reachable whether or not you are signed in: these are opened from links in emails.
 const openPaths = ['/invite', '/forgot-password', '/reset-password', '/verify-signup'];
 

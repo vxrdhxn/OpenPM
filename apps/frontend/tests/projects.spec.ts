@@ -29,10 +29,11 @@ test.describe('private projects', () => {
 
     // So does its card on the projects page.
     await page.goto('/projects');
-    await expect(page.getByRole('link', { name: new RegExp(name) })).toContainText('Private');
+    // Scoped to the page: the sidebar's "Recent boards" links to it too.
+    await expect(page.getByRole('main').getByRole('link', { name: new RegExp(name) })).toContainText('Private');
 
     // Back to the whole workspace.
-    await page.getByRole('link', { name: new RegExp(name) }).click();
+    await page.getByRole('main').getByRole('link', { name: new RegExp(name) }).click();
     await page.getByRole('button', { name: 'Edit project' }).click();
     const edit = page.getByRole('dialog', { name: 'Edit project' });
     await edit.getByLabel('Who can see it').selectOption('workspace');

@@ -1,15 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useWebsocket } from '@/hooks/useWebsocket';
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DroppableStateSnapshot } from '@hello-pangea/dnd';
-import { Plus, GripVertical, AlertCircle, Pencil, Lock, Users } from 'lucide-react';
-import ProjectDialog from '@/components/ProjectDialog';
-import ProjectPeopleDialog from '@/components/ProjectPeopleDialog';
-import TaskDetailModal, { CurrentUser } from '@/components/TaskDetailModal';
+import { Plus, GripVertical, AlertCircle, Pencil, Lock, Users, CalendarDays, ChevronRight, Loader2, Inbox } from 'lucide-react';
+import type { CurrentUser } from '@/components/TaskDetailModal';
+import type { ProjectFields } from '@/components/ProjectDialog';
+import Avatar from '@/components/ui/Avatar';
+import { PriorityChip } from '@/components/TaskBadges';
+import { isOverdue } from '@/components/dashboard/TaskRows';
+import { gradientFor } from '@/lib/palette';
 import BoardFilters, { EMPTY_BOARD_FILTERS, isFiltering, type BoardFilterValues } from '@/components/BoardFilters';
 import { buildQuery } from '@/lib/query';
 import type { Member } from '@/lib/members';
@@ -19,16 +23,22 @@ import TaskForm from '@/components/TaskForm';
 import Dialog from '@/components/ui/Dialog';
 import { messageOf, useToast } from '@/components/ui/feedback';
 import { ErrorBlock } from '@/components/ui/states';
-import { EMPTY_DRAFT, STATUSES, newTaskBody, priorityLabel, type TaskDraft } from '@/lib/tasks';
+import { EMPTY_DRAFT, STATUSES, newTaskBody, priorityLabel, statusLabel, type TaskDraft } from '@/lib/tasks';
 
-const COLUMN_COLORS: Record<(typeof STATUSES)[number]['value'], string> = {
-  todo: 'bg-slate-200 dark:bg-slate-800',
-  in_progress: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
-  in_review: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
-  done: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
+// The dialogs are loaded when first opened, not with the board.
+const TaskDetailModal = dynamic(() => import('@/components/TaskDetailModal'), { ssr: false });
+const ProjectDialog = dynamic(() => import('@/components/ProjectDialog'), { ssr: false });
+const ProjectPeopleDialog = dynamic(() => import('@/components/ProjectPeopleDialog'), { ssr: false });
+
+/** Accent per column: the dot and top edge (decorative; the column title says the status). */
+const COLUMN_ACCENTS: Record<(typeof STATUSES)[number]['value'], { dot: string; bar: string; over: string }> = {
+  todo: { dot: 'bg-slate-400', bar: 'from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-500', over: 'bg-slate-200/60 dark:bg-slate-800/60 ring-slate-300 dark:ring-slate-600' },
+  in_progress: { dot: 'bg-blue-500', bar: 'from-sky-400 to-blue-600', over: 'bg-blue-50/80 dark:bg-blue-500/10 ring-blue-300 dark:ring-blue-500/40' },
+  in_review: { dot: 'bg-amber-500', bar: 'from-amber-400 to-orange-500', over: 'bg-amber-50/80 dark:bg-amber-500/10 ring-amber-300 dark:ring-amber-500/40' },
+  done: { dot: 'bg-emerald-500', bar: 'from-emerald-400 to-teal-600', over: 'bg-emerald-50/80 dark:bg-emerald-500/10 ring-emerald-300 dark:ring-emerald-500/40' },
 };
 
-const COLUMNS = STATUSES.map((s) => ({ id: s.value, title: s.label, color: COLUMN_COLORS[s.value] }));
+const COLUMNS = STATUSES.map((s) => ({ id: s.value, title: s.label, accent: COLUMN_ACCENTS[s.value] }));
 
 export default function KanbanBoard() {
   // Next 15+ passes `params` to pages as a Promise, so read the route param with the hook instead.
@@ -262,6 +272,18 @@ export default function KanbanBoard() {
       await api.patch(`/projects/${params.id}/tasks/${draggableId}`, {
         status: destination.droppableId
       });
+      if (source.droppableId !== destination.droppableId) {
+        toast(`Moved to ${statusLabel(destination.droppableId)}`, 'success', {
+          label: 'Undo',
+          run: () => {
+            api
+              .patch(`/projects/${params.id}/tasks/${draggableId}`, { status: source.droppableId })
+              .then(() => toast(`Moved back to ${statusLabel(source.droppableId)}`, 'info'))
+              .catch((e) => toast(messageOf(e, 'Could not undo the move'), 'error'))
+              .finally(fetchTasks);
+          },
+        });
+      }
     } catch (err) {
       toast(messageOf(err, 'Could not move the task'), 'error');
       // Put the board back the way the server has it.
@@ -296,34 +318,62 @@ export default function KanbanBoard() {
 
   if (projectMissing) {
     return (
-      <div className="p-8 max-w-xl">
-        <h1 className="text-2xl font-bold">Project not found</h1>
-        <p className="mt-2 text-slate-600 dark:text-slate-400">It may have been deleted, or the link is wrong.</p>
-        <Link href="/projects" className="btn-compact mt-4">Back to projects</Link>
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="max-w-md text-center animate-fade-up">
+          <div aria-hidden="true" className="mx-auto mb-6 icon-tile w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/15 to-fuchsia-500/15 text-indigo-600 dark:text-indigo-300 ring-1 ring-indigo-500/20 animate-float">
+            <Inbox className="w-10 h-10" />
+          </div>
+          <h1 className="page-title">Project not found</h1>
+          <p className="mt-2 text-slate-600 dark:text-slate-400">It may have been deleted, or the link is wrong.</p>
+          <Link href="/projects" className="btn-compact mt-6">Back to projects</Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-950/50">
-      <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap gap-4 justify-between items-center shrink-0">
-        <div className="min-w-0">
+    <div className="flex flex-col flex-1 min-h-0 h-full">
+      <div className="relative px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl flex flex-wrap gap-4 justify-between items-center shrink-0">
+        <div className="min-w-0 flex items-start gap-4">
+          <span
+            aria-hidden="true"
+            className={`hidden sm:inline-flex icon-tile w-12 h-12 rounded-2xl bg-gradient-to-br ${gradientFor(params.id)} text-white font-display text-xl font-bold shadow-lg`}
+          >
+            {project ? [...project.name.trim()][0]?.toUpperCase() : ''}
+          </span>
+          <div className="min-w-0">
+          <nav aria-label="Breadcrumb" className="mb-1">
+            <ol className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <li>
+                <Link href="/projects" className="hover:text-indigo-700 dark:hover:text-indigo-300">All boards</Link>
+              </li>
+              <li aria-hidden="true"><ChevronRight className="w-3 h-3" /></li>
+              <li aria-current="page" className="truncate max-w-[16rem]">{project?.name ?? '…'}</li>
+            </ol>
+          </nav>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold break-words">
-              {project?.name ?? <span className="inline-block h-7 w-48 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" aria-label="Loading project" />}
+            <h1 className="page-title break-words">
+              {project?.name ?? <span className="skeleton inline-block h-8 w-48 align-middle" aria-label="Loading project" />}
             </h1>
             {project?.visibility === 'private' && (
-              <span className="flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40 px-2 py-1 rounded-full">
+              <span className="chip py-1 text-amber-800 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40">
                 <Lock className="w-3 h-3" aria-hidden="true" /> Private
               </span>
             )}
             {isConnected ? (
-              <span className="flex items-center text-xs font-medium text-green-800 bg-green-100 dark:text-green-300 dark:bg-green-900/40 px-2 py-1 rounded-full"><span className="w-2 h-2 rounded-full bg-green-500 mr-1 animate-pulse" aria-hidden="true"></span> Live</span>
+              <span className="chip py-1 text-emerald-800 bg-emerald-50 ring-1 ring-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:ring-emerald-500/30">
+                <span aria-hidden="true" className="relative flex w-2 h-2">
+                  <span className="absolute inset-0 rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                  <span className="relative w-2 h-2 rounded-full bg-emerald-500" />
+                </span>
+                Live
+              </span>
             ) : (
-              <span className="flex items-center text-xs font-medium text-slate-700 bg-slate-100 dark:text-slate-300 dark:bg-slate-800 px-2 py-1 rounded-full"><AlertCircle className="w-3 h-3 mr-1" aria-hidden="true" /> Disconnected</span>
+              <span className="chip py-1 text-slate-700 bg-slate-100 dark:text-slate-300 dark:bg-slate-800"><AlertCircle className="w-3 h-3" aria-hidden="true" /> Disconnected</span>
             )}
           </div>
-          {project?.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{project.description}</p>}
+          {project?.description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-3xl">{project.description}</p>}
+          </div>
         </div>
         {(canEdit || project?.visibility === 'private') && (
           <div className="flex flex-wrap gap-2">
@@ -351,7 +401,7 @@ export default function KanbanBoard() {
 
       <BoardFilters value={filters} onChange={setFilters} members={members} labels={orgLabels} />
       {isFiltering(filters) && (
-        <p className="px-4 sm:px-8 pt-2 text-xs text-slate-600 dark:text-slate-400">Showing matching tasks only.</p>
+        <p className="px-4 sm:px-8 pt-2 text-xs text-slate-600 dark:text-slate-400 animate-fade-in">Showing matching tasks only.</p>
       )}
 
       {loadError && (
@@ -364,11 +414,21 @@ export default function KanbanBoard() {
           (an empty board), as WCAG asks of scrollable regions. */}
       <div className="flex-1 overflow-x-auto p-4 sm:p-8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500" tabIndex={0} role="region" aria-label="Board columns">
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-6 h-full items-start">
-            {COLUMNS.map(col => (
-              <section key={col.id} aria-label={col.title} className="w-72 sm:w-80 shrink-0 flex flex-col max-h-full">
-                <div className={`px-4 py-3 rounded-t-xl font-semibold text-sm ${col.color}`}>
-                  {col.title} <span className="ml-2 opacity-60 text-xs font-normal">{totals[col.id] ?? tasks[col.id]?.length ?? 0}</span>
+          <div className="flex gap-5 h-full items-start stagger">
+            {COLUMNS.map((col, colIndex) => (
+              <section
+                key={col.id}
+                aria-label={col.title}
+                style={{ '--i': colIndex } as React.CSSProperties}
+                className="w-72 sm:w-80 shrink-0 flex flex-col max-h-full rounded-2xl bg-slate-100/80 dark:bg-slate-900/50 ring-1 ring-slate-200/80 dark:ring-slate-800 backdrop-blur overflow-hidden"
+              >
+                <div aria-hidden="true" className={`h-1 bg-gradient-to-r ${col.accent.bar}`} />
+                <div className="flex items-center gap-2 px-4 pt-3 pb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  <span aria-hidden="true" className={`w-2 h-2 rounded-full ${col.accent.dot}`} />
+                  {col.title}
+                  <span className="ml-auto min-w-[1.5rem] rounded-full bg-white dark:bg-slate-800 px-2 py-0.5 text-center text-xs font-medium text-slate-600 dark:text-slate-300 shadow-sm tabular-nums">
+                    {totals[col.id] ?? tasks[col.id]?.length ?? 0}
+                  </span>
                 </div>
                 
                 <Droppable droppableId={col.id}>
@@ -376,9 +436,14 @@ export default function KanbanBoard() {
                     <div 
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex-1 overflow-y-auto p-3 rounded-b-xl border-x border-b border-slate-200 dark:border-slate-800 transition-colors ${snapshot.isDraggingOver ? 'bg-slate-200/50 dark:bg-slate-800/50' : 'bg-slate-50 dark:bg-slate-900/50'}`}
+                      className={`flex-1 overflow-y-auto px-2.5 pb-2.5 pt-1 mx-1 mb-1 rounded-xl transition-all duration-200 ${snapshot.isDraggingOver ? `${col.accent.over} ring-2 ring-dashed` : ''}`}
                       style={{ minHeight: '150px' }}
                     >
+                      {tasks[col.id]?.length === 0 && !snapshot.isDraggingOver && (
+                        <p className="mt-2 rounded-xl border-2 border-dashed border-slate-300/80 dark:border-slate-700 px-3 py-6 text-center text-xs text-slate-600 dark:text-slate-400">
+                          {canEdit ? 'Drop tasks here' : 'No tasks'}
+                        </p>
+                      )}
                       {tasks[col.id]?.map((task, index) => (
                         <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={!canEdit}>
                           {(provided, snapshot) => (
@@ -389,14 +454,21 @@ export default function KanbanBoard() {
                               // use the title button. The card is not itself a button, because it
                               // contains another control (the drag handle).
                               onClick={() => setSelectedTaskId(task.id)}
-                              className={`bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-3 group cursor-pointer focus-within:ring-2 focus-within:ring-indigo-500 ${snapshot.isDragging ? 'shadow-xl scale-105 ring-2 ring-indigo-500' : 'hover:border-indigo-300 dark:hover:border-indigo-500'} transition-all`}
+                              style={provided.draggableProps.style}
+                              className={`relative bg-white dark:bg-slate-800/90 p-3.5 rounded-xl border mb-2.5 group cursor-pointer focus-within:ring-2 focus-within:ring-indigo-500 ${
+                                snapshot.isDragging
+                                  ? 'shadow-2xl border-indigo-300 dark:border-indigo-500 ring-2 ring-indigo-500/40'
+                                  : 'shadow-soft border-slate-200/80 dark:border-slate-700/80 hover:shadow-lift hover:border-indigo-200 dark:hover:border-indigo-500/50'
+                              } transition-[box-shadow,border-color] duration-200`}
                             >
+                              {/* The card tilts while it is carried (inner element: the library positions the outer one). */}
+                              <div className={`transition-transform duration-200 ${snapshot.isDragging ? 'rotate-2 scale-[1.02]' : ''}`}>
                               <div className="flex items-start gap-2">
                                 <div {...provided.dragHandleProps} onClick={(e) => e.stopPropagation()} aria-label={`Move task: ${task.title}`} className={`text-slate-400 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity mt-1 cursor-grab active:cursor-grabbing ${canEdit ? '' : 'hidden'}`}>
                                   <GripVertical className="w-4 h-4" aria-hidden="true" />
                                 </div>
-                                <div className="flex-1">
-                                  <h3 className="font-medium text-slate-900 dark:text-slate-100">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-sm font-medium leading-snug text-slate-900 dark:text-slate-100">
                                     <button
                                       type="button"
                                       aria-label={`Open task: ${task.title}`}
@@ -404,7 +476,7 @@ export default function KanbanBoard() {
                                         e.stopPropagation();
                                         setSelectedTaskId(task.id);
                                       }}
-                                      className="text-left break-words outline-none"
+                                      className="text-left break-words outline-none group-hover:text-indigo-700 dark:group-hover:text-indigo-200 transition-colors"
                                     >
                                       {task.title}
                                     </button>
@@ -416,20 +488,32 @@ export default function KanbanBoard() {
                                       ))}
                                     </div>
                                   )}
-                                  <div className="flex items-center justify-between mt-3">
-                                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                                      task.priority === 'high' || task.priority === 'urgent' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                      'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                                    }`}>
-                                      {priorityLabel(task.priority)}
-                                    </span>
+                                  <div className="flex items-center justify-between gap-2 mt-3">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <PriorityChip priority={task.priority} label={priorityLabel(task.priority)} />
+                                      {task.due_date && (
+                                        <span
+                                          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+                                            isOverdue(task)
+                                              ? 'bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-200'
+                                              : 'text-slate-600 dark:text-slate-400'
+                                          }`}
+                                        >
+                                          <CalendarDays className="w-3 h-3" aria-hidden="true" />
+                                          {isOverdue(task) && <span className="sr-only">Overdue, due</span>}
+                                          {new Date(task.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        </span>
+                                      )}
+                                    </div>
                                     {task.assignee_name && (
-                                      <div className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-bold" title={task.assignee_name}>
-                                        {task.assignee_name.charAt(0).toUpperCase()}
-                                      </div>
+                                      <span title={task.assignee_name} className="shrink-0">
+                                        <Avatar name={task.assignee_name} id={task.assignee_id ?? undefined} size="xs" className="ring-0 transition-transform group-hover:scale-110" />
+                                        <span className="sr-only">Assigned to {task.assignee_name}</span>
+                                      </span>
                                     )}
                                   </div>
                                 </div>
+                              </div>
                               </div>
                             </div>
                           )}
@@ -441,8 +525,9 @@ export default function KanbanBoard() {
                           type="button"
                           onClick={() => loadMore(col.id)}
                           disabled={loadingColumn === col.id}
-                          className="w-full mt-1 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-white/60 dark:hover:bg-slate-800 rounded-lg disabled:opacity-50"
+                          className="w-full mt-1 py-2 flex items-center justify-center gap-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-white dark:hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50"
                         >
+                          {loadingColumn === col.id && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                           {loadingColumn === col.id
                             ? 'Loading...'
                             : `Show more (${Math.max(0, (totals[col.id] ?? 0) - (tasks[col.id]?.length ?? 0))} more)`}
@@ -476,7 +561,7 @@ export default function KanbanBoard() {
           canDelete={me?.role === 'admin' || me?.role === 'owner'}
           canChangeVisibility={me?.role === 'admin' || me?.role === 'owner' || project.created_by === me?.user_id}
           onClose={() => setEditingProject(false)}
-          onSaved={(saved) => {
+          onSaved={(saved: ProjectFields) => {
             setProject(saved);
             setEditingProject(false);
             fetchPeople();
@@ -511,6 +596,7 @@ export default function KanbanBoard() {
                 Cancel
               </button>
               <button type="submit" className="btn-compact" disabled={creating}>
+                {creating && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                 {creating ? 'Creating…' : 'Create task'}
               </button>
             </>

@@ -1,14 +1,16 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { CalendarDays, Loader2, Trash2 } from 'lucide-react';
+import Avatar from './ui/Avatar';
+import { PriorityChip, StatusPill } from './TaskBadges';
 import AttachmentsPanel from './AttachmentsPanel';
 import CommentsPanel from './CommentsPanel';
 import TaskLabels from './TaskLabels';
 import TaskForm, { type Assignable } from './TaskForm';
 import Dialog from './ui/Dialog';
 import { messageOf, useConfirm, useToast } from './ui/feedback';
-import { changesOf, draftOf, priorityLabel, rebaseDraft, statusLabel, toDateInput, type TaskDraft } from '@/lib/tasks';
+import { changesOf, draftOf, priorityLabel, rebaseDraft, toDateInput, type TaskDraft } from '@/lib/tasks';
 import { api, ApiError } from '@/lib/api';
 import type { Label } from '@/lib/labels';
 import type { Mentionable } from '@/lib/mentions';
@@ -139,11 +141,21 @@ export default function TaskDetailModal({ task, projectId, me, lastMessage = nul
       title={task.title}
       onClose={requestClose}
       headerExtra={
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium">{statusLabel(task.status)}</span>
-          <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-medium">{priorityLabel(task.priority)} priority</span>
-          {task.assignee_name && <span className="text-slate-600 dark:text-slate-400">Assigned to {task.assignee_name}</span>}
-          {due && <span className="text-slate-600 dark:text-slate-400">Due {new Date(task.due_date!).toLocaleDateString()}</span>}
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+          <StatusPill status={task.status} />
+          <PriorityChip priority={task.priority} label={`${priorityLabel(task.priority)} priority`} />
+          {task.assignee_name && (
+            <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+              <Avatar name={task.assignee_name} id={task.assignee_id ?? undefined} size="xs" className="ring-0" />
+              Assigned to {task.assignee_name}
+            </span>
+          )}
+          {due && (
+            <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400">
+              <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
+              Due {new Date(task.due_date!).toLocaleDateString()}
+            </span>
+          )}
         </div>
       }
       footer={

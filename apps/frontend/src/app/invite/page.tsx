@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { CheckSquare } from 'lucide-react';
 import { api } from '@/lib/api';
 import { messageOf, useConfirm } from '@/components/ui/feedback';
+import AuthShell, { AuthCard } from '@/components/AuthShell';
 
 interface InviteDetails {
   email: string;
@@ -202,12 +203,12 @@ function AcceptInviteForm() {
 
 export default function AcceptInvite() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
-      <div className="max-w-md w-full bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800">
+    <AuthShell>
+      <AuthCard>
         <Suspense fallback={<div className="text-center p-4">Loading…</div>}>
           <AcceptInviteForm />
         </Suspense>
-      </div>
-    </div>
+      </AuthCard>
+    </AuthShell>
   );
 }

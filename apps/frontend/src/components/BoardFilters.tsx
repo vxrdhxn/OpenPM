@@ -35,7 +35,7 @@ export default function BoardFilters({
   return (
     <div className="flex flex-wrap items-center gap-3 px-4 sm:px-8 pt-4">
       <div className="relative w-64">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+        <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
         <input
           type="search"
           aria-label="Search tasks"
@@ -43,7 +43,7 @@ export default function BoardFilters({
           value={value.q}
           maxLength={100}
           onChange={(e) => set({ q: e.target.value })}
-          className="input-field pl-9"
+          className="input-field pl-10"
         />
       </div>
 
@@ -95,9 +95,9 @@ export default function BoardFilters({
       {isFiltering(value) && (
         <button
           onClick={() => onChange(EMPTY_BOARD_FILTERS)}
-          className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          className="btn-ghost animate-fade-in"
         >
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4" aria-hidden="true" />
           Clear filters
         </button>
       )}

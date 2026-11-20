@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Layers, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import AuthShell, { AuthCard } from '@/components/AuthShell';
 
 /**
  * Opened from the sign-up email (docs/signup.md): finishes creating the workspace and signs its owner
@@ -28,8 +29,8 @@ function VerifySignup() {
   }, [token, router]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md glass-panel p-8 rounded-2xl text-center space-y-4">
+    <AuthShell>
+      <AuthCard className="text-center space-y-4">
         <div className="flex justify-center">
           <div className="p-3 bg-blue-500/10 rounded-2xl ring-1 ring-blue-500/20">
             <Layers className="w-8 h-8 text-blue-500" aria-hidden="true" />
@@ -51,8 +52,8 @@ function VerifySignup() {
             <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-500" aria-hidden="true" />
           </div>
         )}
-      </div>
-    </main>
+      </AuthCard>
+    </AuthShell>
   );
 }
 

@@ -59,7 +59,7 @@ export default function OrganizationPanel({ role }: { role: string }) {
     }
   };
 
-  const card = 'bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm';
+  const card = 'card animate-fade-up';
 
   if (loadError) return <div className={`${card} p-6`}><ErrorBlock message={loadError} onRetry={load} /></div>;
   if (!org) return <div className={`${card} p-6`}><LoadingBlock label="Loading organization" /></div>;

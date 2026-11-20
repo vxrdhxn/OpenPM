@@ -1,5 +1,6 @@
 'use client';
 
+import { PROJECTS_CHANGED } from '@/components/nav';
 import { useRef, useState } from 'react';
 import { Loader2, Trash2 } from 'lucide-react';
 import Dialog from './ui/Dialog';
@@ -63,6 +64,7 @@ export default function ProjectDialog({ project, canDelete = false, canChangeVis
         ? await api.patch(`/projects/${project.id}`, { name: name.trim(), description, status, ...visibilityChange })
         : await api.post('/projects', { name: name.trim(), description, visibility });
       toast(project ? 'Project saved' : 'Project created');
+      window.dispatchEvent(new Event(PROJECTS_CHANGED));
       onSaved(saved);
     } catch (err) {
       toast(messageOf(err, project ? 'Could not save the project' : 'Could not create the project'), 'error');
@@ -83,6 +85,7 @@ export default function ProjectDialog({ project, canDelete = false, canChangeVis
     try {
       await api.delete(`/projects/${project.id}`);
       toast('Project deleted');
+      window.dispatchEvent(new Event(PROJECTS_CHANGED));
       onDeleted?.();
     } catch (err) {
       toast(messageOf(err, 'Could not delete the project'), 'error');

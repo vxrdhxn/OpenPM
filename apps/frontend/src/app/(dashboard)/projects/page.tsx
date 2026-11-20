@@ -5,7 +5,9 @@ import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, FolderKanban, Clock, Loader2, Search, Lock } from 'lucide-react';
+import { Plus, FolderKanban, Clock, Loader2, Search, Lock, ArrowRight } from 'lucide-react';
+import { gradientFor } from '@/lib/palette';
+import PageHeader from '@/components/ui/PageHeader';
 import ProjectDialog from '@/components/ProjectDialog';
 import { EmptyBlock, ErrorBlock } from '@/components/ui/states';
 
@@ -19,6 +21,12 @@ interface Project {
 }
 
 const PAGE_SIZE = 24;
+
+const STATUS_FILTERS = [
+  { value: '', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Archived' },
+] as const;
 
 function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -92,23 +100,24 @@ function ProjectsPage() {
 
 
   return (
-    <div className="p-4 sm:p-8">
-      <div className="flex flex-wrap gap-4 items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Projects</h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">Manage your team&apos;s workflows and tasks.</p>
-        </div>
-        {canCreate && (
-          <button onClick={() => setIsModalOpen(true)} className="btn-compact">
-            <Plus className="w-4 h-4" aria-hidden="true" />
-            New project
-          </button>
-        )}
-      </div>
+    <div className="p-4 sm:p-8 max-w-[1400px] w-full mx-auto">
+      <PageHeader
+        icon={<FolderKanban />}
+        title="Projects"
+        subtitle="Manage your team's workflows and tasks."
+        actions={
+          canCreate && (
+            <button onClick={() => setIsModalOpen(true)} className="btn-compact">
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              New project
+            </button>
+          )
+        }
+      />
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-8">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
+          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
           <input
             type="search"
             aria-label="Search projects"
@@ -116,19 +125,26 @@ function ProjectsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             maxLength={100}
-            className="input-field pl-9"
+            className="input-field pl-10"
           />
         </div>
-        <select
-          aria-label="Filter by status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as typeof status)}
-          className="input-field sm:w-44"
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="archived">Archived</option>
-        </select>
+        <div role="group" aria-label="Filter by status" className="inline-flex self-start rounded-xl bg-slate-100 dark:bg-slate-800/70 p-1 ring-1 ring-slate-200 dark:ring-slate-700/60">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              aria-pressed={status === f.value}
+              onClick={() => setStatus(f.value)}
+              className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                status === f.value
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -138,17 +154,19 @@ function ProjectsPage() {
       )}
 
       {loading ? (
-        <div role="status" className="flex justify-center items-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" aria-hidden="true" />
+        <div role="status" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           <span className="sr-only">Loading projects</span>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} aria-hidden="true" className="skeleton h-52 rounded-2xl" style={{ animationDelay: `${i * 80}ms` }} />
+          ))}
         </div>
       ) : projects.length === 0 && filtered ? (
-        <EmptyBlock icon={<Search className="w-10 h-10" />} title="No matching projects">
+        <EmptyBlock icon={<Search />} title="No matching projects">
           Try a different search or status.
         </EmptyBlock>
       ) : projects.length === 0 ? (
         <EmptyBlock
-          icon={<FolderKanban className="w-12 h-12" />}
+          icon={<FolderKanban />}
           title="No projects yet"
           action={canCreate && <button onClick={() => setIsModalOpen(true)} className="btn-compact"><Plus className="w-4 h-4" aria-hidden="true" />Create a project</button>}
         >
@@ -156,47 +174,67 @@ function ProjectsPage() {
         </EmptyBlock>
       ) : (
         <>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {projects.map((p) => (
-            <Link key={p.id} href={`/projects/${p.id}`} className="block group">
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-all hover:border-indigo-500/50">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="p-3 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-400">
-                    <FolderKanban className="w-6 h-6" />
-                  </div>
-                  <div className="flex items-center gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 stagger">
+          {projects.map((p, i) => (
+            <Link
+              key={p.id}
+              href={`/projects/${p.id}`}
+              style={{ '--i': i } as React.CSSProperties}
+              className="card-interactive group relative flex flex-col overflow-hidden outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/40"
+            >
+              <div aria-hidden="true" className={`relative h-20 bg-gradient-to-br ${gradientFor(p.id)} ${p.status === 'archived' ? 'grayscale opacity-70' : ''}`}>
+                <div className="absolute inset-0 bg-dots opacity-30 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+                <div className="absolute -right-6 -top-10 w-32 h-32 rounded-full bg-white/15 blur-xl transition-transform duration-700 group-hover:scale-150" />
+              </div>
+              <div className="relative flex-1 flex flex-col px-6 pb-5">
+                <div className="-mt-7 mb-3 flex items-end justify-between gap-3">
+                  <span
+                    aria-hidden="true"
+                    className={`icon-tile w-14 h-14 rounded-2xl bg-gradient-to-br ${gradientFor(p.id)} text-white font-display text-xl font-bold shadow-lg ring-4 ring-white dark:ring-slate-900 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105`}
+                  >
+                    {[...p.name.trim()][0]?.toUpperCase() ?? '?'}
+                  </span>
+                  <div className="flex items-center gap-2 pb-1">
                     {p.visibility === 'private' && (
-                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      <span className="chip bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                         <Lock className="w-3 h-3" aria-hidden="true" /> Private
                       </span>
                     )}
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${p.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'}`}>
+                    <span
+                      className={`chip capitalize ${
+                        p.status === 'active'
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300'
+                          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                      }`}
+                    >
+                      {p.status === 'active' && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
                       {p.status}
                     </span>
                   </div>
                 </div>
-                <h3 className="text-xl font-semibold mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-1.5 group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors break-words">
                   {p.name}
-                </h3>
-                <p className="text-slate-500 dark:text-slate-400 text-sm line-clamp-2 mb-4">
+                </h2>
+                <p className="text-slate-600 dark:text-slate-400 text-sm line-clamp-2 mb-5">
                   {p.description || 'No description provided.'}
                 </p>
-                <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 gap-1 mt-auto">
-                  <Clock className="w-4 h-4" />
-                  Created {new Date(p.created_at).toLocaleDateString()}
+                <div className="mt-auto flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+                    Created {new Date(p.created_at).toLocaleDateString()}
+                  </span>
+                  <span aria-hidden="true" className="flex items-center gap-1 font-medium text-indigo-700 dark:text-indigo-300 opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                    Open board <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
                 </div>
               </div>
             </Link>
           ))}
         </div>
         {nextCursor && (
-          <div className="flex justify-center mt-8">
-            <button
-              onClick={loadMore}
-              disabled={loadingMore}
-              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
-            >
-              {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
+          <div className="flex justify-center mt-10">
+            <button onClick={loadMore} disabled={loadingMore} className="btn-secondary">
+              {loadingMore && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
               Load more
             </button>
           </div>

@@ -7,6 +7,7 @@ import MembersPanel from '@/components/MembersPanel';
 import OrganizationPanel from '@/components/OrganizationPanel';
 import LabelsPanel from '@/components/LabelsPanel';
 import { messageOf, useConfirm, useToast } from '@/components/ui/feedback';
+import { LoadingBlock } from '@/components/ui/states';
 
 export default function OrganizationSettings() {
   const confirm = useConfirm();
@@ -64,18 +65,22 @@ export default function OrganizationSettings() {
   };
 
   if (loading) {
-    return <div className="p-8">Loading organization settings...</div>;
+    return (
+      <div className="p-4 sm:p-8 max-w-4xl mx-auto w-full">
+        <div className="card p-6"><LoadingBlock label="Loading organization settings" rows={4} /></div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto w-full">
-      <h1 className="text-2xl font-bold mb-6 text-slate-900 dark:text-white">Organization Settings</h1>
+    <div className="p-4 sm:p-8 max-w-4xl mx-auto w-full">
+      <h1 className="page-title mb-6">Organization Settings</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Left Col: Invite Form */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="card p-6 animate-fade-up">
             <h2 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white flex items-center gap-2">
               <UserPlus className="w-5 h-5" />
               Invite Member
@@ -141,7 +146,7 @@ export default function OrganizationSettings() {
           <MembersPanel />
           <LabelsPanel />
 
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="card animate-fade-up overflow-hidden">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Invites</h2>
               <p className="text-sm text-slate-500">Invitations not accepted yet. Inviting someone who declined sends them a new link.</p>

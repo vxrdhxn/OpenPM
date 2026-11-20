@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckSquare, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import AuthShell, { AuthCard } from '@/components/AuthShell';
 
 function ResetPasswordForm() {
   const [password, setPassword] = useState('');
@@ -117,12 +118,12 @@ function ResetPasswordForm() {
 
 export default function ResetPassword() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
-      <div className="max-w-md w-full bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800">
+    <AuthShell>
+      <AuthCard>
         <Suspense fallback={<div className="text-center p-4">Loading...</div>}>
           <ResetPasswordForm />
         </Suspense>
-      </div>
-    </div>
+      </AuthCard>
+    </AuthShell>
   );
 }

@@ -47,8 +47,8 @@ export default function NotificationSettings() {
   };
 
   return (
-    <div className="p-8 max-w-2xl">
-      <h1 className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">Notifications</h1>
+    <div className="p-4 sm:p-8 max-w-2xl mx-auto w-full">
+      <h1 className="page-title mb-2">Notifications</h1>
       <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
         Choose what you are notified about. Old notifications are deleted automatically.
       </p>
@@ -58,7 +58,7 @@ export default function NotificationSettings() {
       ) : !prefs ? (
         <LoadingBlock label="Loading notification settings" />
       ) : (
-        <form onSubmit={save} className="space-y-6 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <form onSubmit={save} className="space-y-6 card p-6 animate-fade-up">
           <fieldset>
             <legend className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Notify me when…</legend>
             <div className="space-y-3">
