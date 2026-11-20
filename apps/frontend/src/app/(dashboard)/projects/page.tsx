@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useMe } from '@/components/me';
 import { api } from '@/lib/api';
 import { buildQuery, type Page } from '@/lib/query';
 import Link from 'next/link';
@@ -47,10 +48,7 @@ function ProjectsPage() {
     setIsModalOpen(false);
     if (searchParams.get('new')) router.replace('/projects');
   };
-  const [role, setRole] = useState('');
-  useEffect(() => {
-    api.get('/auth/me').then((d) => setRole(d.user.role)).catch(() => setRole(''));
-  }, []);
+  const role = useMe()?.role ?? '';
   const canCreate = role !== '' && role !== 'viewer';
 
   // Only the newest request may update the list: a slow response for an old search must not

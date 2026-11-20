@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useMe } from '@/components/me';
 import { api } from '@/lib/api';
 import { Trash2, UserPlus, Mail, Shield } from 'lucide-react';
 import MembersPanel from '@/components/MembersPanel';
@@ -13,7 +14,7 @@ export default function OrganizationSettings() {
   const confirm = useConfirm();
   const toast = useToast();
   const [invites, setInvites] = useState<any[]>([]);
-  const [myRole, setMyRole] = useState<string | null>(null);
+  const myRole = useMe()?.role ?? null;
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('member');
@@ -22,10 +23,10 @@ export default function OrganizationSettings() {
 
   const fetchInvites = useCallback(
     () =>
-      Promise.all([api.get('/invites'), api.get('/auth/me')])
-        .then(([data, session]) => {
+      api
+        .get('/invites')
+        .then((data) => {
           setInvites(data);
-          setMyRole(session.user.role);
         })
         .catch((err) => toast(messageOf(err, 'Could not load invites'), 'error'))
         .finally(() => setLoading(false)),

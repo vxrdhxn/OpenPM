@@ -21,12 +21,7 @@ import { ErrorBlock } from '@/components/ui/states';
 // Only loaded when someone opens it.
 const CommandPalette = dynamic(() => import('@/components/CommandPalette'), { ssr: false });
 
-interface Me {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
+import { MeProvider, type Me } from '@/components/me';
 
 interface SidebarProject {
   id: string;
@@ -216,6 +211,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     // One WebSocket for the whole signed-in app (the badge and the board share it).
+    <MeProvider value={me}>
     <WebsocketProvider>
       <a
         href="#main"
@@ -302,5 +298,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       {paletteOpen && <CommandPalette isManager={isManager} onClose={() => setPaletteOpen(false)} />}
     </WebsocketProvider>
+    </MeProvider>
   );
 }

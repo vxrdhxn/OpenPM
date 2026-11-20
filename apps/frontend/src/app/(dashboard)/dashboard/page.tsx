@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useMe } from '@/components/me';
 import ThreeScene from '@/components/three/ThreeScene';
 import { useEffect, useState } from 'react';
 import { Activity, AlarmClock, ArrowUpRight, CalendarClock, CheckCircle2, Clock3, ListTodo, TrendingUp, UserPlus } from 'lucide-react';
@@ -91,13 +92,7 @@ function Body<T>({ section, children }: { section: Section<T>; children: (data: 
 export default function Dashboard() {
   // "Now" for the deadline window and the greeting, fixed for this visit.
   const [now] = useState(() => Date.now());
-  const [firstName, setFirstName] = useState('');
-  useEffect(() => {
-    api
-      .get('/profile/me')
-      .then((me: { name?: string }) => setFirstName(me.name?.trim().split(/\s+/)[0] ?? ''))
-      .catch(() => undefined);
-  }, []);
+  const firstName = useMe()?.name?.trim().split(/\s+/)[0] ?? '';
 
   const summary = useSection<Summary>(() => api.get('/dashboard'));
   const mine = useSection<Page<TaskRow>>(() =>

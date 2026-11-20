@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useMe } from '@/components/me';
 import { Tag, Trash2 } from 'lucide-react';
 import LabelChip from './LabelChip';
 import { useConfirm } from '@/components/ui/feedback';
-import { api } from '@/lib/api';
 import { createLabel, deleteLabel, LABEL_COLORS, listLabels, updateLabel, type LabelColor, type OrgLabel } from '@/lib/labels';
 
 const RANK: Record<string, number> = { owner: 4, admin: 3, member: 2, viewer: 1 };
@@ -15,7 +15,7 @@ const RANK: Record<string, number> = { owner: 4, admin: 3, member: 2, viewer: 1 
  */
 export default function LabelsPanel() {
   const confirm = useConfirm();
-  const [role, setRole] = useState('');
+  const role = useMe()?.role ?? '';
   const [labels, setLabels] = useState<OrgLabel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,7 +40,6 @@ export default function LabelsPanel() {
 
   useEffect(() => {
     load();
-    api.get('/auth/me').then((session) => setRole(session.user.role)).catch(() => setRole(''));
   }, [load]);
 
   const run = async (action: () => Promise<unknown>, fallback: string) => {

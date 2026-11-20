@@ -1,15 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useMe } from '@/components/me';
 import { Crown, LogOut, UserMinus, Users } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm, useToast } from '@/components/ui/feedback';
 import { assignableRoles, canManage, canTransferOwnership, leaveBlockedReason, type Member, type Role } from '@/lib/members';
-
-interface Me {
-  user_id: string;
-  role: Role;
-}
 
 /**
  * The organization's members: change roles, remove people, and leave. Actions are only shown where
@@ -19,7 +15,7 @@ export default function MembersPanel() {
   const confirm = useConfirm();
   const toast = useToast();
   const [members, setMembers] = useState<Member[]>([]);
-  const [me, setMe] = useState<Me | null>(null);
+  const me = useMe();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -27,10 +23,10 @@ export default function MembersPanel() {
   // State is only set in the promise callbacks, never synchronously in the effect.
   const load = useCallback(
     () =>
-      Promise.all([api.get('/members'), api.get('/auth/me')])
-        .then(([list, session]) => {
+      api
+        .get('/members')
+        .then((list) => {
           setMembers(list);
-          setMe(session.user);
           setError('');
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Could not load members'))
@@ -110,7 +106,7 @@ export default function MembersPanel() {
     return <div className="p-6 text-slate-500">Loading members...</div>;
   }
 
-  const actor = me ? { id: me.user_id, role: me.role } : null;
+  const actor = me ? { id: me.id, role: me.role as Role } : null;
   const leaveBlocked = actor ? leaveBlockedReason(actor, members) : null;
 
   return (

@@ -31,9 +31,25 @@ development database.
 | `a11y.spec.ts` | axe-core (WCAG 2.1 A and AA rules) on every main screen, the task dialog and a confirmation, at desktop and phone size. |
 | `responsive.spec.ts` | Phone (Pixel 7, Chromium): the menu drawer opens, navigates, closes on Escape and returns focus; no page scrolls sideways; the task dialog's Save stays on screen. |
 | `login.spec.ts` | The login form renders. |
+| `admin.spec.ts` | The two sign-in doors: `/admin/login` leads to the admin door and an owner lands in the admin area; the member door takes the same account to the dashboard; switching doors; a member at the admin door is told so (the API's own tests cover the real refusal). |
+| `errors.spec.ts` | What people see when things fail (injected with `page.route`): a list that cannot load says so and *Try again* recovers; one failed dashboard section does not blank the others; a network failure is reported; a refused move is put back with the reason; a failed save keeps the edits; the offline banner. And undo after delete: Undo brings the task back and nothing is sent; without it the delete goes after the grace period; leaving the page sends it at once. |
+| `visual.spec.ts` | Visual regression (opt-in): the signed-out pages and the dark sign-in compared with committed screenshots. See below. |
 
 Locators use roles and accessible names (`getByRole`, `getByLabel`), so a control that loses its
 label or role fails a test, not only an accessibility scan.
+
+## Visual regression
+
+```bash
+E2E_VISUAL=1 npx playwright test --project=visual                      # compare
+E2E_VISUAL=1 npx playwright test --project=visual --update-snapshots   # accept a deliberate change
+```
+
+Screenshots live in `tests/visual.spec.ts-snapshots/`, one set per operating system (the file name
+ends in `-win32`, `-linux`, ...), because fonts render slightly differently on each. Only the
+`-win32` set is committed today; to check in CI, make the `-linux` set once on the CI image and
+commit it. 3D canvases are masked (WebGL differs between GPUs) and the pages are signed out, so no
+names or dates change between runs. A difference of more than 1% of the pixels fails.
 
 Environment: `E2E_BASE_URL` (frontend; set it to skip starting the dev server) and `E2E_API_URL`
 (default `http://localhost:3000/api`).

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { isManagerRole, useMe } from '@/components/me';
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, Gauge, KeyRound, Mail, Settings, ShieldAlert, ShieldCheck, Tags, UserPlus, Users } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -66,18 +67,15 @@ const More = ({ href, children }: { href: string; children: React.ReactNode }) =
  * The API enforces who may read this; the page also says so plainly to anyone else.
  */
 export default function AdminHome() {
-  const [role, setRole] = useState<string | null>(null);
+  const role = useMe()?.role ?? null;
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let live = true;
-    api
-      .get('/auth/me')
-      .then(async (me: { user: { role: string } }) => {
-        if (!live) return;
-        setRole(me.user.role);
-        if (me.user.role !== 'owner' && me.user.role !== 'admin') return;
+    if (!isManagerRole(role ?? undefined)) return;
+    Promise.resolve()
+      .then(async () => {
         const [org, members, invites, security, failed] = await Promise.all([
           api.get('/organization'),
           api.get('/members'),
@@ -100,7 +98,7 @@ export default function AdminHome() {
     return () => {
       live = false;
     };
-  }, []);
+  }, [role]);
 
   if (role && role !== 'owner' && role !== 'admin') {
     return (

@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMe } from '@/components/me';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck, Loader2 } from 'lucide-react';
 import { useWebsocket } from '@/hooks/useWebsocket';
-import { api } from '@/lib/api';
 import { NOTIFICATIONS_CHANGED } from '@/components/NotificationsLink';
 import { timeAgo } from '@/lib/activity';
 import Avatar from '@/components/ui/Avatar';
@@ -31,11 +31,7 @@ export default function NotificationsPage() {
   const [error, setError] = useState('');
   const { lastMessage } = useWebsocket();
   const requestId = useRef(0);
-  const [meId, setMeId] = useState<string | undefined>();
-
-  useEffect(() => {
-    api.get('/auth/me').then((session) => setMeId(session.user.user_id)).catch(() => undefined);
-  }, []);
+  const meId = useMe()?.id;
 
   // First page. State is only set in the promise callbacks.
   const load = useCallback(() => {

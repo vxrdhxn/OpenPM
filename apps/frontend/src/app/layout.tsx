@@ -7,9 +7,11 @@ import { FeedbackProvider } from '@/components/ui/feedback';
 import MotionLayer from '@/components/motion/MotionLayer';
 import { THEME_SCRIPT } from '@/lib/theme';
 
-// Display type for headings, a grotesk for reading, a mono for numbers and labels.
-const sans = Space_Grotesk({ subsets: ['latin'], variable: '--font-sans', display: 'swap', weight: ['400', '500', '600', '700'] });
-const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-display', display: 'swap', weight: ['400', '500', '600', '700', '800'] });
+// Display type for headings, a grotesk for reading, a mono for numbers and labels. The first two are
+// variable fonts: with no `weight`, next/font serves one file per font that holds every weight,
+// instead of one file per weight. Plex Mono is not variable, so it names the two weights it uses.
+const sans = Space_Grotesk({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
 const mono = IBM_Plex_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap', weight: ['400', '500'] });
 
 export const metadata: Metadata = {

@@ -95,7 +95,7 @@ npm test
 
 - [x] Use strict TypeScript settings where practical. — `strict` plus `noUncheckedIndexedAccess` etc. in `tsconfig.base.json`
 - [x] Remove unsafe `any` from important paths. — routes, services and repositories are typed (route generics for body/params/query); `any` remains only in infrastructure helpers (cache payloads, `db.query`'s default row type, the realtime hub)
-- [ ] Avoid duplicated domain types. — *partial:* duplicates within each app removed (one `Queryable`, `TaskLabel` and `TaskPath` in the API; one status-name table in the frontend). The API and frontend still each declare the wire types (task status/priority, roles, labels, notifications); sharing them needs a `packages/` workspace that all three Docker builds copy
+- [x] Avoid duplicated domain types. — one wire vocabulary (`apps/api/src/wire`: roles, task statuses and priorities, label colours, notification types, sign-in doors, `Page<T>`) used by the API and imported by the frontend as `@openpm/wire`; the API's own repeats removed too (Nov 2026)
 - [x] Validate external input at runtime. — bodies, query strings and path params by JSON Schema; NUL bytes refused; the WebSocket accepts no client messages
 - [x] Validate environment variables at startup. — API and worker both validate with zod (`apps/api/src/config.ts`, `apps/worker/src/config.ts`) and exit listing every invalid variable; the worker requires `APP_URL` in production (`docs/jobs.md`)
 
@@ -824,7 +824,7 @@ Audit event
 ```
 
 - [x] Automate this flow. — `journey.spec.ts` in CI (Phase 10)
-- [ ] Add failure-path tests. — *partial:* unsaved edits, unknown project and page; no browser tests of API errors
+- [x] Add failure-path tests. — `errors.spec.ts`: API errors, network failure, a refused move put back, a failed save keeping edits, the offline banner (Nov 2026)
 
 ## Load testing
 
@@ -888,12 +888,12 @@ Audit event
 
 ## Frontend
 
-- [ ] Analyze bundle size.
+- [x] Analyze bundle size. — `npm run perf:bundle` measures first-load JS, the 3D chunk and fonts per page in a real browser, against budgets (`docs/performance.md`): 155–169 KB per page
 - [x] Lazy-load heavy components. — task, project and people dialogs and the command palette load on first open (`next/dynamic`)
-- [ ] Avoid unnecessary client components.
-- [ ] Optimize data fetching.
-- [ ] Prevent excessive re-renders.
-- [ ] Optimize assets.
+- [x] Avoid unnecessary client components. — audited: every client component uses state, effects, handlers or browser APIs; the home page is a server component with client islands
+- [x] Optimize data fetching. — the signed-in user is loaded once and shared (`useMe()`): one request fewer on the dashboard, board, admin area and projects list
+- [x] Prevent excessive re-renders. — board cards memoized (`BoardCardContent`); the motion layer runs on refs; 3D scenes take live data without remounting
+- [x] Optimize assets. — self-hosted Latin-subset fonts (variable where available), no images, 3D only where shown; font budget in `perf:bundle`
 
 ## Database
 
@@ -1051,16 +1051,16 @@ Before release:
 - [x] Keyboard navigation. — dialogs, skip link, menu, keyboard drag (tested; `docs/accessibility.md`)
 - [ ] Accessibility review. — *partial:* axe WCAG 2.1 AA clean on every screen in CI, keyboard reviewed; no screen-reader pass yet
 - [x] Responsive UI. — phone menu drawer, no sideways scrolling, tested at Pixel 7 size
-- [ ] Visual regression checks where useful.
+- [x] Visual regression checks where useful. — `visual.spec.ts` (opt-in, `E2E_VISUAL=1`): signed-out pages and the dark sign-in against committed screenshots, 3D masked; Windows baselines committed, Linux baselines to make on the CI image
 - [x] Clear onboarding. — dashboard welcome with three steps; `docs/user-guide.md`
 - [x] Helpful first-run experience. — "Create your first project" opens the project dialog
 - [x] Destructive-action confirmations. — in-app confirm (Cancel focused) for every delete, remove and leave
-- [ ] Undo/recovery where appropriate. — *partial:* unsaved task edits are protected; archive instead of delete for projects; toasts take an action, and moving a card offers Undo; no undo after delete (needs soft delete in the API)
+- [x] Undo/recovery where appropriate. — unsaved task edits are protected; archive instead of delete for projects; moving a card offers Undo; deleting a task offers Undo (the delete is sent after a grace period, at once if the page is left: `lib/pendingDelete.ts`)
 - [x] 404 page.
 - [x] 500/error page. — `error.tsx` and `global-error.tsx`
 - [x] Network failure states. — offline banner; failed requests shown, not swallowed
 - [x] No placeholder UI. — the board's "Loading..." title and the empty app shell are gone
-- [ ] No production console errors. — *partial:* no app errors in dev; production build not checked in a browser
+- [x] No production console errors. — production build checked in a browser on every main page, signed in and out, light and dark: no errors (Nov 2026)
 
 ---
 
@@ -1127,7 +1127,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] Repository audit.
 - [x] Baseline tests.
-- [ ] Architecture cleanup. — *partial:* layering, worker env validation, unused dependencies and in-app duplicate types done (Nov 2026); open: API and frontend share no wire types
+- [x] Architecture cleanup. — layering, worker env validation, unused dependencies, in-app duplicate types, and shared wire types between the API and frontend (Nov 2026)
 - [x] Environment validation.
 - [x] Database schema finalization. — single-org membership decided; delete rules pinned (migration 023); task versions (024); bounded lists
 - [x] Authentication hardening. — revocation via token_version, current role on every request, uniform register conflicts (H.3)
@@ -1329,7 +1329,7 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Reliability           | 🟢     | Failure-tested in Compose (Postgres, Redis, worker, API restarts, pool exhaustion); rollback and restore rehearsed on kind. No incident runbook; not tested on a cloud cluster. |
 | Backup/restore        | 🟢     | Scripts, a drill that compares every table, and a disaster recovery rehearsed (`docs/backup-restore.md`). No scheduled job for the in-chart Postgres; no retention policy. |
 | Documentation         | 🟢     | README, CONTRIBUTING, SECURITY, user guide, deploying, releasing, backup/restore, release checklist, security review, accessibility, testing and feature docs. Missing: threat model, per-route permissions, task/project WebSocket events, incident runbook, privacy/data policy. |
-| UX polish             | 🟢     | Phase 10: task and project editing, shared dialogs, toasts, error and empty states, phone layout, onboarding, WCAG 2.1 AA in CI. Redesign (Nov 20): design system with light/dark tokens, animations that respect reduced motion, landing page, split-screen sign-in, sidebar with recent boards, command palette, activity page, undo on board moves. Open: screen-reader pass, undo after delete, visual regression checks. |
+| UX polish             | 🟢     | Nov 21: paper-ink-red redesign across every page (home page, motion, light/dark switch), admin and member sign-in with an admin area, undo after delete. Phase 10: task and project editing, shared dialogs, toasts, error and empty states, phone layout, onboarding, WCAG 2.1 AA in CI. Redesign (Nov 20): design system with light/dark tokens, animations that respect reduced motion, landing page, split-screen sign-in, sidebar with recent boards, command palette, activity page, undo on board moves. Open: screen-reader pass, undo after delete, visual regression checks. |
 | Production readiness  | 🟡     | v0.1.0 released. To run it: merge the deploy PR, create `openpm-secrets` in `openpm-prod`, sync. Never run on a cloud cluster. |
 
 ### Status legend

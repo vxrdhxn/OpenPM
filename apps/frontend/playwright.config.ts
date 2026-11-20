@@ -33,7 +33,7 @@ export default defineConfig({
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/admin.json' },
       dependencies: ['setup'],
-      testIgnore: /auth\.setup\.ts/,
+      testIgnore: /(auth\.setup|visual)\.(ts|spec\.ts)/,
     },
     {
       // Phone layout on Chromium (an iPhone profile would need WebKit installed).
@@ -42,6 +42,19 @@ export default defineConfig({
       dependencies: ['setup'],
       testMatch: /(responsive|a11y)\.spec\.ts/,
     },
+    // Visual regression (tests/visual.spec.ts): screenshots compared with committed baselines.
+    // Opt in with E2E_VISUAL=1. Fonts render differently per operating system, so baselines are kept
+    // per platform (the file name ends in -win32, -linux, ...): make them once on the machine or CI
+    // image that will check them, with `npx playwright test --project=visual --update-snapshots`.
+    ...(process.env.E2E_VISUAL
+      ? [
+          {
+            name: 'visual',
+            use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 }, colorScheme: 'light' as const },
+            testMatch: /visual\.spec\.ts/,
+          },
+        ]
+      : []),
   ],
   webServer: process.env.E2E_BASE_URL
     ? undefined
