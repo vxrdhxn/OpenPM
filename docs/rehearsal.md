@@ -188,3 +188,38 @@ there is no managed database on kind, and the Ingress had no TLS.
   Ingress and counted per pod**: see [security-review.md](security-review.md), findings 1–6.
 - **Node's `fetch` drops a custom `Host` header**, so the first test calls through Traefik got 404s.
   This only affected the test client, which now uses `http.get`.
+
+## Cloud cluster: Azure AKS, 2026-11-21
+
+The first run on a cloud cluster. The v0.1.0 release (chart from the `v0.1.0` tag, images
+`ghcr.io/vxrdhxn/openpm-*:0.1.0` pulled anonymously from GHCR) on AKS in Central India: one
+`Standard_B2s_v2` node, Kubernetes v1.36, Azure CNI overlay with the Cilium dataplane (which enforces
+NetworkPolicy). Traefik as the Ingress controller behind an Azure load balancer, cert-manager with a
+Let's Encrypt certificate for `openpm.<ip>.sslip.io`. Postgres and Redis in-chart on Azure Disk
+(`default` storage class); secrets passed at install time.
+
+| Check | Result |
+| --- | --- |
+| Install | `helm install --wait` deployed; all pods ready, migrations applied by the init container, post-install smoke test passed. Volumes bound on Azure Disk. |
+| TLS | A Let's Encrypt certificate was issued over HTTP-01 through the Ingress within a minute. HTTP redirects to HTTPS (301). |
+| App flow from the internet | Register (cookie `HttpOnly; Secure; SameSite=Strict`), project, task and the board's task list through the public HTTPS URL. The worker processed the `task_created` job via the in-chart Redis. |
+| NetworkPolicy (enforced by Cilium) | Allowed: API→Postgres, worker→Redis, frontend→API. Blocked: frontend→Postgres, frontend→Redis, worker→API. Same as on kind. |
+
+### Found
+
+- **Chart and images must come from the same release.** Installing the chart from `main` with the
+  `0.1.0` images failed: the chart passes `DATABASE_MIGRATION_URL` and an app-user `DATABASE_URL`
+  (least-privilege database user, added after 0.1.0), which the 0.1.0 migrator does not know, so it
+  tried to sign in as a user that did not exist yet. Using the chart from the `v0.1.0` tag worked.
+  **Open risk:** the production Argo CD app (`argocd/apps/openpm-prod.yaml`) syncs the chart from
+  `main` (`targetRevision: HEAD`) while `values.prod.yaml` pins the images to the last release, so
+  the same mismatch can reach production whenever the chart on `main` needs a newer app.
+- The worker logged one Redis `ETIMEDOUT` 12 s after starting (Redis not ready yet) and reconnected
+  by itself.
+
+### Not covered
+
+- Argo CD, `values.prod.yaml` with an existing Secret, and a managed database (Azure Database for
+  PostgreSQL); these were rehearsed on kind only.
+- More than one node: PDB drains and topology spread across zones.
+- Load on cloud hardware.

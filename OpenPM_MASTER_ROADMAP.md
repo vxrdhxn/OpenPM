@@ -4,7 +4,7 @@
 >
 > **Goal:** Build OpenPM into a polished, secure, reliable, observable, self-hostable, Kubernetes-native project-management platform without sacrificing engineering quality for speed.
 >
-> **Last audited against the code:** 2026-11-17, after the v0.1.0 release (commit `d7fa018`). A box is ticked only when the code exists and is covered by tests or CI, or the procedure has been rehearsed. Items marked *partial* exist but are incomplete; "not applicable" items are ticked with the reason. Process checklists (Definition of Done, agent rules) and outlines (threat list) are plain bullets, not tasks. "Mocked DB" means the tests use a fake database, not a live Postgres. Deployment, upgrade, rollback, restore and failure tests have run on a local kind cluster and Compose, not on a cloud cluster. The summary is in section 36.
+> **Last audited against the code:** 2026-11-17, after the v0.1.0 release (commit `d7fa018`). A box is ticked only when the code exists and is covered by tests or CI, or the procedure has been rehearsed. Items marked *partial* exist but are incomplete; "not applicable" items are ticked with the reason. Process checklists (Definition of Done, agent rules) and outlines (threat list) are plain bullets, not tasks. "Mocked DB" means the tests use a fake database, not a live Postgres. Deployment, upgrade, rollback, restore and failure tests have run on a local kind cluster and Compose; the v0.1.0 release was also installed on a cloud cluster (Azure AKS, 2026-11-21: install, TLS, app flow, NetworkPolicy). The summary is in section 36.
 
 ---
 
@@ -1094,7 +1094,7 @@ Do not call OpenPM production-ready until all critical gates pass.
 
 - [x] Docker builds.
 - [x] Helm validates.
-- [x] Kubernetes deployment succeeds. — kind (G.4); not yet a real cluster
+- [x] Kubernetes deployment succeeds. — kind (G.4); Azure AKS with Let's Encrypt TLS, 2026-11-21 (`docs/rehearsal.md`)
 - [x] Probes work. — API not ready until the database works; observed on kind
 - [x] HPA works where applicable. — kind + metrics-server: 2 → 7 under load, back to 2 after (G.5)
 - [x] NetworkPolicy works. — enforced on kind: required paths open, others blocked
@@ -1319,7 +1319,7 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Security              | 🟡     | Threat model and security model (`docs/threat-model.md`, `docs/security-model.md`); pre-release review with 7 fixes. No default credentials, nonce-based CSP, security audit log, least-privilege DB user, hostile-input tests, `npm audit`, gitleaks, Trivy and CodeQL in CI. Open: no MFA or account lockout; sign-up still reveals registered emails; tenant filtering is per query, not in a shared data layer. |
 | File handling         | 🟢     | Allowlist, size limit, magic-byte check, random keys, org-scoped authorization, forced download; verified against MinIO. Not covered: malware scanning, pending-upload reaper, retention. |
 | Docker                | 🟢     | Multi-stage, alpine, non-root, Trivy-clean; tag strategy `X.Y.Z` + `sha-<commit>`. Compose requires `JWT_SECRET` and keeps Postgres/Redis on localhost. The worker image has no `HEALTHCHECK` (Kubernetes probes it). |
-| Kubernetes            | 🟢     | Installed and exercised on kind: app flow, NetworkPolicies, upgrades, rollback, Argo CD, Ingress, HPA, a production-values install from an existing Secret, restore. Not tested: a cloud cluster, node drain (PDB), topology spread. |
+| Kubernetes            | 🟢     | Installed and exercised on kind: app flow, NetworkPolicies, upgrades, rollback, Argo CD, Ingress, HPA, a production-values install from an existing Secret, restore. Also installed on Azure AKS (TLS, app flow, NetworkPolicy under Cilium). Not tested on a cloud cluster: Argo CD, upgrades, multi-node drain and topology spread. |
 | Helm                  | 🟢     | No default credentials (render fails without them), `existingSecret`, digest pinning, smoke test hook; CI renders and checks three value sets. No `values.schema.json`. |
 | ArgoCD                | 🟢     | App-of-apps; dev auto-syncs with self-heal, prod syncs by hand; both read credentials from `openpm-secrets`. Dev upgraded off the old default credentials on kind. Prod not yet synced. |
 | Observability         | 🟢     | Structured logs, API/worker metrics, 2 dashboards, 18 tested alerts, run against live Prometheus/Grafana. No log retention policy, Redis latency metric or infrastructure dashboards. |
@@ -1330,7 +1330,7 @@ Audited 2026-11-17 against commit `d7fa018` (v0.1.0 is `4290599`).
 | Backup/restore        | 🟢     | Scripts, a drill that compares every table, and a disaster recovery rehearsed (`docs/backup-restore.md`). No scheduled job for the in-chart Postgres; no retention policy. |
 | Documentation         | 🟢     | README, CONTRIBUTING, SECURITY, user guide, deploying, releasing, backup/restore, release checklist, security review, accessibility, testing and feature docs. Missing: threat model, per-route permissions, task/project WebSocket events, incident runbook, privacy/data policy. |
 | UX polish             | 🟢     | Nov 21: paper-ink-red redesign across every page (home page, motion, light/dark switch), admin and member sign-in with an admin area, undo after delete. Phase 10: task and project editing, shared dialogs, toasts, error and empty states, phone layout, onboarding, WCAG 2.1 AA in CI. Redesign (Nov 20): design system with light/dark tokens, animations that respect reduced motion, landing page, split-screen sign-in, sidebar with recent boards, command palette, activity page, undo on board moves. Open: screen-reader pass, undo after delete, visual regression checks. |
-| Production readiness  | 🟡     | v0.1.0 released. To run it: merge the deploy PR, create `openpm-secrets` in `openpm-prod`, sync. Never run on a cloud cluster. |
+| Production readiness  | 🟡     | v0.1.0 released. To run it: merge the deploy PR, create `openpm-secrets` in `openpm-prod`, sync. Installed and verified on Azure AKS (2026-11-21); not yet run there with Argo CD or a managed database. |
 
 ### Status legend
 
