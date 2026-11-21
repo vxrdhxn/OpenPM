@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="#screenshots">Screenshots</a> •
   <a href="#features">Features</a> •
   <a href="#quickstart">Quickstart</a> •
   <a href="#architecture">Architecture</a> •
@@ -31,6 +32,44 @@
 Most project management tools are SaaS-only. Your data lives on someone else's servers, your workflows are locked behind their pricing tiers, and one API change breaks your integrations.
 
 **OpenPM is different.** Deploy it on your infrastructure - a single Docker Compose command for small teams, or a production Helm chart on Kubernetes for scale. You own everything.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/board-light.png" alt="Kanban board with To Do, In Progress, In Review and Done columns, tasks with labels, priorities, due dates and assignees" width="100%" />
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/dashboard-dark.png" alt="Dashboard in dark mode: open, overdue and upcoming tasks, project progress and activity" /></td>
+    <td width="50%"><img src="docs/screenshots/task-light.png" alt="Task dialog: status, priority, assignee, due date, description, labels and attachments" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Dashboard (dark mode)</sub></td>
+    <td align="center"><sub>Task details</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/projects-light.png" alt="Projects list" /></td>
+    <td width="50%"><img src="docs/screenshots/admin-light.png" alt="Admin area: members, pending invites, failed sign-ins and recent security events" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Projects</sub></td>
+    <td align="center"><sub>Admin area</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/phone-dashboard-light.png" alt="Dashboard on a phone" width="24%" />
+  &nbsp;
+  <img src="docs/screenshots/phone-board-light.png" alt="Board on a phone" width="24%" />
+  &nbsp;
+  <img src="docs/screenshots/login-light.png" alt="Sign-in page" width="46%" />
+</p>
+
+All screens, light and dark, are in [`docs/screenshots/`](docs/screenshots/). They are regenerated with
+demo data by `apps/frontend/tests/screenshots.spec.ts` (instructions at the top of the file).
 
 ---
 

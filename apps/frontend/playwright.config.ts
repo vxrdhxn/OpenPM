@@ -33,7 +33,7 @@ export default defineConfig({
       name: 'desktop',
       use: { ...devices['Desktop Chrome'], storageState: 'tests/.auth/admin.json' },
       dependencies: ['setup'],
-      testIgnore: /(auth\.setup|visual)\.(ts|spec\.ts)/,
+      testIgnore: /(auth\.setup|visual|screenshots)\.(ts|spec\.ts)/,
     },
     {
       // Phone layout on Chromium (an iPhone profile would need WebKit installed).
@@ -52,6 +52,16 @@ export default defineConfig({
             name: 'visual',
             use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 }, colorScheme: 'light' as const },
             testMatch: /visual\.spec\.ts/,
+          },
+        ]
+      : []),
+    // README screenshots (tests/screenshots.spec.ts writes docs/screenshots/). Opt in with E2E_SCREENSHOTS=1.
+    ...(process.env.E2E_SCREENSHOTS
+      ? [
+          {
+            name: 'screenshots',
+            use: { ...devices['Desktop Chrome'], viewport: { width: 1720, height: 1000 } },
+            testMatch: /screenshots\.spec\.ts/,
           },
         ]
       : []),
