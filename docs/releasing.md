@@ -1,7 +1,11 @@
 # Releasing, deploying and rolling back
 
 Production runs exactly what `helm/openpm/values.prod.yaml` on `main` says: each image is pinned
-by digest, and Argo CD's `openpm-prod` app deploys it when someone syncs it by hand. Every production
+by digest, and Argo CD's `openpm-prod` app deploys it when someone syncs it by hand. Argo CD reads
+the chart and that file from the tag `deploy/vX.Y.Z` (`targetRevision` in
+`argocd/apps/openpm-prod.yaml`): the deploy commit, which is the release tag plus the digests. So the
+chart always comes from the same release as the images; a chart change on `main` cannot reach
+production ahead of the app it was written for. Every production
 change is a reviewed commit, and every rollback is a revert.
 
 ```
@@ -74,7 +78,7 @@ git revert -m 1 <merge commit of "deploy: vX.Y.Z to production">
 argocd app sync openpm-prod
 ```
 
-The revert pins the previous release's digests again, so git and the cluster stay in agreement.
+The revert points `openpm-prod` at the previous release's deploy tag again, so git and the cluster stay in agreement.
 The images are not rebuilt; the previous ones are still in the registry. Rehearsed on kind; see
 [rehearsal.md](rehearsal.md#release-deploy-and-rollback-phase-8-2026-11-17).
 

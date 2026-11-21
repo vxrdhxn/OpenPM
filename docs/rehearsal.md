@@ -212,9 +212,10 @@ Let's Encrypt certificate for `openpm.<ip>.sslip.io`. Postgres and Redis in-char
   `0.1.0` images failed: the chart passes `DATABASE_MIGRATION_URL` and an app-user `DATABASE_URL`
   (least-privilege database user, added after 0.1.0), which the 0.1.0 migrator does not know, so it
   tried to sign in as a user that did not exist yet. Using the chart from the `v0.1.0` tag worked.
-  **Open risk:** the production Argo CD app (`argocd/apps/openpm-prod.yaml`) syncs the chart from
-  `main` (`targetRevision: HEAD`) while `values.prod.yaml` pins the images to the last release, so
-  the same mismatch can reach production whenever the chart on `main` needs a newer app.
+  The production Argo CD app had the same mismatch: it synced the chart from `main` while
+  `values.prod.yaml` pinned the images to the last release. **Fixed:** `openpm-prod` now deploys the tag
+  `deploy/vX.Y.Z` (the deploy commit: the release's chart plus the digests). A two-source app (chart
+  from the tag, values from `main`) was tried first; Argo CD refuses two revisions of one repository.
 - **`helm upgrade --wait` failed** on the backup volume, which stays `Pending` until the first
   scheduled backup (Azure Disk binds on first use). Expected and documented in
   [backup-restore.md](backup-restore.md); without `--wait` (Helm 4 still waits for the smoke test)

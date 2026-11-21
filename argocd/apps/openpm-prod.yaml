@@ -9,7 +9,12 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/vxrdhxn/OpenPM.git'
-    targetRevision: HEAD
+    # The release's deploy tag, never a branch: the chart and values.prod.yaml (with the image
+    # digests) come from one commit, so production never runs a chart from main with images from an
+    # older release (docs/releasing.md). The release workflow tags its "deploy: vX.Y.Z to production"
+    # commit deploy/vX.Y.Z and sets this line in the same commit; keep the "# deploy tag" marker, the
+    # workflow finds the line by it.
+    targetRevision: deploy/v0.1.0 # deploy tag
     path: helm/openpm
     helm:
       valueFiles:
@@ -21,7 +26,7 @@ spec:
   # Manual sync on purpose: production changes only when someone syncs a reviewed revision (in the
   # UI or `argocd app sync openpm-prod`). Automated sync with prune would deploy every commit on main
   # the moment it lands, and delete whatever a bad commit removes. Dev (openpm-dev.yaml) syncs
-  # automatically. For release pinning, set targetRevision to a tag instead of HEAD.
+  # automatically.
   syncPolicy:
     syncOptions:
       - CreateNamespace=true

@@ -224,6 +224,10 @@ jobs:
         run: |
           # Changes only the image lines; yq alone would also drop every blank line (scripts/pin-images.sh).
           scripts/pin-images.sh helm/openpm/values.prod.yaml "$VERSION" < images.txt
+          # Production deploys this commit (the tag's chart + these digests) by its deploy tag, created
+          # after the commit below (argocd/apps/openpm-prod.yaml).
+          sed -i -E "s|^( *targetRevision: )[^ ]+( # deploy tag)$|\1deploy/$TAG\2|" argocd/apps/openpm-prod.yaml
+          grep -qE "^ *targetRevision: deploy/$TAG # deploy tag$" argocd/apps/openpm-prod.yaml || { echo "::error::openpm-prod not pointed at deploy/$TAG"; exit 1; }
           git diff
           # The PR may not run CI (see the checkout token above), so validate the change here.
           helm lint --strict helm/openpm -f helm/openpm/values.prod.yaml
@@ -242,8 +246,11 @@ jobs:
           git switch -c "$branch"
           git commit -am "deploy: $TAG to production"
           git push origin "$branch"
+          # Immutable name for this exact commit; openpm-prod deploys it once the PR is merged.
+          git tag "deploy/$TAG"
+          git push origin "deploy/$TAG"
           {
-            echo "Pins production (\`helm/openpm/values.prod.yaml\`) to the images of [$TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG)."
+            echo "Pins production to [$TAG]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG): its images in \`helm/openpm/values.prod.yaml\`, deployed from the tag \`deploy/$TAG\` (this PR's commit: the release's chart with these digests; \`argocd/apps/openpm-prod.yaml\`)."
             echo
             while read -r app image digest; do echo "- $app: \`$image:$VERSION@$digest\`"; done < images.txt
             echo
