@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/assets/logo.svg" alt="OpenPM" width="80" />
-</p>
+
 
 <h1 align="center">OpenPM</h1>
 
