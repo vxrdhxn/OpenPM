@@ -204,6 +204,7 @@ Let's Encrypt certificate for `openpm.<ip>.sslip.io`. Postgres and Redis in-char
 | TLS | A Let's Encrypt certificate was issued over HTTP-01 through the Ingress within a minute. HTTP redirects to HTTPS (301). |
 | App flow from the internet | Register (cookie `HttpOnly; Secure; SameSite=Strict`), project, task and the board's task list through the public HTTPS URL. The worker processed the `task_created` job via the in-chart Redis. |
 | NetworkPolicy (enforced by Cilium) | Allowed: API→Postgres, worker→Redis, frontend→API. Blocked: frontend→Postgres, frontend→Redis, worker→API. Same as on kind. |
+| Upgrade to `main` | `helm upgrade` to the chart and images of `d91fa9d` (images built locally, pushed as `sha-d91fa9d`), turning on `secrets.postgres.appPassword`. The init container applied 11 migrations and created `openpm_app`; afterwards the API and worker connected only as `openpm_app`. The user and project created on 0.1.0 were intact; smoke test passed. |
 
 ### Found
 
@@ -214,6 +215,10 @@ Let's Encrypt certificate for `openpm.<ip>.sslip.io`. Postgres and Redis in-char
   **Open risk:** the production Argo CD app (`argocd/apps/openpm-prod.yaml`) syncs the chart from
   `main` (`targetRevision: HEAD`) while `values.prod.yaml` pins the images to the last release, so
   the same mismatch can reach production whenever the chart on `main` needs a newer app.
+- **`helm upgrade --wait` failed** on the backup volume, which stays `Pending` until the first
+  scheduled backup (Azure Disk binds on first use). Expected and documented in
+  [backup-restore.md](backup-restore.md); without `--wait` (Helm 4 still waits for the smoke test)
+  the upgrade succeeded.
 - The worker logged one Redis `ETIMEDOUT` 12 s after starting (Redis not ready yet) and reconnected
   by itself.
 
