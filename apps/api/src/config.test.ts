@@ -138,3 +138,38 @@ describe('signupNeedsVerification', () => {
     expect(signupNeedsVerification({ SIGNUP_VERIFICATION: 'off', RESEND_API_KEY: 're_123' })).toBe(false);
   });
 });
+
+describe('config: COOKIE_DOMAIN', () => {
+  const saved = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...saved };
+    vi.restoreAllMocks();
+  });
+
+  async function load(value: string | undefined) {
+    vi.resetModules();
+    delete process.env.COOKIE_DOMAIN;
+    if (value !== undefined) process.env.COOKIE_DOMAIN = value;
+    return (await import('./config.js')).config;
+  }
+
+  it('is unset by default, and blank means unset', async () => {
+    expect((await load(undefined)).COOKIE_DOMAIN).toBeUndefined();
+    expect((await load('')).COOKIE_DOMAIN).toBeUndefined();
+  });
+
+  it('accepts a domain, dropping a leading dot and lowercasing it', async () => {
+    expect((await load('openpm.example.com')).COOKIE_DOMAIN).toBe('openpm.example.com');
+    expect((await load('.Example.ME')).COOKIE_DOMAIN).toBe('example.me');
+  });
+
+  it.each(['https://example.com', 'example', 'example.com/', 'exa mple.com', 'localhost:3000'])('refuses %j', async (value) => {
+    vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as never);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(load(value)).rejects.toThrow('process.exit');
+  });
+});

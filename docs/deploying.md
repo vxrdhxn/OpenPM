@@ -91,6 +91,21 @@ from the browser to object storage, so tell the frontend its public origin, the 
 Without it, uploads fail with a CSP error in the browser console. The setting is read at runtime;
 no rebuild is needed.
 
+## Frontend and API on different hosts
+
+The chart serves the frontend, `/api` and `/ws` on one host, which needs no extra settings. To run
+them apart (e.g. the frontend on a static/edge host and the API elsewhere), put them on **subdomains
+of one domain**, such as `app.example.com` and `api.example.com`:
+
+- **API:** `COOKIE_DOMAIN=example.com` (Helm: `api.cookieDomain`), so the sign-in cookie is shared
+  with the frontend, whose middleware checks it on every page. `CORS_ORIGIN=https://app.example.com`.
+- **Frontend build:** `NEXT_PUBLIC_API_URL=https://api.example.com/api` and
+  `NEXT_PUBLIC_WS_URL=wss://api.example.com/ws` (inlined at build time). The Content-Security-Policy
+  allows these origins by itself.
+
+Two unrelated domains (`*.vercel.app` + `*.azurecontainerapps.io`) do not work: the cookie is
+`SameSite=Strict` and belongs to one site, so the frontend never sees it and sends you back to sign-in.
+
 ## Values are checked
 
 `helm/openpm/values.schema.json` is applied on every `helm install`, `upgrade`, `template` and Argo

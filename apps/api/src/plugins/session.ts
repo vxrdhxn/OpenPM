@@ -2,8 +2,26 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PoolClient } from 'pg';
 import type { SessionClaims } from './auth';
 import { db } from '../db/client';
+import { config } from '../config';
 
 export const SESSION_TTL_SECONDS = 24 * 60 * 60;
+
+/**
+ * Options of the auth cookie. With COOKIE_DOMAIN the cookie belongs to that domain and its subdomains,
+ * so a frontend on app.example.com sees a cookie the API on api.example.com set (both are the same
+ * site, so SameSite=Strict still holds). Setting and clearing must use the same domain, or the
+ * browser keeps the old cookie.
+ */
+export function sessionCookieOptions(maxAge: number, domain: string | undefined = config.COOKIE_DOMAIN) {
+  return {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict' as const,
+    maxAge,
+    ...(domain ? { domain } : {}),
+  };
+}
 
 /**
  * Sign a session JWT and set it as the httpOnly auth cookie. Returns the token, which the auth routes
@@ -17,26 +35,14 @@ export function issueSession(
 ): string {
   const token = fastify.jwt.sign(payload, { expiresIn: SESSION_TTL_SECONDS });
 
-  reply.setCookie('auth_token', token, {
-    path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: SESSION_TTL_SECONDS,
-  });
+  reply.setCookie('auth_token', token, sessionCookieOptions(SESSION_TTL_SECONDS));
 
   return token;
 }
 
 /** Clear the auth cookie (the browser drops it at once). */
 export function clearSessionCookie(reply: FastifyReply): void {
-  reply.setCookie('auth_token', '', {
-    path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 0,
-  });
+  reply.setCookie('auth_token', '', sessionCookieOptions(0));
 }
 
 /**

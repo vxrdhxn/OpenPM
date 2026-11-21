@@ -15,6 +15,15 @@ const envSchema = z.object({
   // Optional here so development works out of the box; production is enforced by getJwtSecret().
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long').optional(),
   CORS_ORIGIN: z.string().url().default('http://localhost:3001'),
+  // Domain attribute of the session cookie, for a frontend and API on different subdomains
+  // (app.example.com + api.example.com): set it to the shared parent, "example.com", so the frontend's
+  // sign-in check sees the cookie too. Unset (the default) = the API's own host only, which is right
+  // whenever both are served from one host (the Helm chart's Ingress, docs/deploying.md).
+  COOKIE_DOMAIN: z
+    .string()
+    .regex(/^\.?([a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i, 'COOKIE_DOMAIN must be a domain name such as example.com')
+    .transform((d) => d.replace(/^\./, '').toLowerCase())
+    .optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   // Verify-by-email sign-up (docs/signup.md): "auto" (the default) verifies whenever an email provider
   // is configured, "required" always, "off" never (a workspace is created at once).
@@ -69,6 +78,7 @@ const BLANK_MEANS_UNSET = new Set([
   'WS_MAX_BUFFERED_BYTES',
   'RESEND_API_KEY',
   'DATABASE_MIGRATION_URL',
+  'COOKIE_DOMAIN',
   'S3_ENDPOINT',
   'S3_PUBLIC_ENDPOINT',
   'S3_REGION',

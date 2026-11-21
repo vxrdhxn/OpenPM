@@ -8,6 +8,9 @@ data:
   NODE_ENV: {{ .Values.global.environment | quote }}
   LOG_LEVEL: {{ .Values.global.logLevel | default "info" | quote }}
   CORS_ORIGIN: {{ .Values.api.corsOrigin | default (printf "http://%s" .Values.global.domain) | quote }}
+  {{- with .Values.api.cookieDomain }}
+  COOKIE_DOMAIN: {{ . | quote }}
+  {{- end }}
   
   {{- $proto := "http" }}
   {{- if .Values.ingress.tls }}

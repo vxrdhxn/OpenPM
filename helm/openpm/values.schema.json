@@ -284,6 +284,11 @@
           "pattern": "^https?://[^\\s/]+$",
           "description": "The frontend origin, e.g. https://app.example.com (no path)."
         },
+        "cookieDomain": {
+          "type": "string",
+          "pattern": "^(|\\.?([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,})$",
+          "description": "Session cookie domain for a frontend and API on different subdomains, e.g. example.com. Empty = the API's host only."
+        },
         "trustProxy": {
           "type": "string",
           "pattern": "^(|[0-9]+|[0-9a-fA-F.:/]+(\\s*,\\s*[0-9a-fA-F.:/]+)*)$",

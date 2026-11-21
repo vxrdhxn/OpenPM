@@ -141,6 +141,10 @@ api:
   # Seconds a stopping pod keeps serving, so it leaves the Service before it stops (preStop).
   preStopSeconds: 5
   corsOrigin: "http://openpm.local"
+  # Domain of the session cookie (COOKIE_DOMAIN). Leave empty when the Ingress serves the frontend and
+  # the API on one host (the default). Set it to the shared parent domain only when they are on
+  # different subdomains, e.g. "example.com" for app.example.com + api.example.com (docs/deploying.md).
+  cookieDomain: ""
   # Proxies whose X-Forwarded-For the API believes (TRUST_PROXY): "1" = the Ingress controller in
   # front of it, so rate limits are per client rather than one bucket for everyone. Add a hop per
   # proxy in front of the controller that also appends the header (e.g. "2" behind a cloud L7 load
