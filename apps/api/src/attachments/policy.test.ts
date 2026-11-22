@@ -34,6 +34,13 @@ describe('sanitizeFilename', () => {
     expect(sanitizeFilename(input)).toBe(expected);
   });
 
+  it('handles a long run of dots and spaces quickly (no regex backtracking)', () => {
+    const input = 'a' + '. '.repeat(200_000) + 'b';
+    const started = Date.now();
+    expect(sanitizeFilename(input)).toHaveLength(255);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   it('removes control characters, including NUL and newlines', () => {
     expect(sanitizeFilename('a\u0000b\r\nc\u007fd.txt')).toBe('abcd.txt');
   });

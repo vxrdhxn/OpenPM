@@ -79,6 +79,17 @@ export const MAX_ATTACHMENTS_PER_TASK = 25;
 const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 const RESERVED_CHARS = /[<>:"|?*]/g;
 
+/** Strips leading and trailing dots and whitespace in linear time. The regex /[\s.]+$/ does the same
+ *  but backtracks quadratically on a long run of ". . . ." followed by any other character. */
+function trimDotsAndSpaces(name: string): string {
+  const trimmable = (c: string) => c === '.' || c.trim() === '';
+  let start = 0;
+  let end = name.length;
+  while (start < end && trimmable(name.charAt(start))) start++;
+  while (end > start && trimmable(name.charAt(end - 1))) end--;
+  return name.slice(start, end);
+}
+
 /**
  * Normalize a client-supplied filename for display and for the download header.
  * Strips any directory part, control and bidi characters, and characters that are special on
@@ -89,7 +100,7 @@ export function sanitizeFilename(input: string): string {
   let name = input.normalize('NFC');
   name = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1); // basename
   name = name.replace(UNSAFE_CHARS, '').replace(RESERVED_CHARS, '_').replace(/\s+/g, ' ');
-  name = name.replace(/^[\s.]+|[\s.]+$/g, ''); // no leading dots (hidden files) / trailing dots+spaces
+  name = trimDotsAndSpaces(name); // no leading dots (hidden files) / trailing dots+spaces
 
   if (!name) return 'file';
 

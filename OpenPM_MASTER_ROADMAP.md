@@ -867,11 +867,11 @@ Audit event
 
 ## Branch protection
 
-- [ ] CI required. — *pending:* settings documented in `docs/ci.md`; must be enabled in GitHub repo settings
-- [ ] Review required.
-- [ ] Protected branches.
-- [ ] Security checks required.
-- [ ] Resolved review comments required.
+- [x] CI required. — 10 checks required on `main`, branch up to date before merging (`docs/ci.md`)
+- [ ] Review required. — *partial:* changes go through a pull request, but 0 approvals are required (one maintainer); the admin can bypass
+- [x] Protected branches. — `main`: no force pushes, no deletion
+- [x] Security checks required. — gitleaks, Trivy (image jobs) and both CodeQL analyses are among the required checks
+- [x] Resolved review comments required. — conversation resolution required
 
 ---
 
