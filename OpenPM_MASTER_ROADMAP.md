@@ -599,7 +599,7 @@ metadata
 
 ## Tooling
 
-- [x] CodeQL passes. — javascript-typescript + actions, `security-extended`, green on GitHub (H.4); findings are not yet merge-blocking
+- [x] CodeQL passes. — javascript-typescript + actions, `security-extended`, green on GitHub (H.4); high-or-higher findings block merges (code-scanning rule on `main`)
 - [x] Trivy passes or has documented exceptions. — blocking on HIGH/CRITICAL (fixable) since G.1
 - [x] Secret scanning enabled.
 - [x] Dependency scanning enabled. — Dependabot

@@ -60,9 +60,10 @@ also reach unchanged code). It is a separate workflow because uploading results 
   Build output (`dist/`, `.next/`) is excluded.
 - **Results** appear under **Security → Code scanning**, and on pull requests as annotations.
 
-The CodeQL job fails only if the analysis itself fails, not when it finds something. To block merges
-on findings, add a **code scanning** rule to the `main` ruleset (**Settings → Rules → Rulesets →
-Require code scanning results**, tool CodeQL, e.g. block on *High or higher* security alerts).
+The CodeQL job fails only if the analysis itself fails, not when it finds something. Findings block
+merges through a **code scanning** rule in the `main` ruleset (**Settings → Rules → Rulesets → main**):
+tool CodeQL, blocking on *High or higher* security alerts and on *Errors* for other alerts. It is
+checked on pull requests; a new finding at that level must be fixed or dismissed before merging.
 
 To triage a finding: fix it, or dismiss it in the Code scanning UI with a reason (false positive,
 used in tests, won't fix). Do not delete queries or add `paths-ignore` entries to hide one.
