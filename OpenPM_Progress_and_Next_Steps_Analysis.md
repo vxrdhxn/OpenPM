@@ -1,8 +1,8 @@
 # OpenPM — System Status, Architectural Audit & Actionable Roadmap
 
-**Date:** November 19, 2026 (updated after commit `b3001fe`)
+**Date:** November 22, 2026 (updated after commit `ce30b4a`)
 **Repository:** `OpenPM`
-**Status Overview:** Build, lint and test clean on Node 22 🟢 | v0.1.0 released 🟢 | Phase 1 cleanup in progress 🟡 | Never deployed to a real cluster 🟡
+**Status Overview:** Build, lint and test clean on Node 22 🟢 | v0.1.0 released 🟢 | Phase 1 cleanup in progress 🟡 | Installed on a cloud cluster (Azure AKS) 🟢 | No public deployment yet 🟡
 
 The detailed checklist is in `OpenPM_MASTER_ROADMAP.md` (section 36 has the per-area summary). This document gives the overview and the next steps.
 
@@ -16,7 +16,7 @@ All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lin
 
 What still stands between the project and production:
 
-1. **Kubernetes is only proven on kind.** The chart installs, upgrades and rolls back on a local cluster (G.4), and Argo CD sync, an Ingress controller and HPA scaling are verified there (G.5). There is no real cloud deployment yet.
+1. **Kubernetes is proven on kind and once on a cloud cluster.** The chart installs, upgrades and rolls back on a local cluster (G.4), and Argo CD sync, an Ingress controller and HPA scaling are verified there (G.5). On Azure AKS (2026-11-21) v0.1.0 installed with Let's Encrypt TLS, the app worked from the internet, Cilium enforced the NetworkPolicies, and an upgrade to `main` kept the data (`docs/rehearsal.md`). Not yet on a cloud cluster: Argo CD, a managed database, more than one node. There is no permanent public deployment; the planned split (frontend on Vercel, API on Azure, `COOKIE_DOMAIN` across two subdomains) needs a domain.
 2. **The missing product features (Phase I).** Phases F (broken user flows) and H (hardening) are complete.
 
 ---
@@ -191,12 +191,12 @@ Never run outside tests or Compose: two API replicas sharing live updates, attac
 | Component | Status | Next Milestone |
 | :--- | :---: | :--- |
 | **Foundation & Build** | 🟢 Complete | Make CI checks required in branch protection |
-| **API Backend & RBAC** | 🟢 Solid | Load-tested and failure-tested (Phase 9); next: a real cluster |
+| **API Backend & RBAC** | 🟢 Solid | Load-tested and failure-tested (Phase 9); next: load on cloud hardware |
 | **Organizations & Invites** | 🟢 Solid | Ownership transfer, org deletion |
 | **Authentication** | 🟢 Solid | MFA |
 | **Background Worker** | 🟢 Solid | Crash-tested (Phase 9); a transactional outbox for guaranteed emails |
-| **Frontend UI** | 🟢 Functional | Invite-accept page, member management |
-| **Kubernetes & DevOps** | 🟢 Verified on kind | A real cloud cluster |
+| **Frontend UI** | 🟢 Functional | Screen-reader accessibility pass |
+| **Kubernetes & DevOps** | 🟢 Verified on kind and AKS | Argo CD and a managed database on a cloud cluster |
 | **Observability** | 🟢 Verified locally | Run on a cluster with the Prometheus Operator (G.4) |
 
 ### Phase 9: Performance and reliability (done)
