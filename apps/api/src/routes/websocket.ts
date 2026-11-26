@@ -3,6 +3,7 @@ import { cache } from '../cache/redis';
 import { config } from '../config';
 import { activeWebsocketConnections, websocketErrorsTotal, websocketRejectionsTotal } from '../metrics';
 import { hiddenProjectIds } from '../security/projectAccess';
+import { issueTicket, redeemTicket, TICKET_TTL_SECONDS } from '../realtime/tickets';
 
 export interface WebsocketRouteOptions {
   /** Ping interval. A client that misses a whole interval without answering is dropped. */
@@ -24,9 +25,13 @@ const MAX_TIMER_MS = 2_147_483_647;
 /**
  * GET /ws: realtime updates for the caller's organization.
  *
- * Auth: the httpOnly `auth_token` cookie (sent automatically by browsers on the handshake)
- * or an `Authorization: Bearer` header for non-browser clients. Tokens in the URL are NOT
- * accepted, since query strings end up in access logs and proxies.
+ * Auth, one of:
+ * - `?ticket=`, a single-use 30-second ticket from POST /api/realtime/ticket (realtime/tickets.ts). The
+ *   browser client always uses one, so the socket works when the API is on another domain than the
+ *   frontend (Vercel) and the cookie is not sent with the handshake.
+ * - the httpOnly `auth_token` cookie (sent automatically by browsers on a same-site handshake);
+ * - an `Authorization: Bearer` header for non-browser clients.
+ * Session tokens in the URL are NOT accepted, since query strings end up in access logs and proxies.
  *
  * Because the cookie authenticates the socket, the handshake's Origin is checked to stop
  * cross-site WebSocket hijacking.
@@ -41,7 +46,18 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
   let open = 0;
   const perUser = new Map<string, number>();
 
-  fastify.get('/ws', { websocket: true }, async (socket, request) => {
+  // A ticket for one socket (realtime/tickets.ts). Through the frontend's proxy, so the cookie authenticates it.
+  fastify.post('/api/realtime/ticket', {
+    preValidation: [fastify.authenticate],
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const ticket = await issueTicket(request.user);
+    // Without Redis there are no live updates anyway; the client retries with backoff.
+    if (!ticket) return reply.code(503).send({ error: 'Live updates are unavailable right now' });
+    return { ticket, expires_in: TICKET_TTL_SECONDS };
+  });
+
+  fastify.get<{ Querystring: { ticket?: string } }>('/ws', { websocket: true }, async (socket, request) => {
 
     // Everything that must be torn down when the socket goes away. Registered before any
     // `await`, so a client that disconnects mid-setup can never leak a subscription.
@@ -102,7 +118,15 @@ const websocketRoutes: FastifyPluginAsync<WebsocketRouteOptions> = async (fastif
     // Token signature/expiry AND the session still being current (not revoked, user still exists).
     let check;
     try {
-      check = await fastify.verifySession(request);
+      const ticket = request.query.ticket;
+      if (ticket !== undefined) {
+        // The ticket stands in for the token: same claims, and the session must still be current.
+        const claims = typeof ticket === 'string' ? await redeemTicket(ticket) : null;
+        check = claims && (await fastify.isSessionCurrent(claims)) ? { ok: true as const } : { ok: false as const };
+        if (claims) request.user = claims;
+      } else {
+        check = await fastify.verifySession(request);
+      }
     } catch (err) {
       fastify.log.error(err, 'WS session check failed');
       check = { ok: false as const };

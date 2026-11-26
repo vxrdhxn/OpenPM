@@ -103,8 +103,21 @@ of one domain**, such as `app.example.com` and `api.example.com`:
   `NEXT_PUBLIC_WS_URL=wss://api.example.com/ws` (inlined at build time). The Content-Security-Policy
   allows these origins by itself.
 
-Two unrelated domains (`*.vercel.app` + `*.azurecontainerapps.io`) do not work: the cookie is
-`SameSite=Strict` and belongs to one site, so the frontend never sees it and sends you back to sign-in.
+Two unrelated domains (`*.vercel.app` + `*.azurecontainerapps.io`) do not work this way: the cookie
+is `SameSite=Strict` and belongs to one site, so the frontend never sees it and sends you back to
+sign-in. Without a domain of your own, proxy the API through the frontend instead:
+
+## Frontend on Vercel, API elsewhere, no custom domain
+
+The frontend serves the API at its own `/api` (a Next.js rewrite), so the sign-in cookie belongs to
+the frontend's domain. WebSockets cannot go through that rewrite, so the browser connects straight to
+the API with a single-use ticket (`docs/realtime.md`).
+
+- **Frontend build (Vercel project settings):** `API_PROXY_TARGET=https://<api host>` and
+  `NEXT_PUBLIC_WS_URL=wss://<api host>/ws`. Leave `NEXT_PUBLIC_API_URL` unset (same origin).
+- **API:** `CORS_ORIGIN=https://<app>.vercel.app`, `APP_URL` the same, `COOKIE_DOMAIN` unset.
+  `TRUST_PROXY=2` when the API sits behind its own ingress (Azure Container Apps): Vercel sets
+  `X-Forwarded-For` to the client, and the ingress appends Vercel's address.
 
 ## Values are checked
 

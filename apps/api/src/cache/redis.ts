@@ -122,6 +122,23 @@ export const cache = {
     await attempt('set', () => (ttlSeconds ? client.set(key, data, 'EX', ttlSeconds) : client.set(key, data)));
   },
 
+  /** Like set, but reports whether the value was stored (for data that must not be silently lost). */
+  async put(key: string, value: unknown, ttlSeconds: number): Promise<boolean> {
+    const result = await attempt('set', () => client.set(key, JSON.stringify(value), 'EX', ttlSeconds));
+    return result === 'OK';
+  },
+
+  /** Read and delete a key in one step (GETDEL), so a value can be used once. Null on a miss or outage. */
+  async take<T>(key: string): Promise<T | null> {
+    const data = await attempt('getdel', () => client.getdel(key));
+    if (data === FAILED || !data) return null;
+    try {
+      return JSON.parse(data) as T;
+    } catch {
+      return null;
+    }
+  },
+
   /**
    * Invalidate a key. Called after a database write has committed, so it must not fail the request;
    * if Redis is unavailable, the key is remembered and deleted once Redis is back.
