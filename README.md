@@ -7,6 +7,10 @@
 </p>
 
 <p align="center">
+  <a href="https://openpm-psi.vercel.app"><strong>Live demo: openpm-psi.vercel.app</strong></a>
+</p>
+
+<p align="center">
   <a href="#screenshots">Screenshots</a> •
   <a href="#features">Features</a> •
   <a href="#quickstart">Quickstart</a> •
@@ -246,6 +250,11 @@ openpm/
 ---
 
 ## Deployment
+
+The live demo at [openpm-psi.vercel.app](https://openpm-psi.vercel.app) runs the frontend on Vercel
+and the API, worker and Redis on Azure Container Apps, with Azure Database for PostgreSQL
+([Frontend on Vercel, API elsewhere](docs/deploying.md#frontend-on-vercel-api-elsewhere-no-custom-domain)).
+The first request after a quiet spell can take a few seconds while the API starts.
 
 Full guide, including credentials and running behind a proxy: [`docs/deploying.md`](docs/deploying.md).
 Backups: [`docs/backup-restore.md`](docs/backup-restore.md).
