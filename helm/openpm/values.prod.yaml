@@ -22,8 +22,8 @@ api:
   replicaCount: 3
   image:
     repository: "ghcr.io/vxrdhxn/openpm-api"
-    tag: "0.1.0"
-    digest: ""
+    tag: "0.2.0"
+    digest: "sha256:32acdad93af7cc310c17ab00ca6da57ae765bfc13b3363cc3001acaf842e70f5"
     pullPolicy: "IfNotPresent"
   resources:
     limits:
@@ -37,8 +37,8 @@ worker:
   replicaCount: 2
   image:
     repository: "ghcr.io/vxrdhxn/openpm-worker"
-    tag: "0.1.0"
-    digest: ""
+    tag: "0.2.0"
+    digest: "sha256:6caa5b6590fd55c262d5b8038a0fa00f17e00337ab9c84b780c2622612e3f398"
     pullPolicy: "IfNotPresent"
   resources:
     limits:
@@ -52,8 +52,8 @@ frontend:
   replicaCount: 3
   image:
     repository: "ghcr.io/vxrdhxn/openpm-frontend"
-    tag: "0.1.0"
-    digest: ""
+    tag: "0.2.0"
+    digest: "sha256:4e148df0e1529ae04dbba9681fa16a25eeed0a98222fe9a2da79a68e2f6e53b7"
     pullPolicy: "IfNotPresent"
   resources:
     limits:

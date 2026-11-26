@@ -14,7 +14,7 @@ spec:
     # older release (docs/releasing.md). The release workflow tags its "deploy: vX.Y.Z to production"
     # commit deploy/vX.Y.Z and sets this line in the same commit; keep the "# deploy tag" marker, the
     # workflow finds the line by it.
-    targetRevision: deploy/v0.1.0 # deploy tag
+    targetRevision: deploy/v0.2.0 # deploy tag
     path: helm/openpm
     helm:
       valueFiles:
