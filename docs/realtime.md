@@ -13,8 +13,13 @@ API pod / worker ──PUBLISH org:<org id>:updates──▶ Redis ──▶ eve
 - **One channel per organization:** `org:<org id>:updates`. A socket's channel comes from its
   session token, never from the client, so it only ever hears its own organization.
 - **The socket is one-way.** Clients cannot send anything; a message closes the socket (1008).
-- **Authentication:** the `auth_token` cookie (or `Authorization: Bearer`), checked against the
-  session on connect and at every heartbeat (30 s). A revoked session closes with `Session revoked`.
+- **Authentication:** the web app first calls `POST /api/realtime/ticket` (with its cookie) and
+  connects to `/ws?ticket=<ticket>`. A ticket is 256 random bits, works once, expires after 30 s,
+  and Redis keeps only its hash; it carries the session it was issued for. This lets the socket
+  reach an API on another domain than the page (Vercel, see `docs/deploying.md`), where the
+  `SameSite=Strict` cookie is not sent. Other clients may use the `auth_token` cookie or
+  `Authorization: Bearer`. Session tokens are never accepted in the URL. The session is checked
+  on connect and at every heartbeat (30 s). A revoked session closes with `Session revoked`.
   The handshake's `Origin` must be `CORS_ORIGIN`.
 - **Private projects:** each socket keeps the set of projects its user cannot see (reloaded on
   `project_access_changed` and at each heartbeat), and drops every event about them.

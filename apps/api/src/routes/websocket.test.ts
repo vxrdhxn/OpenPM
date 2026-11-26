@@ -7,7 +7,7 @@ import WebSocket from 'ws';
 // Private projects: which ones this user cannot see (no database in these tests).
 vi.mock('../security/projectAccess', () => ({ hiddenProjectIds: vi.fn() }));
 vi.mock('../cache/redis', () => ({
-  cache: { get: vi.fn(), set: vi.fn(), del: vi.fn(), publish: vi.fn(), subscribe: vi.fn() },
+  cache: { get: vi.fn(), set: vi.fn(), del: vi.fn(), publish: vi.fn(), subscribe: vi.fn(), put: vi.fn(), take: vi.fn() },
 }));
 
 import { cache } from '../cache/redis';
@@ -84,6 +84,17 @@ describe('GET /ws', () => {
       return unsubscribe as unknown as () => void;
     });
     vi.mocked(hiddenProjectIds).mockResolvedValue(new Set());
+    // Redis for tickets: put stores, take reads and deletes.
+    const store = new Map<string, unknown>();
+    vi.mocked(cache.put).mockImplementation(async (key, value) => {
+      store.set(key, JSON.parse(JSON.stringify(value)));
+      return true;
+    });
+    vi.mocked(cache.take).mockImplementation(async (key) => {
+      const value = store.get(key) ?? null;
+      store.delete(key);
+      return value as never;
+    });
   });
 
   afterEach(async () => {
@@ -250,6 +261,74 @@ describe('GET /ws', () => {
       const c = connect({ path: `/ws?token=${tokenFor('org-1')}` });
       expect((await c.closed).code).toBe(1008);
       expect(cache.subscribe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tickets (frontend and API on different domains)', () => {
+    const issue = (headers: Record<string, string>) =>
+      app.inject({ method: 'POST', url: '/api/realtime/ticket', headers });
+
+    it('issues a ticket only to a signed-in caller', async () => {
+      await build();
+      expect((await issue({})).statusCode).toBe(401);
+
+      const res = await issue(asCookie(tokenFor('org-9')));
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ticket: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), expires_in: 30 });
+      // Only a hash of the ticket is used as the Redis key.
+      expect(vi.mocked(cache.put).mock.calls[0]![0]).not.toContain(res.json().ticket);
+    });
+
+    it('answers 503 when Redis cannot store the ticket', async () => {
+      await build();
+      vi.mocked(cache.put).mockResolvedValue(false);
+      expect((await issue(asCookie(tokenFor()))).statusCode).toBe(503);
+    });
+
+    it('opens a socket with a ticket and no cookie, on the org channel of the ticket holder', async () => {
+      await build();
+      const { ticket } = (await issue(asCookie(tokenFor('org-9')))).json();
+
+      const c = connect({ path: `/ws?ticket=${ticket}`, headers: { origin: config.CORS_ORIGIN } });
+      await open(c);
+      await tick();
+      expect(cache.subscribe).toHaveBeenCalledWith('org:org-9:updates', expect.any(Function));
+    });
+
+    it('accepts a ticket only once', async () => {
+      await build();
+      const { ticket } = (await issue(asCookie(tokenFor()))).json();
+      const first = connect({ path: `/ws?ticket=${ticket}` });
+      await open(first);
+
+      const second = connect({ path: `/ws?ticket=${ticket}` });
+      expect(await second.closed).toMatchObject({ code: 1008, reason: 'Unauthorized' });
+    });
+
+    it('rejects unknown and malformed tickets, without falling back to the cookie', async () => {
+      await build();
+      const unknown = connect({ path: `/ws?ticket=${'a'.repeat(43)}`, headers: asCookie(tokenFor()) });
+      expect(await unknown.closed).toMatchObject({ code: 1008, reason: 'Unauthorized' });
+      const malformed = connect({ path: '/ws?ticket=x&ticket=y' });
+      expect(await malformed.closed).toMatchObject({ code: 1008, reason: 'Unauthorized' });
+      expect(cache.subscribe).not.toHaveBeenCalled();
+    });
+
+    it('refuses a ticket whose session was revoked after it was issued', async () => {
+      let current = true;
+      await build(undefined, { verifySession: async (claims) => (current ? { role: claims.role } : null) });
+      const { ticket } = (await issue(asCookie(tokenFor()))).json();
+      current = false;
+
+      const c = connect({ path: `/ws?ticket=${ticket}` });
+      expect(await c.closed).toMatchObject({ code: 1008, reason: 'Unauthorized' });
+    });
+
+    it('still checks the Origin', async () => {
+      await build();
+      const { ticket } = (await issue(asCookie(tokenFor()))).json();
+      const c = connect({ path: `/ws?ticket=${ticket}`, headers: { origin: 'https://evil.example' } });
+      expect(await c.closed).toMatchObject({ code: 1008, reason: 'Origin not allowed' });
     });
   });
 

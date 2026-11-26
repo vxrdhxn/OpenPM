@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { websocketUrl } from '@/lib/endpoints';
+import { apiBaseUrl, websocketUrl } from '@/lib/endpoints';
 
 export type WebSocketMessage = {
   type: string;
@@ -15,10 +15,11 @@ const CLOSE_POLICY_VIOLATION = 1008;
 /**
  * Live updates for the signed-in user's organization.
  *
- * Authentication is the httpOnly `auth_token` cookie, which the browser attaches to the
- * handshake automatically; JavaScript never reads or sends the token (and it must not go in
- * the URL, where it would be logged). Reconnects with exponential backoff, since the socket
- * is dropped on every API pod restart and by idle load balancers.
+ * Authentication: before each connect, a single-use 30-second ticket is fetched from the API with the
+ * httpOnly cookie and put in the socket URL (docs/realtime.md). This works when the socket goes to
+ * another domain than the page (frontend on Vercel, API elsewhere), where the cookie is not sent.
+ * JavaScript never reads the session token itself. Reconnects with exponential backoff, since the
+ * socket is dropped on every API pod restart and by idle load balancers.
  *
  * `connectionEpoch` increments on every successful (re)connect. Events published while the
  * socket was down are not replayed, so consumers should refetch when it goes above 1.
@@ -35,8 +36,28 @@ export function useWebsocketConnection(): WebsocketState {
     let attempt = 0;
     let disposed = false;
 
-    const connect = () => {
-      socket = new WebSocket(wsUrl);
+    const retry = () => {
+      // Exponential backoff with jitter so clients don't reconnect in lockstep after a deploy.
+      const delay = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
+      attempt += 1;
+      retryTimer = setTimeout(connect, delay / 2 + Math.random() * (delay / 2));
+    };
+
+    const connect = async () => {
+      let ticket: string;
+      try {
+        const res = await fetch(`${apiBaseUrl()}/realtime/ticket`, { method: 'POST', credentials: 'include' });
+        // Signed out: retrying can't fix it, the normal 401 flow takes over (as with a 1008 close).
+        if (res.status === 401) return;
+        if (!res.ok) throw new Error(`ticket: HTTP ${res.status}`);
+        ({ ticket } = await res.json());
+      } catch {
+        if (!disposed) retry();
+        return;
+      }
+      if (disposed) return;
+
+      socket = new WebSocket(`${wsUrl}?ticket=${encodeURIComponent(ticket)}`);
 
       socket.onopen = () => {
         attempt = 0;
@@ -59,15 +80,11 @@ export function useWebsocketConnection(): WebsocketState {
       socket.onclose = (event) => {
         setIsConnected(false);
         if (disposed || event.code === CLOSE_POLICY_VIOLATION) return;
-
-        // Exponential backoff with jitter so clients don't reconnect in lockstep after a deploy.
-        const delay = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
-        attempt += 1;
-        retryTimer = setTimeout(connect, delay / 2 + Math.random() * (delay / 2));
+        retry();
       };
     };
 
-    connect();
+    void connect();
 
     return () => {
       disposed = true;
