@@ -115,3 +115,5 @@ temp/
 # Crash dumps
 core.*
 hs_err_pid*
+
+.vercel
