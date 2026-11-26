@@ -2,7 +2,7 @@
 
 **Date:** November 22, 2026 (updated after commit `ce30b4a`)
 **Repository:** `OpenPM`
-**Status Overview:** Build, lint and test clean on Node 22 🟢 | v0.1.0 released 🟢 | Phase 1 cleanup in progress 🟡 | Installed on a cloud cluster (Azure AKS) 🟢 | No public deployment yet 🟡
+**Status Overview:** Build, lint and test clean on Node 22 🟢 | v0.1.0 released 🟢 | Phase 1 cleanup in progress 🟡 | Installed on a cloud cluster (Azure AKS) 🟢 | Live at https://openpm-psi.vercel.app 🟢
 
 The detailed checklist is in `OpenPM_MASTER_ROADMAP.md` (section 36 has the per-area summary). This document gives the overview and the next steps.
 
@@ -16,7 +16,7 @@ All three workspace apps (`apps/api`, `apps/worker`, `apps/frontend`) build, lin
 
 What still stands between the project and production:
 
-1. **Kubernetes is proven on kind and once on a cloud cluster.** The chart installs, upgrades and rolls back on a local cluster (G.4), and Argo CD sync, an Ingress controller and HPA scaling are verified there (G.5). On Azure AKS (2026-11-21) v0.1.0 installed with Let's Encrypt TLS, the app worked from the internet, Cilium enforced the NetworkPolicies, and an upgrade to `main` kept the data (`docs/rehearsal.md`). Not yet on a cloud cluster: Argo CD, a managed database, more than one node. There is no permanent public deployment; the planned split (frontend on Vercel, API on Azure, `COOKIE_DOMAIN` across two subdomains) needs a domain.
+1. **Kubernetes is proven on kind and once on a cloud cluster.** The chart installs, upgrades and rolls back on a local cluster (G.4), and Argo CD sync, an Ingress controller and HPA scaling are verified there (G.5). On Azure AKS (2026-11-21) v0.1.0 installed with Let's Encrypt TLS, the app worked from the internet, Cilium enforced the NetworkPolicies, and an upgrade to `main` kept the data (`docs/rehearsal.md`). Not yet on a cloud cluster: Argo CD, a managed database, more than one node. Live since 2026-11-26 (v0.2.0) at https://openpm-psi.vercel.app: the frontend on Vercel proxies `/api` to the API on Azure Container Apps (Central India; API, worker and Redis as one app that scales to zero), Postgres Flexible B1ms in South Central India (B1ms had no capacity in Central India). Live updates connect straight to the API with a single-use ticket. No custom domain needed (`docs/deploying.md`). Not yet: logs (Log Analytics is off to stay free), backups beyond Azure's 7-day default, a persistent Redis (queued jobs are lost when the app scales to zero).
 2. **The missing product features (Phase I).** Phases F (broken user flows) and H (hardening) are complete.
 
 ---
@@ -240,4 +240,4 @@ Left at the time: frontend items, branch protection (repo admin), shared API/fro
 
 ### Recommended Immediate Action
 1. **Repo settings (admin):** dismiss the 5 false-positive CodeQL alerts (see H.4). For releases: allow Actions to create PRs, add a `RELEASE_PR_TOKEN` secret, and make the GHCR packages public or add a pull secret (`docs/releasing.md`).
-2. **A public deployment:** frontend on Vercel and API on Azure, once a domain is available (`docs/deploying.md`, "Frontend and API on different hosts").
+2. **The public deployment (live, 2026-11-26):** add logs and alerting within the free tier, and a custom domain if one becomes available.
